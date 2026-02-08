@@ -1,0 +1,276 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from threading import Lock
+from typing import Any, Protocol
+
+from app.core.error_codes import ErrorCode
+from app.core.errors import AppError
+from app.core.settings import Settings
+
+
+@dataclass(slots=True)
+class VectorEntry:
+    vector: list[float]
+    payload: dict[str, Any]
+
+
+@dataclass(slots=True)
+class VectorHit:
+    score: float
+    payload: dict[str, Any]
+
+
+class VectorStore(Protocol):
+    """向量库接口。"""
+
+    def upsert(self, kb_id: str, entries: list[VectorEntry]) -> None: ...
+
+    def delete_by_doc_id(self, kb_id: str, doc_id: str) -> None: ...
+
+    def delete_by_kb_id(self, kb_id: str) -> None: ...
+
+    def search(
+        self,
+        kb_id: str,
+        query_vector: list[float],
+        topk: int,
+        filters: dict[str, Any] | None = None,
+    ) -> list[VectorHit]: ...
+
+
+class InMemoryVectorStore:
+    """内存向量库（MVP 兜底实现）。"""
+
+    def __init__(self) -> None:
+        self._items: dict[str, list[VectorEntry]] = {}
+        self._lock = Lock()
+
+    def upsert(self, kb_id: str, entries: list[VectorEntry]) -> None:
+        """写入向量数据。"""
+
+        with self._lock:
+            self._items.setdefault(kb_id, [])
+            self._items[kb_id].extend(entries)
+
+    def delete_by_doc_id(self, kb_id: str, doc_id: str) -> None:
+        """按 doc_id 删除向量。"""
+
+        with self._lock:
+            items = self._items.get(kb_id, [])
+            self._items[kb_id] = [
+                entry for entry in items if entry.payload.get("doc_id") != doc_id
+            ]
+
+    def delete_by_kb_id(self, kb_id: str) -> None:
+        """按 kb_id 删除全部向量。"""
+
+        with self._lock:
+            self._items.pop(kb_id, None)
+
+    def search(
+        self,
+        kb_id: str,
+        query_vector: list[float],
+        topk: int,
+        filters: dict[str, Any] | None = None,
+    ) -> list[VectorHit]:
+        """向量检索。"""
+
+        with self._lock:
+            items = list(self._items.get(kb_id, []))
+        hits: list[VectorHit] = []
+        for entry in items:
+            if not self._match_filters(entry.payload, filters):
+                continue
+            score = self._cosine(query_vector, entry.vector)
+            hits.append(VectorHit(score=score, payload=entry.payload))
+        hits.sort(key=lambda item: item.score, reverse=True)
+        return hits[: max(0, topk)]
+
+    def _match_filters(self, payload: dict[str, Any], filters: dict[str, Any] | None) -> bool:
+        if not filters:
+            return True
+        doc_ids = filters.get("doc_ids")
+        if doc_ids and payload.get("doc_id") not in doc_ids:
+            return False
+        published_after = filters.get("published_after")
+        if published_after:
+            published_at = payload.get("published_at")
+            if published_at is None or published_at < published_after:
+                return False
+        return True
+
+    @staticmethod
+    def _cosine(a: list[float], b: list[float]) -> float:
+        if not a or not b or len(a) != len(b):
+            return 0.0
+        dot = sum(x * y for x, y in zip(a, b))
+        norm_a = sum(x * x for x in a) ** 0.5
+        norm_b = sum(y * y for y in b) ** 0.5
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return dot / (norm_a * norm_b)
+
+class QdrantVectorStore:
+    """Qdrant 向量库实现（可选依赖）。"""
+
+    def __init__(self, settings: Settings) -> None:
+        try:
+            from qdrant_client import QdrantClient  # type: ignore
+            from qdrant_client.http import models as rest  # type: ignore
+        except Exception as exc:  # pragma: no cover - 依赖缺失时触发
+            raise AppError(
+                code=ErrorCode.VECTOR_UPSERT_FAILED,
+                message="缺少 Qdrant 依赖，请安装 qdrant-client",
+                detail={"error": str(exc)},
+                status_code=500,
+            ) from exc
+
+        self._client = QdrantClient(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key,
+            check_compatibility=False,
+        )
+        self._collection_prefix = settings.qdrant_collection_prefix
+        self._vector_dim = settings.vector_dim
+        self._rest = rest
+
+    def upsert(self, kb_id: str, entries: list[VectorEntry]) -> None:
+        try:
+            self._ensure_collection(kb_id)
+            points = [
+                self._rest.PointStruct(
+                    id=entry.payload["chunk_id"],
+                    vector=entry.vector,
+                    payload=entry.payload,
+                )
+                for entry in entries
+            ]
+            self._client.upsert(collection_name=self._collection_name(kb_id), points=points)
+        except Exception as exc:
+            raise AppError(
+                code=ErrorCode.VECTOR_UPSERT_FAILED,
+                message="向量库不可用，无法写入",
+                detail={"error": str(exc)},
+                status_code=503,
+            ) from exc
+
+    def delete_by_doc_id(self, kb_id: str, doc_id: str) -> None:
+        try:
+            if not self._collection_exists(kb_id):
+                return
+            condition = self._rest.FieldCondition(
+                key="doc_id", match=self._rest.MatchValue(value=doc_id)
+            )
+            self._client.delete(
+                collection_name=self._collection_name(kb_id),
+                points_selector=self._rest.Filter(must=[condition]),
+            )
+        except Exception as exc:
+            raise AppError(
+                code=ErrorCode.VECTOR_UPSERT_FAILED,
+                message="向量库不可用，无法删除",
+                detail={"error": str(exc)},
+                status_code=503,
+            ) from exc
+
+    def delete_by_kb_id(self, kb_id: str) -> None:
+        try:
+            if not self._collection_exists(kb_id):
+                return
+            self._client.delete_collection(collection_name=self._collection_name(kb_id))
+        except Exception as exc:
+            raise AppError(
+                code=ErrorCode.VECTOR_UPSERT_FAILED,
+                message="向量库不可用，无法删除集合",
+                detail={"error": str(exc)},
+                status_code=503,
+            ) from exc
+
+    def search(
+        self,
+        kb_id: str,
+        query_vector: list[float],
+        topk: int,
+        filters: dict[str, Any] | None = None,
+    ) -> list[VectorHit]:
+        try:
+            if not self._collection_exists(kb_id):
+                return []
+        except Exception as exc:
+            raise AppError(
+                code=ErrorCode.VECTOR_SEARCH_FAILED,
+                message="向量库不可用，无法检索",
+                detail={"error": str(exc)},
+                status_code=503,
+            ) from exc
+
+        query_filter = None
+        if filters and filters.get("doc_ids"):
+            condition = self._rest.FieldCondition(
+                key="doc_id",
+                match=self._rest.MatchAny(any=filters["doc_ids"]),
+            )
+            query_filter = self._rest.Filter(must=[condition])
+
+        try:
+            results = self._client.search(
+                collection_name=self._collection_name(kb_id),
+                query_vector=query_vector,
+                limit=topk,
+                with_payload=True,
+                query_filter=query_filter,
+            )
+            hits = [
+                VectorHit(score=result.score, payload=result.payload or {})
+                for result in results
+            ]
+        except Exception as exc:
+            raise AppError(
+                code=ErrorCode.VECTOR_SEARCH_FAILED,
+                message="向量库不可用，无法检索",
+                detail={"error": str(exc)},
+                status_code=503,
+            ) from exc
+        if filters and filters.get("published_after"):
+            hits = [
+                hit
+                for hit in hits
+                if (hit.payload.get("published_at") or "") >= filters["published_after"]
+            ]
+        return hits
+
+    def _collection_name(self, kb_id: str) -> str:
+        return f"{self._collection_prefix}{kb_id}"
+
+    def _ensure_collection(self, kb_id: str) -> None:
+        name = self._collection_name(kb_id)
+        if self._collection_exists(kb_id):
+            return
+        self._client.create_collection(
+            collection_name=name,
+            vectors_config=self._rest.VectorParams(
+                size=self._vector_dim, distance=self._rest.Distance.COSINE
+            ),
+        )
+
+    def _collection_exists(self, kb_id: str) -> bool:
+        name = self._collection_name(kb_id)
+        collections = self._client.get_collections().collections
+        return name in {collection.name for collection in collections}
+
+
+_vector_store: VectorStore | None = None
+
+
+def get_vector_store(settings: Settings) -> VectorStore:
+    """获取向量库实例（按配置选择后端）。"""
+
+    global _vector_store
+    if _vector_store is None:
+        if settings.vector_backend == "qdrant":
+            _vector_store = QdrantVectorStore(settings)
+        else:
+            _vector_store = InMemoryVectorStore()
+    return _vector_store
