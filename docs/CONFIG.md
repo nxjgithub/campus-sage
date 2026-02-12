@@ -33,12 +33,17 @@
 - `VLLM_TIMEOUT_S`：默认 60
 - `VLLM_ENABLED`：true/false，是否启用 vLLM 生成
 ### 4.2 Embedding（向量模型）
-- `EMBEDDING_BACKEND`：Embedding 后端（http/simple），默认 http
+- `EMBEDDING_BACKEND`：Embedding 后端（http/simple/local），默认 http
 - `EMBEDDING_BASE_URL`：Embedding 服务地址（OpenAI 兼容），默认 `http://127.0.0.1:8001/v1`
+- `EMBEDDING_API_PATH`：Embedding 接口路径，默认 `/embeddings`
 - `EMBEDDING_TIMEOUT_S`：默认 60
 - `EMBEDDING_API_KEY`：可选
 - `EMBEDDING_MODEL_NAME`：如 `bge-m3`（示例）
 - `EMBEDDING_BATCH_SIZE`：默认 32
+- `EMBEDDING_DIMENSIONS`：可选，向 OpenAI 兼容服务传递输出维度（如 text-embedding-3）
+- `LOCAL_EMBEDDING_MODEL_NAME`：本地 Embedding 模型名（方案 3 预留），默认 `BAAI/bge-m3`
+- `LOCAL_EMBEDDING_DEVICE`：本地 Embedding 设备（方案 3 预留），默认 `cpu`
+- `LOCAL_EMBEDDING_NORMALIZE`：本地 Embedding 是否归一化，默认 `true`
 
 ### 4.3 Rerank（可选）
 - `RERANK_ENABLED`：true/false

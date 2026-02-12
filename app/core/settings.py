@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -38,16 +40,31 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = Field(default=7, description="刷新令牌过期天数")
     password_min_length: int = Field(default=8, description="密码最小长度")
 
-    embedding_backend: str = Field(
-        default="http", description="Embedding 后端（http/simple）"
+    embedding_backend: Literal["http", "simple", "local"] = Field(
+        default="http", description="Embedding 后端（http/simple/local）"
     )
     embedding_base_url: str = Field(
         default="http://127.0.0.1:8001/v1", description="Embedding 服务地址"
+    )
+    embedding_api_path: str = Field(
+        default="/embeddings", description="Embedding 接口路径"
     )
     embedding_timeout_s: int = Field(default=60, description="Embedding 超时秒数")
     embedding_api_key: str | None = Field(default=None, description="Embedding API Key")
     embedding_model_name: str = Field(default="bge-m3", description="Embedding 模型名")
     embedding_batch_size: int = Field(default=32, description="Embedding 批大小")
+    embedding_dimensions: int | None = Field(
+        default=None, description="Embedding 输出维度（可选）"
+    )
+    local_embedding_model_name: str = Field(
+        default="BAAI/bge-m3", description="本地 Embedding 模型名"
+    )
+    local_embedding_device: str = Field(
+        default="cpu", description="本地 Embedding 运行设备"
+    )
+    local_embedding_normalize: bool = Field(
+        default=True, description="本地 Embedding 是否归一化"
+    )
 
     rerank_enabled: bool = Field(default=False, description="是否启用重排")
     rerank_model_name: str = Field(default="bge-reranker", description="重排模型名")

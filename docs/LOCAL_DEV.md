@@ -168,6 +168,39 @@ python scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --top
 VLLM_ENABLED=true
 ```
 
+## 9.1 方案 1：接入 OpenAI 兼容 Embedding（推荐）
+本项目默认已支持 OpenAI 兼容 Embedding 接口，最小配置如下：
+```
+EMBEDDING_BACKEND=http
+EMBEDDING_BASE_URL=http://127.0.0.1:8001/v1
+EMBEDDING_API_PATH=/embeddings
+EMBEDDING_MODEL_NAME=bge-m3
+VECTOR_DIM=1024
+```
+
+可选配置：
+```
+EMBEDDING_API_KEY=your_api_key
+EMBEDDING_DIMENSIONS=1024
+```
+
+注意：
+- `VECTOR_DIM` 必须与实际 Embedding 输出维度一致，否则会触发维度校验失败。
+- 若接入的是网关或代理，请确认其兼容 `POST /embeddings` 返回 `data[index, embedding]` 结构。
+
+## 9.2 方案 3 预留埋点：本地 Embedding（按需启用）
+当前代码已预留本地后端入口，可通过以下配置切换：
+```
+EMBEDDING_BACKEND=local
+LOCAL_EMBEDDING_MODEL_NAME=BAAI/bge-m3
+LOCAL_EMBEDDING_DEVICE=cpu
+LOCAL_EMBEDDING_NORMALIZE=true
+```
+
+说明：
+- 该模式依赖 `sentence-transformers`，默认环境未强制安装。
+- 未安装依赖时，服务会返回明确错误提示，便于后续按需落地。
+
 
 ## 10. 启用 Qdrant 向量库
 1. 安装依赖：
