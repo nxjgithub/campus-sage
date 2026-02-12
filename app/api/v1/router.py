@@ -8,6 +8,7 @@ from app.api.v1.eval import router as eval_router
 from app.api.v1.feedback import router as feedback_router
 from app.api.v1.ingest_jobs import router as ingest_router
 from app.api.v1.kb import router as kb_router
+from app.api.v1.monitor import router as monitor_router
 from app.api.v1.roles import router as role_router
 from app.api.v1.users import router as user_router
 
@@ -22,3 +23,4 @@ api_router.include_router(eval_router)
 api_router.include_router(auth_router)
 api_router.include_router(user_router)
 api_router.include_router(role_router)
+api_router.include_router(monitor_router)

@@ -1,98 +1,151 @@
-﻿# AGENTS.md — 给 Codex / AI Agent 的仓库级工作约束（必须遵守）
+# AGENTS.md — 给 Codex / AI Agent 的仓库级工作约束（必须遵守）
 
-本项目：CampusSage（CSage）— Evidence-grounded University Knowledge Assistant（RAG）
-技术栈：FastAPI + VectorDB(Qdrant/pgvector) + vLLM，Python 为主。
+本项目：CampusSage（CSage）— Evidence-grounded University Knowledge Assistant（RAG）  
+当前技术栈：FastAPI + VectorDB(Qdrant 默认) + vLLM + OpenAI 兼容 Embedding（后端）+ React 前端规划文档（待实现）
 
-> 目标：让 AI Agent 产出的代码“能跑、可测、可维护、可追溯”，并且适合毕业设计答辩。
-
-
-## 0. 最高优先级硬约束（违反即视为失败）
-1) **所有源码/配置/文档必须 UTF-8 编码**（`.py/.md/.yml/.toml/.json` 等）。
-2) **注释与 Docstring 必须使用中文**（解释“为什么这么做/边界条件/异常含义”）。
-3) **命名必须使用英文**（模块/函数/类/变量），仅注释中文。
-4) **统一换行符 LF**（Windows 本地可 CRLF，但提交时必须是 LF）。
-5) **严禁提交 IDE 文件与本地机密**：`.idea/`、`.env`、模型权重、大体积数据集、日志。
-6) **任何 RAG 回答必须有证据引用**；证据不足必须拒答/提示，不允许“编”。
+> 目标：让 AI Agent 产出的代码“能跑、可测、可维护、可追溯”，并可用于毕业设计答辩演示。
 
 
-## 1. 仓库结构（模块边界要清晰）
-推荐结构（按此创建/维护）：
+## 0. 最高优先级硬约束（违反即失败）
+1. 所有源码/配置/文档必须 UTF-8 编码（`.py/.md/.yml/.toml/.json/.ts/.tsx/.css`）。
+2. 注释与 Docstring 必须使用中文（解释设计原因、边界条件、异常含义）。
+3. 命名必须使用英文（模块/函数/类/变量），仅注释中文。
+4. 统一换行符 LF（Windows 本地可 CRLF，但提交时必须 LF）。
+5. 严禁提交 IDE 文件与本地机密：`.idea/`、`.env`、模型权重、大体积数据、日志。
+6. 任何 RAG 回答必须有证据引用；证据不足必须拒答，不允许编造。
+7. 修改行为必须同步文档，禁止“代码变了但文档没变”。
+
+
+## 1. 仓库结构与边界
+推荐结构（按此维护）：
 - `app/`：后端应用代码
-    - `app/main.py`：FastAPI 入口
-    - `app/api/`：路由层（只做入参/出参、依赖注入、调用 service，严禁写复杂逻辑）
-    - `app/core/`：配置、日志、异常、通用工具
-    - `app/db/`：数据库模型与数据访问（Repository/DAO）
-    - `app/ingest/`：入库流水线（解析→chunk→embedding→写向量库）
-    - `app/rag/`：问答流水线（检索→上下文→vLLM→引用/拒答）
-    - `app/eval/`：离线评测（Recall@K/MRR/延迟统计）
-- `tests/`：pytest 测试（`test_*.py`）
-- `docs/`：设计与规范（必须保持更新）
-- `scripts/`：一次性脚本（导入数据/跑评测等）
-- `docker/` & `docker-compose.yml`：依赖服务与部署文件
+  - `app/main.py`：FastAPI 入口
+  - `app/api/`：路由层（仅参数校验、依赖注入、调用 service）
+  - `app/core/`：配置、日志、异常、通用工具
+  - `app/db/`：数据模型与仓库层
+  - `app/ingest/`：入库流水线（解析→chunk→embedding→向量写入）
+  - `app/rag/`：问答流水线（检索→上下文→生成→引用/拒答）
+  - `app/eval/`：离线评测
+- `tests/`：后端 pytest 测试
+- `docs/`：设计与规范文档
+- `docs/frontend/`：前端规范文档
+- `frontend/`：前端工程（后续创建）
+- `scripts/`：一次性脚本
 
-> 说明：如果当前仓库还没有这些目录，AI Agent 可以按任务需要逐步创建，但必须保持上述边界一致。
-
-
-## 2. 开发与验证命令（每次任务都必须跑）
-在工具链落地前，默认使用以下命令（若后续引入新工具，必须同步更新本节与 README）：
-
-- 代码风格/静态检查：`ruff check .`
-- 单元测试：`pytest -q`
-- 启动依赖（如已提供）：`docker compose up -d`
-- 启动 API：`uvicorn app.main:app --reload`
-
-**Definition of Done（任何任务的完成标准）**
-1) 仅修改与任务相关的文件，改动范围可解释；
-2) `ruff check .` 通过；
-3) `pytest -q` 通过（新增/改动的行为必须有测试）；
-4) API 行为有明确错误响应（HTTP 状态码 + 错误码 + 中文错误信息）；
-5) 如果影响 RAG：引用字段与格式必须符合 `docs/RAG_CONTRACT.md`。
+约束：
+- 后端业务层不得依赖 API 层。
+- 前端页面层不得直接裸调接口，必须走统一 API 层。
+- 前后端契约以文档为准，不得私自扩展未约定字段。
 
 
-## 3. 编码规范（AI Agent 必须遵循）
-### 3.1 写法与分层
-- 路由层（`app/api/`）必须薄：只做参数校验、权限/依赖注入、调用 service、返回响应。
-- 业务逻辑在 `app/ingest/`、`app/rag/`、`app/eval/`。
-- IO（网络/文件/数据库/向量库）必须显式出现在 service 层，不要隐藏副作用。
-- 禁止“巨石函数”：单函数建议 ≤ 50 行，超出必须拆分并补中文注释说明边界。
+## 2. 开发与验证命令（按改动范围执行）
+后端改动必须执行：
+- `ruff check .`
+- `pytest -q`
+- 评测相关改动附加执行：`python scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --topk 5`
 
-### 3.2 类型与数据结构
-- 公共函数与 service 方法必须写类型标注。
-- 请求/响应必须使用 Pydantic Model，并写中文字段说明（Field 描述）。
-- 禁止随意返回 `dict`；统一返回明确的 Response Model。
+前端改动（`frontend/` 建立后）必须执行：
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
 
-### 3.3 错误处理（统一格式）
-- 业务异常必须带 `code`（枚举化），并由统一异常处理中间件转为 HTTP 响应。
-- 错误响应建议结构：
-  ```json
-  {
-    "error": {
-      "code": "INGEST_PARSE_FAILED",
-      "message": "PDF解析失败：未提取到有效文本",
-      "detail": {"doc_id": "..."}
-    },
-    "request_id": "..."
-  }
-### 3.4 日志与可观测性
-- 必须结构化记录关键字段：
-- 入库：doc_id, kb_id, chunk_count, embed_count, upsert_count, total_ms
-- 问答：kb_id, topk, threshold, rerank, retrieve_ms, generate_ms, total_ms, hit_docs, hit_chunks
-- 禁止把敏感信息直接打日志（必要时脱敏）。
+如果环境缺失导致无法执行，必须在结果中明确说明“未执行项、原因、影响范围”。
+集成测试说明：
+- Qdrant/Redis 依赖不可用时，允许跳过对应集成测试，但必须在结果说明中标注。
 
-## 4. RAG 专属硬约束（可信度底线）
-1. 证据不足必须拒答：当检索分数低/证据覆盖不足时，返回 refusal=true，并给出下一步建议。
-2. 引用必须可定位：每条引用至少包含 doc_name + page/section + snippet（具体字段以契约为准）。
-3. chunk metadata 必须完整：写入向量库时必须携带 docs/RAG_CONTRACT.md 中的必需字段。
-4. 上下文拼接必须有 token 预算与去重逻辑，避免爆长导致输出不稳定。
 
-## 5. Git 与提交规范
-- 禁止提交：.idea/、.env、__pycache__/、.venv/、日志、权重、大文件数据集。
-- 提交信息建议使用 Conventional Commits：
-- feat: ... fix: ... chore: ... docs: ... test: ...
-- 每次提交前必须确保：ruff + pytest 均通过。
+## 3. 后端实现规范
+### 3.1 分层与写法
+- 路由层（`app/api/`）必须薄，不写复杂业务。
+- 业务逻辑集中在 `app/ingest`、`app/rag`、`app/eval`。
+- IO 副作用必须显式出现在 service 层。
+- 避免巨石函数，复杂逻辑必须拆分并加中文注释。
 
-## 6. 文档同步要求
-任何会影响接口/契约/行为的变更，必须同步更新：
-- docs/API_SPEC.md（接口与 JSON 示例）
-- docs/RAG_CONTRACT.md（chunk schema / 引用格式 / 拒答规则）
-- docs/CONVENTIONS.md（全局规范，如工具链变更）
+### 3.2 类型与模型
+- 公共函数与 service 方法必须有类型标注。
+- 请求/响应统一使用 Pydantic Model。
+- 禁止对外返回随意 `dict`（除约定的简单删除响应外）。
+
+### 3.3 错误与日志
+- 业务异常必须带错误码（枚举化）。
+- 错误响应必须统一结构（`error + request_id`）。
+- 日志必须结构化，关键字段可检索。
+- 禁止直接记录敏感信息，必要时脱敏。
+- 队列相关错误必须统一返回可读错误（例如 Redis 不可用），并记录失败原因。
+
+
+## 4. 前端实现规范（强制）
+前端实现必须遵循：
+- `docs/frontend/FRONTEND_OVERVIEW.md`
+- `docs/frontend/ARCHITECTURE.md`
+- `docs/frontend/API_CONTRACT.md`
+- `docs/frontend/STATE_AND_INTERACTION.md`
+- `docs/frontend/UI_RULES.md`
+- `docs/frontend/ERROR_HANDLING.md`
+- `docs/frontend/TEST_STRATEGY.md`
+- `docs/frontend/AI_WORKFLOW.md`
+
+前端硬约束：
+1. 每个页面必须有 `loading/success/empty/error` 四态。
+2. `refusal=true` 属于业务正常态，不得按接口失败处理。
+3. 引用展示必须包含 `doc_name + (page 或 section_path) + snippet`。
+4. 所有错误提示必须可追踪 `request_id`。
+5. 样式必须遵循统一视觉规范，不得无约束拼接第三方样式。
+
+
+## 5. RAG 专属硬约束
+1. 证据不足必须拒答（`refusal=true`），并给出下一步建议。
+2. 引用必须可定位（文档名 + 页码/章节 + 片段）。
+3. 向量 metadata 必须完整，符合 `docs/RAG_CONTRACT.md`。
+4. 上下文构造必须有预算与去重，避免超长导致不稳定。
+5. vLLM 生成答案必须带证据编号（如 `[1][2]`）；若模型遗漏，服务层必须自动补全引用标记。
+6. 拒答策略必须至少包含：分数阈值、关键词覆盖率阈值、最小上下文长度。
+7. Qdrant 写入前必须执行 payload 契约校验，不允许缺字段写入。
+
+
+## 6. Git 与提交规范
+- 禁止提交：`.idea/`、`.env`、`__pycache__/`、`.venv/`、日志、权重、大文件数据集。
+- 提交信息建议：Conventional Commits
+  - `feat: ...`
+  - `fix: ...`
+  - `docs: ...`
+  - `test: ...`
+  - `chore: ...`
+- 提交前必须完成对应检查命令。
+
+
+## 7. 文档同步规则（强制）
+任何影响接口、契约、页面行为的变更，必须同步更新对应文档：
+- 后端契约文档：
+  - `docs/API_SPEC.md`
+  - `docs/RAG_CONTRACT.md`
+  - `docs/CONVENTIONS.md`
+  - `docs/CONFIG.md`
+  - `docs/LOCAL_DEV.md`
+- 前端规范文档：
+  - `docs/frontend/API_CONTRACT.md`
+  - `docs/frontend/STATE_AND_INTERACTION.md`
+  - `docs/frontend/ERROR_HANDLING.md`
+  - `docs/frontend/UI_RULES.md`
+- 总入口文档：
+  - `docs/PROJECT_GUIDE.md`
+
+
+## 8. AI Agent 执行流程（必须遵守）
+1. 开始任务先读取相关文档，再动代码。
+2. 每次只做一个可验收的小任务。
+3. 先实现，再验证，再更新文档。
+4. 输出结果必须包含：
+   - 修改文件列表
+   - 执行过的命令与结果
+   - 未执行项及原因
+   - 风险与下一步建议
+
+
+## 9. 禁止行为
+- 不允许绕开契约“临时凑合”。
+- 不允许无测试修改核心流程。
+- 不允许静默吞异常。
+- 不允许在未说明的情况下大改目录结构。
+- 不允许编造后端不存在的字段或前端行为。

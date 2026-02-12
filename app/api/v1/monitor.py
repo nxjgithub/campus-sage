@@ -14,7 +14,7 @@ from app.ingest.queue_monitor import (
     move_failed_to_dead,
 )
 
-router = APIRouter(prefix="/api/v1/monitor", tags=["Monitor"])
+router = APIRouter(prefix="/monitor", tags=["Monitor"])
 
 
 @router.get("/queues")
