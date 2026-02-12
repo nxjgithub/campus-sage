@@ -1,4 +1,4 @@
-import { Badge, Button, Layout, Menu, Space, Tag, Typography } from "antd";
+import { Button, Layout, Menu, Space, Tag, Typography } from "antd";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../shared/auth/auth";
 import { NavEntry, ROUTE_PRELOADERS } from "../../shared/constants/nav";
@@ -25,7 +25,6 @@ function resolveSelectedKey(pathname: string, navItems: NavEntry[]) {
 
 function nowText() {
   return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -47,11 +46,9 @@ export function PortalLayout({ navItems, panelLabel }: PortalLayoutProps) {
   const roleText = role === "admin" ? "管理员" : "用户";
   const nextPath = encodeURIComponent(`${location.pathname}${location.search}`);
 
-  const runtimeText = nowText();
-
   return (
     <Layout className="app-shell">
-      <Sider width={232} className="app-sider">
+      <Sider width={228} className="app-sider">
         <div className="brand-block">
           <Typography.Title level={4} className="brand-title">
             CampusSage
@@ -77,11 +74,12 @@ export function PortalLayout({ navItems, panelLabel }: PortalLayoutProps) {
           }}
         />
         <div className="menu-footer">
-          <Space direction="vertical" size={4} style={{ width: "100%" }}>
-            <Typography.Text type="secondary">当前模块</Typography.Text>
-            <Badge status="processing" text={currentModule(location.pathname)} />
-            <Typography.Text type="secondary">{runtimeText}</Typography.Text>
-          </Space>
+          <Typography.Text className="menu-footer-key">当前模块</Typography.Text>
+          <Typography.Text className="menu-footer-value">
+            {currentModule(location.pathname)}
+          </Typography.Text>
+          <Typography.Text className="menu-footer-key">更新时间</Typography.Text>
+          <Typography.Text className="menu-footer-value">{nowText()}</Typography.Text>
         </div>
       </Sider>
       <Layout>
@@ -91,7 +89,7 @@ export function PortalLayout({ navItems, panelLabel }: PortalLayoutProps) {
               Evidence-grounded University Knowledge Assistant
             </Typography.Text>
             <Typography.Text className="header-text">
-              RAG 检索增强问答平台 · 会话 / 引用 / 评测 / 监控 一体化
+              RAG 检索增强问答平台 · 会话、引用、评测、监控一体化
             </Typography.Text>
           </div>
           {isAuthenticated ? (

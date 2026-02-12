@@ -3,11 +3,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Button,
   Card,
-  Col,
   Descriptions,
   Input,
   List,
-  Row,
   Segmented,
   Space,
   Tag,
@@ -30,6 +28,8 @@ import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import { splitCitationMarkers } from "../../shared/utils/citation";
 
 type SortOrder = "desc" | "asc";
+type MessageFilter = "all" | "assistant" | "user";
+type ListDensity = "default" | "small";
 
 function asCitationItems(value: unknown): CitationItem[] {
   if (!Array.isArray(value)) {
@@ -53,12 +53,8 @@ function timingEntries(value: unknown): Array<readonly [string, number]> {
     .filter(([, num]) => Number.isFinite(num));
 }
 
-function renderContentWithMarkers(
-  content: string,
-  onMarkerClick: (citationId: number) => void
-) {
+function renderContentWithMarkers(content: string, onMarkerClick: (citationId: number) => void) {
   const chunks = splitCitationMarkers(content);
-
   return chunks.map((chunk, index) => {
     if (chunk.type === "text") {
       return <span key={`text_${index}`}>{chunk.value}</span>;
@@ -97,7 +93,7 @@ export function MessageCard(props: {
 
   return (
     <List.Item>
-      <Space direction="vertical" style={{ width: "100%" }} size={6}>
+      <Space direction="vertical" style={{ width: "100%" }} size={8}>
         <Space>
           <Tag color={item.role === "user" ? "blue" : "green"}>{item.role}</Tag>
           {item.refusal ? <Tag color="warning">refusal</Tag> : null}
@@ -114,6 +110,7 @@ export function MessageCard(props: {
               })
             : item.content}
         </Typography.Paragraph>
+
         {item.role === "assistant" ? (
           <>
             {timing.length > 0 ? (
@@ -202,6 +199,8 @@ export function ConversationsPage() {
   const [keyword, setKeyword] = useState("");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [messageFilter, setMessageFilter] = useState<MessageFilter>("all");
+  const [listDensity, setListDensity] = useState<ListDensity>("small");
   const [submittingFeedbackMessageId, setSubmittingFeedbackMessageId] = useState<string | null>(
     null
   );
@@ -209,9 +208,7 @@ export function ConversationsPage() {
 
   const listQuery = useQuery({
     queryKey: ["conversation", "list", kbId],
-    queryFn: async () => {
-      return fetchConversationList({ kb_id: kbId || undefined, limit: 50, offset: 0 });
-    }
+    queryFn: async () => fetchConversationList({ kb_id: kbId || undefined, limit: 80, offset: 0 })
   });
 
   const detailQuery = useQuery({
@@ -229,11 +226,17 @@ export function ConversationsPage() {
   const selectedMessageCount = detailQuery.data?.messages.length ?? 0;
   const assistantMessageCount =
     detailQuery.data?.messages.filter((item) => item.role === "assistant").length ?? 0;
+  const filteredMessages = useMemo(() => {
+    const items = detailQuery.data?.messages ?? [];
+    if (messageFilter === "all") {
+      return items;
+    }
+    return items.filter((item) => item.role === messageFilter);
+  }, [detailQuery.data?.messages, messageFilter]);
 
   const feedbackMutation = useMutation({
-    mutationFn: async (params: { messageId: string; payload: FeedbackPayload }) => {
-      return submitFeedback(params.messageId, params.payload);
-    },
+    mutationFn: async (params: { messageId: string; payload: FeedbackPayload }) =>
+      submitFeedback(params.messageId, params.payload),
     retry: false
   });
 
@@ -260,10 +263,10 @@ export function ConversationsPage() {
       <Card className="hero-card">
         <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <Typography.Title level={4} className="hero-title">
-            会话运营看板
+            会话运营台
           </Typography.Title>
           <Typography.Text className="hero-desc">
-            支持会话检索、按 KB 过滤、时序排序、证据联动与逐条反馈。
+            用于回看用户提问路径、复核证据引用、分析拒答与反馈质量。
           </Typography.Text>
           <div className="summary-grid">
             <div className="summary-item">
@@ -286,28 +289,28 @@ export function ConversationsPage() {
         </Space>
       </Card>
 
-      <Row gutter={16}>
-        <Col xs={24} lg={10}>
-          <Card
-            title="会话列表"
-            className="card-soft"
-            extra={
-              <Space>
-                <Input
-                  placeholder="按 kb_id 过滤"
-                  value={kbId}
-                  onChange={(event) => {
-                    setKbId(event.target.value.trim());
-                  }}
-                  style={{ width: 220 }}
-                />
-                <Button onClick={() => void listQuery.refetch()} loading={listQuery.isFetching}>
-                  查询
-                </Button>
-              </Space>
-            }
-          >
-            <Space direction="vertical" size={10} style={{ width: "100%", marginBottom: 12 }}>
+      <div className="ops-workbench">
+        <Card
+          title="会话列表"
+          className="card-soft ops-pane-card"
+          extra={
+            <Space>
+              <Input
+                placeholder="按 kb_id 过滤"
+                value={kbId}
+                onChange={(event) => {
+                  setKbId(event.target.value.trim());
+                }}
+                style={{ width: 180 }}
+              />
+              <Button onClick={() => void listQuery.refetch()} loading={listQuery.isFetching}>
+                刷新
+              </Button>
+            </Space>
+          }
+        >
+          <div className="ops-pane-body">
+            <div className="toolbar-row">
               <Input
                 allowClear
                 placeholder="搜索标题 / 会话ID / kb_id"
@@ -315,6 +318,7 @@ export function ConversationsPage() {
                 onChange={(event) => {
                   setKeyword(event.target.value);
                 }}
+                style={{ width: 260 }}
               />
               <Segmented<SortOrder>
                 value={sortOrder}
@@ -326,66 +330,104 @@ export function ConversationsPage() {
                   setSortOrder(value);
                 }}
               />
-            </Space>
+            </div>
 
             {listQuery.isError ? (
               <RequestErrorAlert error={normalizeApiError(listQuery.error)} />
             ) : null}
 
-            <List
-              bordered
-              loading={listQuery.isLoading}
-              dataSource={filteredItems}
-              locale={{ emptyText: "暂无会话" }}
-              renderItem={(item) => (
-                <List.Item
-                  style={{
-                    cursor: "pointer",
-                    background:
-                      selectedId === item.conversation_id ? "var(--bg-emphasis)" : "transparent"
-                  }}
-                  onClick={() => {
-                    setSelectedId(item.conversation_id);
-                  }}
-                >
-                  <Space direction="vertical" size={0}>
-                    <Typography.Text strong>{item.title || "未命名会话"}</Typography.Text>
-                    <Typography.Text type="secondary">{item.conversation_id}</Typography.Text>
-                    <Typography.Text type="secondary">{item.updated_at}</Typography.Text>
-                  </Space>
-                </List.Item>
-              )}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} lg={14}>
-          <Card title="会话详情" className="card-soft">
+            <div className="ops-scroll-pane">
+              <List
+                size={listDensity}
+                bordered
+                loading={listQuery.isLoading}
+                dataSource={filteredItems}
+                locale={{ emptyText: "暂无会话" }}
+                renderItem={(item) => (
+                  <List.Item
+                    style={{
+                      cursor: "pointer",
+                      background:
+                        selectedId === item.conversation_id ? "var(--bg-emphasis)" : "transparent"
+                    }}
+                    onClick={() => {
+                      setSelectedId(item.conversation_id);
+                    }}
+                  >
+                    <Space direction="vertical" size={0}>
+                      <Typography.Text strong>{item.title || "未命名会话"}</Typography.Text>
+                      <Typography.Text type="secondary">{item.conversation_id}</Typography.Text>
+                      <Typography.Text type="secondary">{item.updated_at}</Typography.Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card title="会话详情" className="card-soft ops-pane-card">
+          <div className="ops-pane-body">
             {!selectedId ? (
               <Typography.Text type="secondary">请先选择左侧会话。</Typography.Text>
             ) : detailQuery.isError ? (
               <RequestErrorAlert error={normalizeApiError(detailQuery.error)} />
             ) : (
-              <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                <CopyableField label="conversation_id" value={detailQuery.data?.conversation_id} />
-                <CopyableField label="request_id" value={detailQuery.data?.request_id} />
-                <List
-                  loading={detailQuery.isLoading}
-                  dataSource={detailQuery.data?.messages ?? []}
-                  locale={{ emptyText: "暂无消息" }}
-                  renderItem={(item) => (
-                    <MessageCard
-                      item={item}
-                      submitting={submittingFeedbackMessageId === item.message_id}
-                      submitted={Boolean(submittedFeedbackMap[item.message_id])}
-                      onFeedbackSubmit={handleFeedbackSubmit}
-                    />
-                  )}
-                />
-              </Space>
+              <div className="ops-scroll-pane">
+                <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                  <div className="density-toolbar">
+                    <Space wrap>
+                      <Tag>消息数：{selectedMessageCount}</Tag>
+                      <Tag color="processing">助手消息：{assistantMessageCount}</Tag>
+                    </Space>
+                    <Space>
+                      <Segmented<MessageFilter>
+                        size="small"
+                        value={messageFilter}
+                        options={[
+                          { label: "全部消息", value: "all" },
+                          { label: "仅助手", value: "assistant" },
+                          { label: "仅用户", value: "user" }
+                        ]}
+                        onChange={(value) => {
+                          setMessageFilter(value);
+                        }}
+                      />
+                      <Segmented<ListDensity>
+                        size="small"
+                        value={listDensity}
+                        options={[
+                          { label: "舒适", value: "default" },
+                          { label: "紧凑", value: "small" }
+                        ]}
+                        onChange={(value) => {
+                          setListDensity(value);
+                        }}
+                      />
+                    </Space>
+                  </div>
+                  <CopyableField label="conversation_id" value={detailQuery.data?.conversation_id} />
+                  <CopyableField label="request_id" value={detailQuery.data?.request_id} />
+                  <List
+                    size={listDensity}
+                    loading={detailQuery.isLoading}
+                    dataSource={filteredMessages}
+                    locale={{ emptyText: "暂无消息" }}
+                    renderItem={(item) => (
+                      <MessageCard
+                        item={item}
+                        submitting={submittingFeedbackMessageId === item.message_id}
+                        submitted={Boolean(submittedFeedbackMap[item.message_id])}
+                        onFeedbackSubmit={handleFeedbackSubmit}
+                      />
+                    )}
+                  />
+                </Space>
+              </div>
             )}
-          </Card>
-        </Col>
-      </Row>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   Form,
   Input,
   Row,
+  Segmented,
   Select,
   Space,
   Table,
@@ -43,6 +44,9 @@ interface DocumentsPageProps {
   initialKbId?: string;
 }
 
+type TableDensity = "middle" | "small";
+type DocumentStatusFilter = "all" | "indexed" | "processing" | "failed";
+
 const FINAL_JOB_STATUS = new Set(["succeeded", "failed", "canceled"]);
 const JOB_HISTORY_LIMIT = 40;
 
@@ -56,6 +60,8 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobHistoryIds, setJobHistoryIds] = useState<string[]>([]);
+  const [tableDensity, setTableDensity] = useState<TableDensity>("small");
+  const [docStatusFilter, setDocStatusFilter] = useState<DocumentStatusFilter>("all");
   const kbId = Form.useWatch("kb_id", form);
 
   const kbQuery = useQuery({
@@ -133,11 +139,13 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     }))
   });
 
-  const historyJobs = useMemo(() => {
-    return historyQueries
-      .map((query) => query.data)
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  }, [historyQueries]);
+  const historyJobs = useMemo(
+    () =>
+      historyQueries
+        .map((query) => query.data)
+        .filter((item): item is NonNullable<typeof item> => Boolean(item)),
+    [historyQueries]
+  );
 
   const uploadMutation = useMutation({
     mutationFn: async (values: UploadFormValues) => {
@@ -220,8 +228,8 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     }
   });
 
-  const hasError = useMemo(() => {
-    return (
+  const hasError = useMemo(
+    () =>
       kbQuery.isError ||
       documentsQuery.isError ||
       jobQuery.isError ||
@@ -229,18 +237,18 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
       deleteMutation.isError ||
       reindexMutation.isError ||
       cancelMutation.isError ||
-      retryMutation.isError
-    );
-  }, [
-    cancelMutation.isError,
-    deleteMutation.isError,
-    documentsQuery.isError,
-    jobQuery.isError,
-    kbQuery.isError,
-    reindexMutation.isError,
-    retryMutation.isError,
-    uploadMutation.isError
-  ]);
+      retryMutation.isError,
+    [
+      cancelMutation.isError,
+      deleteMutation.isError,
+      documentsQuery.isError,
+      jobQuery.isError,
+      kbQuery.isError,
+      reindexMutation.isError,
+      retryMutation.isError,
+      uploadMutation.isError
+    ]
+  );
 
   const firstError = useMemo(() => {
     if (uploadMutation.isError) return normalizeApiError(uploadMutation.error);
@@ -275,6 +283,13 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     documentsQuery.data?.items.filter((item) => item.status === "indexed").length ?? 0;
   const failedCount =
     documentsQuery.data?.items.filter((item) => item.status === "failed").length ?? 0;
+  const filteredDocuments = useMemo(() => {
+    const items = documentsQuery.data?.items ?? [];
+    if (docStatusFilter === "all") {
+      return items;
+    }
+    return items.filter((item) => item.status === docStatusFilter);
+  }, [docStatusFilter, documentsQuery.data?.items]);
 
   return (
     <div className="page-stack">
@@ -286,7 +301,7 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
             文档入库工作台
           </Typography.Title>
           <Typography.Text className="hero-desc">
-            覆盖文档上传、重建索引、任务跟踪、失败重试和历史回放。
+            支持上传、重建、任务监控、失败重试与历史回放，适合知识库运营日常使用。
           </Typography.Text>
           <div className="summary-grid">
             <div className="summary-item">
@@ -309,23 +324,23 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
         </Space>
       </Card>
 
-      <Card title="上传文档并触发入库" className="card-soft">
-        <Alert
-          type="info"
-          showIcon
-          message="上传仅支持 PDF；如果文档较大，建议分批入库并观察队列状态。"
-          style={{ marginBottom: 12 }}
-        />
-        <Form<UploadFormValues>
-          form={form}
-          layout="vertical"
-          initialValues={{ published_at: undefined, kb_id: initialKbId }}
-          onFinish={(values) => {
-            uploadMutation.mutate(values);
-          }}
-        >
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={10}>
+          <Card title="上传文档并触发入库" className="card-soft">
+            <Alert
+              type="info"
+              showIcon
+              message="仅支持 PDF；建议按知识库分批上传，便于观察队列状态。"
+              style={{ marginBottom: 12 }}
+            />
+            <Form<UploadFormValues>
+              form={form}
+              layout="vertical"
+              initialValues={{ published_at: undefined, kb_id: initialKbId }}
+              onFinish={(values) => {
+                uploadMutation.mutate(values);
+              }}
+            >
               <Form.Item
                 name="kb_id"
                 label="知识库"
@@ -339,8 +354,6 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                   }))}
                 />
               </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
               <Form.Item label="文档文件" required>
                 <Upload
                   maxCount={1}
@@ -354,241 +367,286 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                   <Button>选择 PDF 文件</Button>
                 </Upload>
               </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item name="doc_name" label="文档名称（可选）">
-                <Input />
+              <Row gutter={12}>
+                <Col span={24}>
+                  <Form.Item name="doc_name" label="文档名称（可选）">
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="doc_version" label="文档版本（可选）">
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="published_at" label="发布日期（可选）">
+                    <Input placeholder="YYYY-MM-DD" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Form.Item>
+                <Button type="primary" htmlType="submit" loading={uploadMutation.isPending} block>
+                  上传并入库
+                </Button>
               </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="doc_version" label="文档版本（可选）">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="published_at" label="发布日期（YYYY-MM-DD，可选）">
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={uploadMutation.isPending}>
-              上传并入库
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
+            </Form>
+          </Card>
 
-      <Card
-        title="文档列表"
-        className="card-soft"
-        extra={
-          <Button onClick={() => void documentsQuery.refetch()} loading={documentsQuery.isFetching}>
-            刷新
-          </Button>
-        }
-      >
-        {!kbId ? (
-          <Typography.Text type="secondary">请先选择知识库后查看文档列表。</Typography.Text>
-        ) : (
-          <Table
-            rowKey="doc_id"
-            loading={documentsQuery.isLoading}
-            dataSource={documentsQuery.data?.items ?? []}
-            pagination={false}
-            columns={[
-              { title: "doc_id", dataIndex: "doc_id", width: 260 },
-              { title: "文档名", dataIndex: "doc_name" },
-              {
-                title: "状态",
-                dataIndex: "status",
-                width: 120,
-                render: (value: string) => <Tag>{value}</Tag>
-              },
-              { title: "chunk_count", dataIndex: "chunk_count", width: 120 },
-              {
-                title: "操作",
-                key: "actions",
-                width: 240,
-                render: (_, record: { doc_id: string }) => (
-                  <Space>
-                    <ConfirmAction
-                      title="确认重建该文档索引？"
-                      description="系统将重新生成文档向量索引，期间可能增加队列负载。"
-                      okText="确认重建"
-                      cancelText="取消"
-                      onConfirm={() => {
-                        reindexMutation.mutate(record.doc_id);
-                      }}
-                      buttonText="重建索引"
-                      size="small"
-                      loading={reindexMutation.isPending}
-                    />
-                    <ConfirmAction
-                      title="确认删除该文档？"
-                      description="删除后将移除该文档相关向量索引，无法恢复。"
-                      okText="确认删除"
-                      cancelText="取消"
-                      onConfirm={() => {
-                        deleteMutation.mutate(record.doc_id);
-                      }}
-                      buttonText="删除"
-                      danger
-                      size="small"
-                      loading={deleteMutation.isPending}
-                    />
-                  </Space>
-                )
-              }
-            ]}
-          />
-        )}
-      </Card>
-
-      <Card
-        title="入库任务状态"
-        className="card-soft"
-        extra={
-          activeJobId ? (
-            <Typography.Text type="secondary">当前任务：{activeJobId}</Typography.Text>
-          ) : null
-        }
-      >
-        {!activeJobId ? (
-          <Typography.Text type="secondary">暂无进行中的任务。</Typography.Text>
-        ) : (
-          <Space direction="vertical" size={8} style={{ width: "100%" }}>
-            <CopyableField label="job_id" value={activeJobId} />
-            <CopyableField label="request_id" value={jobQuery.data?.request_id} />
-            <Typography.Text>
-              状态：<Tag>{jobQuery.data?.status ?? "-"}</Tag>
-            </Typography.Text>
-            <Typography.Text>stage: {jobQuery.data?.progress?.stage ?? "-"}</Typography.Text>
-            <Typography.Text>
-              pages/chunks/embeddings/upsert：
-              {jobQuery.data?.progress?.pages_parsed ?? 0}/
-              {jobQuery.data?.progress?.chunks_built ?? 0}/
-              {jobQuery.data?.progress?.embeddings_done ?? 0}/
-              {jobQuery.data?.progress?.vectors_upserted ?? 0}
-            </Typography.Text>
-            {jobQuery.data?.error_message ? (
-              <Typography.Text type="danger">{jobQuery.data.error_message}</Typography.Text>
-            ) : null}
-            <Space>
-              <ConfirmAction
-                title="确认取消当前任务？"
-                description="取消后当前入库流程会被中止，可在后续重新重试。"
-                okText="确认取消"
-                cancelText="返回"
-                onConfirm={() => {
-                  if (activeJobId) {
-                    cancelMutation.mutate(activeJobId);
-                  }
-                }}
-                buttonText="取消任务"
-                disabled={!activeJobId}
-                loading={cancelMutation.isPending}
-              />
-              <ConfirmAction
-                title="确认重试当前任务？"
-                description="系统会创建新的入库任务并重新执行处理流程。"
-                okText="确认重试"
-                cancelText="返回"
-                onConfirm={() => {
-                  if (activeJobId) {
-                    retryMutation.mutate(activeJobId);
-                  }
-                }}
-                buttonText="重试任务"
-                disabled={!activeJobId}
-                loading={retryMutation.isPending}
-              />
-            </Space>
-          </Space>
-        )}
-      </Card>
-
-      <Card
-        title="任务历史"
-        className="card-soft"
-        extra={
-          <Button
-            onClick={() => {
-              historyQueries.forEach((query) => {
-                void query.refetch();
-              });
-            }}
-            disabled={!historyJobs.length}
+          <Card
+            title="入库任务状态"
+            className="card-soft"
+            style={{ marginTop: 16 }}
+            extra={
+              activeJobId ? (
+                <Typography.Text type="secondary">当前任务：{activeJobId}</Typography.Text>
+              ) : null
+            }
           >
-            刷新历史
-          </Button>
-        }
-      >
-        {!kbId ? (
-          <Typography.Text type="secondary">请选择知识库后查看任务历史。</Typography.Text>
-        ) : !historyJobs.length ? (
-          <Typography.Text type="secondary">暂无历史任务。</Typography.Text>
-        ) : (
-          <Table
-            rowKey="job_id"
-            dataSource={historyJobs}
-            pagination={false}
-            columns={[
-              { title: "job_id", dataIndex: "job_id", width: 260 },
-              { title: "doc_id", dataIndex: "doc_id", width: 240 },
-              {
-                title: "状态",
-                dataIndex: "status",
-                width: 120,
-                render: (value: string) => <Tag>{value}</Tag>
-              },
-              { title: "错误码", dataIndex: "error_code", width: 160 },
-              { title: "更新时间", dataIndex: "updated_at", width: 220 },
-              {
-                title: "操作",
-                key: "actions",
-                width: 280,
-                render: (_, record) => (
+            {!activeJobId ? (
+              <Typography.Text type="secondary">暂无进行中的任务。</Typography.Text>
+            ) : (
+              <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                <CopyableField label="job_id" value={activeJobId} />
+                <CopyableField label="request_id" value={jobQuery.data?.request_id} />
+                <Typography.Text>
+                  状态：<Tag>{jobQuery.data?.status ?? "-"}</Tag>
+                </Typography.Text>
+                <Typography.Text>stage: {jobQuery.data?.progress?.stage ?? "-"}</Typography.Text>
+                <Typography.Text>
+                  pages/chunks/embeddings/upsert：
+                  {jobQuery.data?.progress?.pages_parsed ?? 0}/
+                  {jobQuery.data?.progress?.chunks_built ?? 0}/
+                  {jobQuery.data?.progress?.embeddings_done ?? 0}/
+                  {jobQuery.data?.progress?.vectors_upserted ?? 0}
+                </Typography.Text>
+                {jobQuery.data?.error_message ? (
+                  <Typography.Text type="danger">{jobQuery.data.error_message}</Typography.Text>
+                ) : null}
+                <Space>
+                  <ConfirmAction
+                    title="确认取消当前任务？"
+                    description="取消后当前入库流程会被中止，可在后续重新重试。"
+                    okText="确认取消"
+                    cancelText="返回"
+                    onConfirm={() => {
+                      if (activeJobId) {
+                        cancelMutation.mutate(activeJobId);
+                      }
+                    }}
+                    buttonText="取消任务"
+                    disabled={!activeJobId}
+                    loading={cancelMutation.isPending}
+                  />
+                  <ConfirmAction
+                    title="确认重试当前任务？"
+                    description="系统会创建新的入库任务并重新执行处理流程。"
+                    okText="确认重试"
+                    cancelText="返回"
+                    onConfirm={() => {
+                      if (activeJobId) {
+                        retryMutation.mutate(activeJobId);
+                      }
+                    }}
+                    buttonText="重试任务"
+                    disabled={!activeJobId}
+                    loading={retryMutation.isPending}
+                  />
+                </Space>
+              </Space>
+            )}
+          </Card>
+        </Col>
+
+        <Col xs={24} xl={14}>
+          <Card
+            title="文档列表"
+            className={`card-soft ${tableDensity === "small" ? "ops-pane-card--dense" : ""}`}
+            extra={
+              <Button
+                onClick={() => void documentsQuery.refetch()}
+                loading={documentsQuery.isFetching}
+              >
+                刷新
+              </Button>
+            }
+          >
+            {!kbId ? (
+              <Typography.Text type="secondary">请先选择知识库后查看文档列表。</Typography.Text>
+            ) : (
+              <>
+                <div className="density-toolbar">
+                  <Segmented<DocumentStatusFilter>
+                    value={docStatusFilter}
+                    options={[
+                      { label: "全部", value: "all" },
+                      { label: "已索引", value: "indexed" },
+                      { label: "处理中", value: "processing" },
+                      { label: "失败", value: "failed" }
+                    ]}
+                    onChange={(value) => {
+                      setDocStatusFilter(value);
+                    }}
+                  />
                   <Space>
-                    <Button
+                    <Typography.Text className="density-meta">
+                      当前 {filteredDocuments.length} / {documentsQuery.data?.items.length ?? 0}
+                    </Typography.Text>
+                    <Segmented<TableDensity>
                       size="small"
-                      onClick={() => {
-                        setActiveJobId(record.job_id);
+                      value={tableDensity}
+                      options={[
+                        { label: "舒适", value: "middle" },
+                        { label: "紧凑", value: "small" }
+                      ]}
+                      onChange={(value) => {
+                        setTableDensity(value);
                       }}
-                    >
-                      查看
-                    </Button>
-                    <ConfirmAction
-                      title="确认取消该任务？"
-                      okText="确认取消"
-                      cancelText="返回"
-                      disabled={!["queued", "running"].includes(record.status)}
-                      onConfirm={() => {
-                        cancelMutation.mutate(record.job_id);
-                      }}
-                      buttonText="取消"
-                      size="small"
-                    />
-                    <ConfirmAction
-                      title="确认重试该任务？"
-                      okText="确认重试"
-                      cancelText="返回"
-                      disabled={!["failed", "canceled"].includes(record.status)}
-                      onConfirm={() => {
-                        retryMutation.mutate(record.job_id);
-                      }}
-                      buttonText="重试"
-                      size="small"
                     />
                   </Space>
-                )
-              }
-            ]}
-          />
-        )}
-      </Card>
+                </div>
+                <Table
+                  size={tableDensity}
+                  className={tableDensity === "small" ? "dense-table" : undefined}
+                  rowKey="doc_id"
+                  loading={documentsQuery.isLoading}
+                  dataSource={filteredDocuments}
+                  pagination={false}
+                  scroll={{ y: 280 }}
+                  columns={[
+                    { title: "doc_id", dataIndex: "doc_id", width: 260 },
+                    { title: "文档名", dataIndex: "doc_name" },
+                    {
+                      title: "状态",
+                      dataIndex: "status",
+                      width: 120,
+                      render: (value: string) => <Tag>{value}</Tag>
+                    },
+                    { title: "chunk_count", dataIndex: "chunk_count", width: 120 },
+                    {
+                      title: "操作",
+                      key: "actions",
+                      width: 240,
+                      render: (_, record: { doc_id: string }) => (
+                        <Space>
+                          <ConfirmAction
+                            title="确认重建该文档索引？"
+                            description="系统将重新生成文档向量索引，期间可能增加队列负载。"
+                            okText="确认重建"
+                            cancelText="取消"
+                            onConfirm={() => {
+                              reindexMutation.mutate(record.doc_id);
+                            }}
+                            buttonText="重建索引"
+                            size="small"
+                            loading={reindexMutation.isPending}
+                          />
+                          <ConfirmAction
+                            title="确认删除该文档？"
+                            description="删除后将移除该文档相关向量索引，无法恢复。"
+                            okText="确认删除"
+                            cancelText="取消"
+                            onConfirm={() => {
+                              deleteMutation.mutate(record.doc_id);
+                            }}
+                            buttonText="删除"
+                            danger
+                            size="small"
+                            loading={deleteMutation.isPending}
+                          />
+                        </Space>
+                      )
+                    }
+                  ]}
+                />
+              </>
+            )}
+          </Card>
+
+          <Card
+            title="任务历史"
+            className={`card-soft ${tableDensity === "small" ? "ops-pane-card--dense" : ""}`}
+            style={{ marginTop: 16 }}
+            extra={
+              <Button
+                onClick={() => {
+                  historyQueries.forEach((query) => {
+                    void query.refetch();
+                  });
+                }}
+                disabled={!historyJobs.length}
+              >
+                刷新历史
+              </Button>
+            }
+          >
+            {!kbId ? (
+              <Typography.Text type="secondary">请选择知识库后查看任务历史。</Typography.Text>
+            ) : !historyJobs.length ? (
+              <Typography.Text type="secondary">暂无历史任务。</Typography.Text>
+            ) : (
+              <Table
+                size={tableDensity}
+                className={tableDensity === "small" ? "dense-table" : undefined}
+                rowKey="job_id"
+                dataSource={historyJobs}
+                pagination={false}
+                scroll={{ y: 280 }}
+                columns={[
+                  { title: "job_id", dataIndex: "job_id", width: 260 },
+                  { title: "doc_id", dataIndex: "doc_id", width: 240 },
+                  {
+                    title: "状态",
+                    dataIndex: "status",
+                    width: 120,
+                    render: (value: string) => <Tag>{value}</Tag>
+                  },
+                  { title: "错误码", dataIndex: "error_code", width: 160 },
+                  { title: "更新时间", dataIndex: "updated_at", width: 220 },
+                  {
+                    title: "操作",
+                    key: "actions",
+                    width: 280,
+                    render: (_, record) => (
+                      <Space>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setActiveJobId(record.job_id);
+                          }}
+                        >
+                          查看
+                        </Button>
+                        <ConfirmAction
+                          title="确认取消该任务？"
+                          okText="确认取消"
+                          cancelText="返回"
+                          disabled={!["queued", "running"].includes(record.status)}
+                          onConfirm={() => {
+                            cancelMutation.mutate(record.job_id);
+                          }}
+                          buttonText="取消"
+                          size="small"
+                        />
+                        <ConfirmAction
+                          title="确认重试该任务？"
+                          okText="确认重试"
+                          cancelText="返回"
+                          disabled={!["failed", "canceled"].includes(record.status)}
+                          onConfirm={() => {
+                            retryMutation.mutate(record.job_id);
+                          }}
+                          buttonText="重试"
+                          size="small"
+                        />
+                      </Space>
+                    )
+                  }
+                ]}
+              />
+            )}
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 }

@@ -1,16 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Form,
-  Input,
-  Row,
-  Space,
-  Typography,
-  message
-} from "antd";
+import { Button, Card, Col, Form, Input, Row, Space, Typography, message } from "antd";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { normalizeApiError } from "../../shared/api/errors";
 import { useAuth } from "../../shared/auth/auth";
@@ -40,6 +29,7 @@ export function LoginPage() {
 
   const fallbackPath = getRoleHomePath(role);
   const nextPath = resolveNextPath(searchParams.get("next"), fallbackPath);
+  const isDev = import.meta.env.DEV;
 
   useEffect(() => {
     if (status !== "loading" && isAuthenticated) {
@@ -48,31 +38,51 @@ export function LoginPage() {
   }, [isAuthenticated, navigate, nextPath, status]);
 
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <Row gutter={[16, 16]} style={{ width: "100%", maxWidth: 980 }}>
-        <Col xs={24} lg={11}>
-          <Card className="hero-card">
-            <Typography.Title level={3} style={{ marginTop: 0 }}>
-              CampusSage
-            </Typography.Title>
-            <Typography.Paragraph className="hero-desc">
-              登录后可访问会话历史、反馈回放、评测与管理员能力。未登录也可在公开知识库中进行匿名问答。
-            </Typography.Paragraph>
-            <Space direction="vertical" size={6}>
-              <Typography.Text>• 引用可定位，支持证据卡片联动</Typography.Text>
-              <Typography.Text>• 支持知识库权限与 RBAC 鉴权</Typography.Text>
-              <Typography.Text>• 支持离线评测、队列监控与错误追踪</Typography.Text>
+    <div className="login-shell">
+      <div className="login-blob login-blob--one" />
+      <div className="login-blob login-blob--two" />
+      <Row gutter={[20, 20]} className="login-layout">
+        <Col xs={24} lg={12}>
+          <Card className="hero-card login-brand-card">
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <Space align="center" size={12}>
+                <span className="login-brand-mark">CS</span>
+                <div>
+                  <Typography.Title level={3} style={{ margin: 0 }}>
+                    CampusSage
+                  </Typography.Title>
+                  <Typography.Text className="login-tagline">让校园问答有据可查</Typography.Text>
+                </div>
+              </Space>
+              <Typography.Paragraph className="hero-desc" style={{ marginBottom: 0 }}>
+                连接检索、引用与评测，让教务问答更稳定，也让管理过程更可追踪。
+              </Typography.Paragraph>
+              <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                <Typography.Text className="login-selling-point">
+                  <span className="login-point-dot" />
+                  回答自动附带证据片段与来源定位
+                </Typography.Text>
+                <Typography.Text className="login-selling-point">
+                  <span className="login-point-dot" />
+                  支持知识库权限与角色分级访问
+                </Typography.Text>
+                <Typography.Text className="login-selling-point">
+                  <span className="login-point-dot" />
+                  评测与监控闭环，便于持续优化质量
+                </Typography.Text>
+              </Space>
             </Space>
           </Card>
         </Col>
-        <Col xs={24} lg={13}>
-          <Card title="账号登录" className="card-soft">
-            <Alert
-              type="info"
-              showIcon
-              message="仅在后端已启动并配置好 CORS / 代理时可登录成功"
-              style={{ marginBottom: 12 }}
-            />
+
+        <Col xs={24} lg={12} className="login-form-col">
+          <Card className="card-soft login-form-card">
+            <Typography.Title level={3} className="login-form-title">
+              账号登录
+            </Typography.Title>
+            <Typography.Paragraph className="login-form-subtitle">
+              登录后可使用会话历史、反馈回放与管理能力。
+            </Typography.Paragraph>
             <Form<LoginFormValues>
               form={form}
               layout="vertical"
@@ -107,19 +117,34 @@ export function LoginPage() {
               >
                 <Input.Password placeholder="请输入密码" autoComplete="current-password" />
               </Form.Item>
-              <Space>
-                <Button type="primary" htmlType="submit" loading={submitting}>
+              <Form.Item style={{ marginBottom: 8 }}>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={submitting}
+                  block
+                  className="login-primary-button"
+                >
                   登录
                 </Button>
-                <Button
-                  onClick={() => {
-                    navigate("/app/ask");
-                  }}
-                >
-                  匿名问答
-                </Button>
-              </Space>
+              </Form.Item>
             </Form>
+
+            <Button
+              type="link"
+              className="login-anonymous-entry"
+              onClick={() => {
+                navigate("/app/ask");
+              }}
+            >
+              继续匿名问答
+            </Button>
+
+            {isDev ? (
+              <Typography.Text className="login-dev-hint">
+                开发环境提示：若登录失败，请确认后端已启动且本地代理配置正确。
+              </Typography.Text>
+            ) : null}
           </Card>
         </Col>
       </Row>

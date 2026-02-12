@@ -6,6 +6,7 @@ import {
   Form,
   Input,
   Modal,
+  Segmented,
   Select,
   Space,
   Table,
@@ -65,6 +66,8 @@ const ACCESS_LEVEL_OPTIONS = [
 ];
 
 const USER_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+type TableDensity = "middle" | "small";
+type RoleFilter = "all" | "admin" | "user";
 
 export function UsersPage() {
   const queryClient = useQueryClient();
@@ -79,19 +82,20 @@ export function UsersPage() {
   const [filterStatus, setFilterStatus] = useState<"active" | "disabled" | "deleted" | undefined>(
     undefined
   );
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [tableDensity, setTableDensity] = useState<TableDensity>("small");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
   const usersQuery = useQuery({
     queryKey: ["users", "list", filterStatus, filterKeyword, page, pageSize],
-    queryFn: async () => {
-      return fetchUserList({
+    queryFn: async () =>
+      fetchUserList({
         status: filterStatus,
         keyword: filterKeyword || undefined,
         limit: pageSize,
         offset: (page - 1) * pageSize
-      });
-    }
+      })
   });
 
   const roleQuery = useQuery({
@@ -144,13 +148,12 @@ export function UsersPage() {
   }, [roleQuery.data?.items]);
 
   const createMutation = useMutation({
-    mutationFn: async (values: CreateUserValues) => {
-      return createUser({
+    mutationFn: async (values: CreateUserValues) =>
+      createUser({
         email: values.email.trim(),
         password: values.password,
         roles: values.roles
-      });
-    },
+      }),
     onSuccess: async () => {
       message.success("用户创建成功");
       createForm.resetFields();
@@ -283,12 +286,20 @@ export function UsersPage() {
     return "success" as const;
   }, [usersQuery.data?.items, usersQuery.isError, usersQuery.isLoading]);
 
-  const activeCount =
-    usersQuery.data?.items.filter((item) => item.status === "active").length ?? 0;
+  const activeCount = usersQuery.data?.items.filter((item) => item.status === "active").length ?? 0;
   const disabledCount =
     usersQuery.data?.items.filter((item) => item.status === "disabled").length ?? 0;
   const adminCount =
     usersQuery.data?.items.filter((item) => item.roles.includes("admin")).length ?? 0;
+  const filteredUsers = useMemo(() => {
+    const items = usersQuery.data?.items ?? [];
+    if (roleFilter === "all") {
+      return items;
+    }
+    return items.filter((item) =>
+      roleFilter === "admin" ? item.roles.includes("admin") : item.roles.includes("user")
+    );
+  }, [roleFilter, usersQuery.data?.items]);
 
   return (
     <div className="page-stack">
@@ -300,7 +311,7 @@ export function UsersPage() {
             用户与权限中心
           </Typography.Title>
           <Typography.Text className="hero-desc">
-            管理账号生命周期、角色分配、KB 访问授权与批量权限替换。
+            统一管理账号状态、角色分配与知识库访问授权，支撑权限治理流程。
           </Typography.Text>
           <div className="summary-grid">
             <div className="summary-item">
@@ -323,159 +334,191 @@ export function UsersPage() {
         </Space>
       </Card>
 
-      <Card title="创建用户" className="card-soft">
-        <Form<CreateUserValues>
-          form={createForm}
-          layout="vertical"
-          initialValues={{ roles: ["user"] }}
-          onFinish={(values) => {
-            createMutation.mutate(values);
-          }}
-        >
-          <Space wrap size={16} style={{ width: "100%" }}>
-            <Form.Item
-              name="email"
-              label="邮箱"
-              rules={[
-                { required: true, message: "请输入邮箱" },
-                { type: "email", message: "邮箱格式不正确" }
-              ]}
-              style={{ minWidth: 280 }}
-            >
-              <Input placeholder="user@example.com" />
-            </Form.Item>
-            <Form.Item
-              name="password"
-              label="初始密码"
-              rules={[{ required: true, message: "请输入初始密码" }]}
-              style={{ minWidth: 240 }}
-            >
-              <Input.Password placeholder="请包含字母与数字" />
-            </Form.Item>
-            <Form.Item
-              name="roles"
-              label="角色"
-              rules={[{ required: true, message: "请选择角色" }]}
-              style={{ minWidth: 220 }}
-            >
-              <Select mode="multiple" options={roleOptions} />
-            </Form.Item>
-          </Space>
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={createMutation.isPending}>
-              创建用户
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
+      <div className="ops-workbench">
+        <Card title="创建用户" className="card-soft ops-pane-card">
+          <div className="ops-pane-body">
+            <div className="ops-scroll-pane">
+              <Form<CreateUserValues>
+                form={createForm}
+                layout="vertical"
+                initialValues={{ roles: ["user"] }}
+                onFinish={(values) => {
+                  createMutation.mutate(values);
+                }}
+              >
+                <Form.Item
+                  name="email"
+                  label="邮箱"
+                  rules={[
+                    { required: true, message: "请输入邮箱" },
+                    { type: "email", message: "邮箱格式不正确" }
+                  ]}
+                >
+                  <Input placeholder="user@example.com" />
+                </Form.Item>
+                <Form.Item
+                  name="password"
+                  label="初始密码"
+                  rules={[{ required: true, message: "请输入初始密码" }]}
+                >
+                  <Input.Password placeholder="请包含字母与数字" />
+                </Form.Item>
+                <Form.Item
+                  name="roles"
+                  label="角色"
+                  rules={[{ required: true, message: "请选择角色" }]}
+                >
+                  <Select mode="multiple" options={roleOptions} />
+                </Form.Item>
+                <Form.Item>
+                  <Button type="primary" htmlType="submit" loading={createMutation.isPending} block>
+                    创建用户
+                  </Button>
+                </Form.Item>
+              </Form>
+            </div>
+          </div>
+        </Card>
 
-      <Card
-        title="用户列表"
-        className="card-soft"
-        extra={
-          <Space>
-            <Input
-              allowClear
-              placeholder="按邮箱/用户ID搜索"
-              value={filterKeywordInput}
-              onChange={(event) => setFilterKeywordInput(event.target.value)}
-              style={{ width: 220 }}
-            />
-            <Select
-              allowClear
-              placeholder="状态筛选"
-              value={filterStatus}
-              options={STATUS_OPTIONS}
-              style={{ width: 150 }}
-              onChange={(value) => {
-                setFilterStatus(value);
-                setPage(1);
-              }}
-            />
-            <Button
-              onClick={() => {
-                setFilterKeyword(filterKeywordInput.trim());
-                setPage(1);
-              }}
-            >
-              查询
-            </Button>
-            <Button
-              onClick={() => {
-                void usersQuery.refetch();
-              }}
-              loading={usersQuery.isFetching}
-            >
-              刷新
-            </Button>
-          </Space>
-        }
-      >
-        <PageState status={userTableStatus}>
-          <Table
-            rowKey="user_id"
-            dataSource={usersQuery.data?.items ?? []}
-            pagination={{
-              current: page,
-              pageSize,
-              total: usersQuery.data?.total ?? 0,
-              showSizeChanger: true,
-              pageSizeOptions: USER_PAGE_SIZE_OPTIONS.map(String),
-              onChange: (nextPage, nextPageSize) => {
-                setPage(nextPage);
-                setPageSize(nextPageSize);
-              }
-            }}
-            columns={[
-              { title: "用户ID", dataIndex: "user_id", width: 220 },
-              { title: "邮箱", dataIndex: "email", width: 260 },
-              {
-                title: "状态",
-                dataIndex: "status",
-                width: 120,
-                render: (value: string) => <Tag>{value}</Tag>
-              },
-              {
-                title: "角色",
-                dataIndex: "roles",
-                render: (roles: string[]) => (
-                  <Space wrap>
-                    {roles.map((role) => (
-                      <Tag key={role}>{role}</Tag>
-                    ))}
-                  </Space>
-                )
-              },
-              { title: "创建时间", dataIndex: "created_at", width: 220 },
-              {
-                title: "操作",
-                key: "actions",
-                width: 260,
-                render: (_, record: UserListItem) => (
-                  <Space>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setEditingUser(record);
-                      }}
-                    >
-                      编辑
-                    </Button>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setAccessUser(record);
-                      }}
-                    >
-                      KB权限
-                    </Button>
-                  </Space>
-                )
-              }
-            ]}
-          />
-        </PageState>
-      </Card>
+        <Card
+          title="用户列表"
+          className={`card-soft ops-pane-card ${tableDensity === "small" ? "ops-pane-card--dense" : ""}`}
+          extra={
+            <Space>
+              <Input
+                allowClear
+                placeholder="按邮箱/用户ID搜索"
+                value={filterKeywordInput}
+                onChange={(event) => setFilterKeywordInput(event.target.value)}
+                style={{ width: 220 }}
+              />
+              <Select
+                allowClear
+                placeholder="状态筛选"
+                value={filterStatus}
+                options={STATUS_OPTIONS}
+                style={{ width: 140 }}
+                onChange={(value) => {
+                  setFilterStatus(value);
+                  setPage(1);
+                }}
+              />
+              <Button
+                onClick={() => {
+                  setFilterKeyword(filterKeywordInput.trim());
+                  setPage(1);
+                }}
+              >
+                查询
+              </Button>
+              <Button onClick={() => void usersQuery.refetch()} loading={usersQuery.isFetching}>
+                刷新
+              </Button>
+            </Space>
+          }
+        >
+          <div className="ops-pane-body">
+            <div className="density-toolbar">
+              <Segmented<RoleFilter>
+                value={roleFilter}
+                options={[
+                  { label: "全部角色", value: "all" },
+                  { label: "仅管理员", value: "admin" },
+                  { label: "仅用户", value: "user" }
+                ]}
+                onChange={(value) => {
+                  setRoleFilter(value);
+                  setPage(1);
+                }}
+              />
+              <Space>
+                <Typography.Text className="density-meta">
+                  当前 {filteredUsers.length} / {usersQuery.data?.items.length ?? 0}
+                </Typography.Text>
+                <Segmented<TableDensity>
+                  size="small"
+                  value={tableDensity}
+                  options={[
+                    { label: "舒适", value: "middle" },
+                    { label: "紧凑", value: "small" }
+                  ]}
+                  onChange={(value) => {
+                    setTableDensity(value);
+                  }}
+                />
+              </Space>
+            </div>
+            <PageState status={userTableStatus}>
+              <div className="ops-scroll-pane">
+                <Table
+                  size={tableDensity}
+                  className={tableDensity === "small" ? "dense-table" : undefined}
+                  rowKey="user_id"
+                  dataSource={filteredUsers}
+                  pagination={{
+                    current: page,
+                    pageSize,
+                    total: roleFilter === "all" ? usersQuery.data?.total ?? 0 : filteredUsers.length,
+                    showSizeChanger: true,
+                    pageSizeOptions: USER_PAGE_SIZE_OPTIONS.map(String),
+                    onChange: (nextPage, nextPageSize) => {
+                      setPage(nextPage);
+                      setPageSize(nextPageSize);
+                    }
+                  }}
+                  columns={[
+                    { title: "用户ID", dataIndex: "user_id", width: 220 },
+                    { title: "邮箱", dataIndex: "email", width: 260 },
+                    {
+                      title: "状态",
+                      dataIndex: "status",
+                      width: 120,
+                      render: (value: string) => <Tag>{value}</Tag>
+                    },
+                    {
+                      title: "角色",
+                      dataIndex: "roles",
+                      render: (roles: string[]) => (
+                        <Space wrap>
+                          {roles.map((role) => (
+                            <Tag key={role}>{role}</Tag>
+                          ))}
+                        </Space>
+                      )
+                    },
+                    { title: "创建时间", dataIndex: "created_at", width: 220 },
+                    {
+                      title: "操作",
+                      key: "actions",
+                      width: 240,
+                      render: (_, record: UserListItem) => (
+                        <Space>
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setEditingUser(record);
+                            }}
+                          >
+                            编辑
+                          </Button>
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setAccessUser(record);
+                            }}
+                          >
+                            KB权限
+                          </Button>
+                        </Space>
+                      )
+                    }
+                  ]}
+                />
+              </div>
+            </PageState>
+          </div>
+        </Card>
+      </div>
 
       <Modal
         title="编辑用户"
@@ -647,11 +690,7 @@ export function UsersPage() {
                     >
                       添加一条
                     </Button>
-                    <Button
-                      type="primary"
-                      htmlType="submit"
-                      loading={replaceAccessMutation.isPending}
-                    >
+                    <Button type="primary" htmlType="submit" loading={replaceAccessMutation.isPending}>
                       批量覆盖保存
                     </Button>
                   </Space>

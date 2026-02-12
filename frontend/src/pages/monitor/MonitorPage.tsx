@@ -9,6 +9,7 @@ import {
   Row,
   Space,
   Statistic,
+  Tag,
   Typography,
   message
 } from "antd";
@@ -54,9 +55,19 @@ export function MonitorPage() {
       stats.dead +
       stats.scheduled
     : 0;
+
   const riskPercent = totalInQueue
     ? Math.min(100, Math.round((((stats?.failed_registry ?? 0) + (stats?.dead ?? 0)) / totalInQueue) * 100))
     : 0;
+
+  const healthTag =
+    riskPercent > 35 ? (
+      <Tag color="error">高风险</Tag>
+    ) : riskPercent > 15 ? (
+      <Tag color="warning">中风险</Tag>
+    ) : (
+      <Tag color="success">低风险</Tag>
+    );
 
   return (
     <div className="page-stack">
@@ -66,7 +77,7 @@ export function MonitorPage() {
             队列监控中心
           </Typography.Title>
           <Typography.Text className="hero-desc">
-            关注入库任务健康度、失败堆积趋势以及死信队列清理进度。
+            实时追踪入库任务压力、失败堆积和死信风险，支撑运维处置。
           </Typography.Text>
           <div className="summary-grid">
             <div className="summary-item">
@@ -86,9 +97,13 @@ export function MonitorPage() {
               <div className="summary-item-value">{riskPercent}%</div>
             </div>
           </div>
+          <Space>
+            <Typography.Text type="secondary">当前健康度：</Typography.Text>
+            {healthTag}
+          </Space>
           <Progress
             percent={riskPercent}
-            strokeColor={riskPercent > 30 ? "#cf3f3f" : "#0ea5a0"}
+            strokeColor={riskPercent > 35 ? "#cf3f3f" : riskPercent > 15 ? "#e5a100" : "#0ea5a0"}
             format={(percent) => `风险任务占比 ${percent}%`}
           />
         </Space>

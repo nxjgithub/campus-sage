@@ -5,13 +5,11 @@ import {
   AutoComplete,
   Button,
   Card,
-  Col,
-  Divider,
+  Collapse,
   Empty,
   Form,
   Input,
   InputNumber,
-  Row,
   Select,
   Space,
   Tag,
@@ -82,6 +80,7 @@ function renderAnswerWithCitationLinks(
 export function AskPage({ initialResult = null }: AskPageProps) {
   const [result, setResult] = useState<AskResponse | null>(initialResult);
   const [activeCitationId, setActiveCitationId] = useState<number | null>(null);
+  const [overviewExpanded, setOverviewExpanded] = useState(false);
   const [submittingFeedbackMessageId, setSubmittingFeedbackMessageId] = useState<string | null>(
     null
   );
@@ -175,35 +174,43 @@ export function AskPage({ initialResult = null }: AskPageProps) {
   };
 
   const summaryItems = [
-    {
-      label: "可用知识库",
-      value: kbQuery.data?.items.length ?? 0
-    },
-    {
-      label: "文档过滤候选",
-      value: documentsQuery.data?.items.length ?? 0
-    },
-    {
-      label: "本次引用数",
-      value: result?.citations.length ?? 0
-    },
-    {
-      label: "拒答状态",
-      value: result?.refusal ? "是" : "否"
-    }
+    { label: "可用知识库", value: kbQuery.data?.items.length ?? 0 },
+    { label: "文档过滤候选", value: documentsQuery.data?.items.length ?? 0 },
+    { label: "本次引用数", value: result?.citations.length ?? 0 },
+    { label: "拒答状态", value: result?.refusal ? "是" : "否" }
+  ];
+
+  const compactSummaryTags = [
+    `知识库 ${summaryItems[0].value}`,
+    `文档候选 ${summaryItems[1].value}`,
+    `引用 ${summaryItems[2].value}`,
+    `拒答 ${summaryItems[3].value}`
   ];
 
   return (
     <div className="page-stack">
-      <Card className="hero-card">
-        <Space direction="vertical" size={10} style={{ width: "100%" }}>
-          <Typography.Title level={4} className="hero-title">
-            真实业务问答工作台
-          </Typography.Title>
-          <Typography.Text className="hero-desc">
-            支持 KB 指定、文档过滤、对话连续追问、引用定位与答案反馈闭环。
-          </Typography.Text>
-          <div className="summary-grid">
+      <Card className="hero-card ask-overview-card">
+        <div className="ask-overview-header">
+          <div>
+            <Typography.Title level={4} className="hero-title">
+              问答工作台
+            </Typography.Title>
+            <Typography.Text className="hero-desc">
+              先填写核心问题，再按需展开高级设置。右侧结果区支持独立滚动查看证据。
+            </Typography.Text>
+          </div>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => {
+              setOverviewExpanded((prev) => !prev);
+            }}
+          >
+            {overviewExpanded ? "收起概览" : "展开概览"}
+          </Button>
+        </div>
+        {overviewExpanded ? (
+          <div className="summary-grid ask-overview-grid">
             {summaryItems.map((item) => (
               <div className="summary-item" key={item.label}>
                 <div className="summary-item-label">{item.label}</div>
@@ -211,36 +218,18 @@ export function AskPage({ initialResult = null }: AskPageProps) {
               </div>
             ))}
           </div>
-        </Space>
+        ) : (
+          <Space wrap size={[8, 8]} style={{ marginTop: 8 }}>
+            {compactSummaryTags.map((item) => (
+              <Tag key={item}>{item}</Tag>
+            ))}
+          </Space>
+        )}
       </Card>
 
-      <Row gutter={16}>
-        <Col xs={24} lg={11}>
-          <Card title="发起问答" className="card-soft">
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Alert
-                type="info"
-                showIcon
-                message="建议先选择知识库，再根据问题范围追加文档过滤。"
-              />
-              <div className="card-inset" style={{ padding: 10 }}>
-                <Typography.Text type="secondary">快捷问题模板</Typography.Text>
-                <Space wrap style={{ marginTop: 8 }}>
-                  {QUESTION_TEMPLATES.map((question) => (
-                    <Button
-                      size="small"
-                      key={question}
-                      onClick={() => {
-                        form.setFieldValue("question", question);
-                      }}
-                    >
-                      {question}
-                    </Button>
-                  ))}
-                </Space>
-              </div>
-            </Space>
-
+      <div className="ask-workbench">
+        <section className="ask-pane">
+          <Card title="发起问答" className="card-soft ask-pane-card">
             {askMutation.isError ? (
               <RequestErrorAlert error={normalizeApiError(askMutation.error)} />
             ) : null}
@@ -251,177 +240,226 @@ export function AskPage({ initialResult = null }: AskPageProps) {
             <Form<AskFormValues>
               form={form}
               layout="vertical"
-              style={{ marginTop: 12 }}
+              className="ask-form-layout"
               onFinish={(values) => {
                 askMutation.mutate(values);
               }}
             >
-              <Form.Item
-                name="kb_id"
-                label="知识库"
-                rules={[{ required: true, message: "请选择或输入知识库 ID" }]}
-              >
-                <AutoComplete
-                  options={(kbQuery.data?.items ?? []).map((item) => ({
-                    value: item.kb_id,
-                    label: `${item.name} (${item.kb_id})`
-                  }))}
-                  placeholder="请选择或手动输入 kb_id"
-                  notFoundContent={kbQuery.isLoading ? "知识库加载中..." : "无可选知识库"}
-                  filterOption={(inputValue, option) => {
-                    if (!option?.label) {
-                      return false;
+              <div className="ask-form-scroll">
+                <Alert
+                  type="info"
+                  showIcon
+                  message="可先完成必填项提问，非核心参数在高级设置中按需展开。"
+                  style={{ marginBottom: 12 }}
+                />
+
+                <Form.Item
+                  name="kb_id"
+                  label="知识库"
+                  rules={[{ required: true, message: "请选择或输入知识库 ID" }]}
+                >
+                  <AutoComplete
+                    options={(kbQuery.data?.items ?? []).map((item) => ({
+                      value: item.kb_id,
+                      label: `${item.name} (${item.kb_id})`
+                    }))}
+                    placeholder="请选择或手动输入 kb_id"
+                    notFoundContent={kbQuery.isLoading ? "知识库加载中..." : "无可选知识库"}
+                    filterOption={(inputValue, option) => {
+                      if (!option?.label) {
+                        return false;
+                      }
+                      return String(option.label).toLowerCase().includes(inputValue.toLowerCase());
+                    }}
+                  />
+                </Form.Item>
+
+                <Form.Item
+                  name="question"
+                  label="问题"
+                  rules={[{ required: true, message: "请输入问题" }]}
+                >
+                  <Input.TextArea
+                    autoSize={{ minRows: 5, maxRows: 9 }}
+                    placeholder="例如：补考申请需要满足什么条件？"
+                  />
+                </Form.Item>
+
+                <div className="card-inset ask-template-panel">
+                  <Typography.Text type="secondary">快速问题模板</Typography.Text>
+                  <div className="ask-template-chip-group">
+                    {QUESTION_TEMPLATES.map((question) => (
+                      <Tag
+                        key={question}
+                        className="ask-template-chip"
+                        onClick={() => {
+                          form.setFieldValue("question", question);
+                        }}
+                      >
+                        {question}
+                      </Tag>
+                    ))}
+                  </div>
+                </div>
+
+                <Collapse
+                  className="ask-advanced-collapse"
+                  size="small"
+                  items={[
+                    {
+                      key: "advanced",
+                      label: "高级设置",
+                      children: (
+                        <div>
+                          <Form.Item name="conversation_id" label="会话 ID（可选）">
+                            <Input placeholder="可填写已有 conversation_id 进行连续问答" />
+                          </Form.Item>
+                          <Form.Item name="doc_ids" label="限定文档（可选）">
+                            <Select
+                              mode="multiple"
+                              allowClear
+                              loading={documentsQuery.isLoading}
+                              placeholder="可选择一个或多个文档进行过滤"
+                              options={(documentsQuery.data?.items ?? []).map((item) => ({
+                                label: `${item.doc_name} (${item.doc_id})`,
+                                value: item.doc_id
+                              }))}
+                            />
+                          </Form.Item>
+                          <Space wrap>
+                            <Form.Item name="topk" label="TopK">
+                              <InputNumber min={1} />
+                            </Form.Item>
+                            <Form.Item name="threshold" label="阈值">
+                              <InputNumber min={0} max={1} step={0.01} />
+                            </Form.Item>
+                            <Form.Item name="rerank_enabled" label="重排">
+                              <Select
+                                allowClear
+                                options={[
+                                  { value: true, label: "true" },
+                                  { value: false, label: "false" }
+                                ]}
+                              />
+                            </Form.Item>
+                            <Form.Item name="debug" label="Debug">
+                              <Select
+                                allowClear
+                                options={[
+                                  { value: true, label: "true" },
+                                  { value: false, label: "false" }
+                                ]}
+                              />
+                            </Form.Item>
+                          </Space>
+                        </div>
+                      )
                     }
-                    return String(option.label).toLowerCase().includes(inputValue.toLowerCase());
-                  }}
+                  ]}
                 />
-              </Form.Item>
-              <Form.Item
-                name="question"
-                label="问题"
-                rules={[{ required: true, message: "请输入问题" }]}
-              >
-                <Input.TextArea rows={5} placeholder="例如：补考申请需要满足什么条件？" />
-              </Form.Item>
-              <Form.Item name="conversation_id" label="会话 ID（可选）">
-                <Input placeholder="可填写已有 conversation_id 进行连续问答" />
-              </Form.Item>
-              <Form.Item name="doc_ids" label="限定文档（可选）">
-                <Select
-                  mode="multiple"
-                  allowClear
-                  loading={documentsQuery.isLoading}
-                  placeholder="可选择一个或多个文档进行过滤"
-                  options={(documentsQuery.data?.items ?? []).map((item) => ({
-                    label: `${item.doc_name} (${item.doc_id})`,
-                    value: item.doc_id
-                  }))}
-                />
-              </Form.Item>
+              </div>
 
-              <Card size="small" className="card-inset" title="高级参数">
-                <Space wrap>
-                  <Form.Item name="topk" label="TopK">
-                    <InputNumber min={1} />
-                  </Form.Item>
-                  <Form.Item name="threshold" label="阈值">
-                    <InputNumber min={0} max={1} step={0.01} />
-                  </Form.Item>
-                  <Form.Item name="rerank_enabled" label="重排">
-                    <Select
-                      allowClear
-                      options={[
-                        { value: true, label: "true" },
-                        { value: false, label: "false" }
-                      ]}
-                    />
-                  </Form.Item>
-                  <Form.Item name="debug" label="Debug">
-                    <Select
-                      allowClear
-                      options={[
-                        { value: true, label: "true" },
-                        { value: false, label: "false" }
-                      ]}
-                    />
-                  </Form.Item>
-                </Space>
-              </Card>
-
-              <Form.Item style={{ marginTop: 12 }}>
-                <Button type="primary" htmlType="submit" loading={askMutation.isPending}>
-                  提问
+              <div className="ask-submit-bar">
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={askMutation.isPending}
+                  disabled={askMutation.isPending}
+                  className="ask-submit-button"
+                >
+                  {askMutation.isPending ? "提问中..." : "提问"}
                 </Button>
-              </Form.Item>
+              </div>
             </Form>
           </Card>
-        </Col>
+        </section>
 
-        <Col xs={24} lg={13}>
-          <Card title="回答与证据" className="card-soft">
-            {!result ? (
-              <Empty description="尚未发起问答" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            ) : (
-              <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                <Space wrap>
-                  <Tag color={result.refusal ? "warning" : "success"}>
-                    {result.refusal ? "拒答" : "已回答"}
-                  </Tag>
-                  {result.refusal_reason ? <Tag>{result.refusal_reason}</Tag> : null}
-                </Space>
+        <section className="ask-pane">
+          <Card title="回答与证据" className="card-soft ask-pane-card">
+            <div className="ask-result-scroll">
+              {!result ? (
+                <Empty description="尚未发起问答" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              ) : (
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <Space wrap>
+                    <Tag color={result.refusal ? "warning" : "success"}>
+                      {result.refusal ? "拒答" : "已回答"}
+                    </Tag>
+                    {result.refusal_reason ? <Tag>{result.refusal_reason}</Tag> : null}
+                  </Space>
 
-                <Typography.Paragraph className="answer-block">
-                  {answerContent}
-                </Typography.Paragraph>
+                  <Typography.Paragraph className="answer-block">
+                    {answerContent}
+                  </Typography.Paragraph>
 
-                {result.suggestions?.length ? (
-                  <Card size="small" title="下一步建议" className="card-inset">
-                    <ul className="muted-list">
-                      {result.suggestions.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
+                  {result.suggestions?.length ? (
+                    <Card size="small" title="下一步建议" className="card-inset">
+                      <ul className="muted-list">
+                        {result.suggestions.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </Card>
+                  ) : null}
+
+                  <Card size="small" title={`引用 (${result.citations.length})`}>
+                    {result.citations.length === 0 ? (
+                      <Typography.Text type="secondary">当前回答未返回引用。</Typography.Text>
+                    ) : (
+                      <Space direction="vertical" style={{ width: "100%" }}>
+                        {result.citations.map((citation) => (
+                          <Card
+                            key={citation.chunk_id}
+                            size="small"
+                            className={
+                              citation.citation_id === activeCitationId
+                                ? "citation-card citation-card--active"
+                                : "citation-card"
+                            }
+                          >
+                            <div
+                              ref={(node) => {
+                                citationRefs.current[citation.citation_id] = node;
+                              }}
+                            />
+                            <Space direction="vertical" size={4}>
+                              <Typography.Text strong>
+                                [{citation.citation_id}] {citation.doc_name}
+                              </Typography.Text>
+                              <Typography.Text type="secondary">
+                                {citation.section_path
+                                  ? `章节：${citation.section_path}`
+                                  : `页码：${citation.page_start ?? "-"}-${
+                                      citation.page_end ?? citation.page_start ?? "-"
+                                    }`}
+                              </Typography.Text>
+                              <Typography.Paragraph style={{ marginBottom: 0 }}>
+                                {citation.snippet}
+                              </Typography.Paragraph>
+                            </Space>
+                          </Card>
+                        ))}
+                      </Space>
+                    )}
                   </Card>
-                ) : null}
 
-                <Card size="small" title={`引用 (${result.citations.length})`}>
-                  {result.citations.length === 0 ? (
-                    <Typography.Text type="secondary">当前回答未返回引用。</Typography.Text>
-                  ) : (
-                    <Space direction="vertical" style={{ width: "100%" }}>
-                      {result.citations.map((citation) => (
-                        <Card
-                          key={citation.chunk_id}
-                          size="small"
-                          className={
-                            citation.citation_id === activeCitationId
-                              ? "citation-card citation-card--active"
-                              : "citation-card"
-                          }
-                        >
-                          <div
-                            ref={(node) => {
-                              citationRefs.current[citation.citation_id] = node;
-                            }}
-                          />
-                          <Space direction="vertical" size={4}>
-                            <Typography.Text strong>
-                              [{citation.citation_id}] {citation.doc_name}
-                            </Typography.Text>
-                            <Typography.Text type="secondary">
-                              {citation.section_path
-                                ? `章节：${citation.section_path}`
-                                : `页码：${citation.page_start ?? "-"}-${
-                                    citation.page_end ?? citation.page_start ?? "-"
-                                  }`}
-                            </Typography.Text>
-                            <Typography.Paragraph style={{ marginBottom: 0 }}>
-                              {citation.snippet}
-                            </Typography.Paragraph>
-                          </Space>
-                        </Card>
-                      ))}
-                    </Space>
-                  )}
-                </Card>
-
-                <Divider style={{ margin: "6px 0" }} />
-                {result.message_id ? (
-                  <FeedbackAction
-                    messageId={result.message_id}
-                    submitting={submittingFeedbackMessageId === result.message_id}
-                    submitted={Boolean(submittedFeedbackMap[result.message_id])}
-                    onSubmit={handleFeedbackSubmit}
-                  />
-                ) : null}
-                <CopyableField label="conversation_id" value={result.conversation_id} />
-                <CopyableField label="message_id" value={result.message_id} />
-                <CopyableField label="request_id" value={result.request_id} />
-              </Space>
-            )}
+                  {result.message_id ? (
+                    <FeedbackAction
+                      messageId={result.message_id}
+                      submitting={submittingFeedbackMessageId === result.message_id}
+                      submitted={Boolean(submittedFeedbackMap[result.message_id])}
+                      onSubmit={handleFeedbackSubmit}
+                    />
+                  ) : null}
+                  <CopyableField label="conversation_id" value={result.conversation_id} />
+                  <CopyableField label="message_id" value={result.message_id} />
+                  <CopyableField label="request_id" value={result.request_id} />
+                </Space>
+              )}
+            </div>
           </Card>
-        </Col>
-      </Row>
+        </section>
+      </div>
     </div>
   );
 }

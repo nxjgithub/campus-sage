@@ -6,6 +6,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Segmented,
   Select,
   Space,
   Table,
@@ -14,12 +15,7 @@ import {
   message
 } from "antd";
 import { fetchKbList } from "../../shared/api/modules/kb";
-import {
-  createEvalSet,
-  EvalRunResponse,
-  fetchEvalRun,
-  runEval
-} from "../../shared/api/modules/eval";
+import { createEvalSet, EvalRunResponse, fetchEvalRun, runEval } from "../../shared/api/modules/eval";
 import { normalizeApiError } from "../../shared/api/errors";
 import { CopyableField } from "../../shared/components/CopyableField";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
@@ -49,6 +45,7 @@ interface EvalRunFormValues {
 interface FetchRunFormValues {
   run_id: string;
 }
+type TableDensity = "middle" | "small";
 
 function parseTags(value?: string) {
   if (!value) {
@@ -68,6 +65,7 @@ export function EvalPage() {
   const [recentSetIds, setRecentSetIds] = useState<string[]>([]);
   const [recentRunIds, setRecentRunIds] = useState<string[]>([]);
   const [runDetail, setRunDetail] = useState<EvalRunResponse | null>(null);
+  const [tableDensity, setTableDensity] = useState<TableDensity>("small");
 
   const kbQuery = useQuery({
     queryKey: ["kb", "list"],
@@ -75,8 +73,8 @@ export function EvalPage() {
   });
 
   const createSetMutation = useMutation({
-    mutationFn: async (values: EvalSetFormValues) => {
-      return createEvalSet({
+    mutationFn: async (values: EvalSetFormValues) =>
+      createEvalSet({
         name: values.name.trim(),
         description: values.description?.trim() || undefined,
         items: values.items.map((item) => ({
@@ -86,8 +84,7 @@ export function EvalPage() {
           gold_page_end: item.gold_page_end,
           tags: parseTags(item.tags_text)
         }))
-      });
-    },
+      }),
     onSuccess: (data) => {
       message.success("评测集创建成功");
       setRecentSetIds((prev) => [data.eval_set_id, ...prev.filter((id) => id !== data.eval_set_id)].slice(0, 10));
@@ -155,7 +152,7 @@ export function EvalPage() {
             离线评测中心
           </Typography.Title>
           <Typography.Text className="hero-desc">
-            支持评测集构建、在线触发评测、结果回查与核心指标对比。
+            统一管理评测样本、运行参数与指标结果，服务检索质量迭代。
           </Typography.Text>
           <div className="summary-grid">
             <div className="summary-item">
@@ -178,197 +175,228 @@ export function EvalPage() {
         </Space>
       </Card>
 
-      <Card title="创建评测集" className="card-soft">
-        <Form<EvalSetFormValues>
-          form={setForm}
-          layout="vertical"
-          initialValues={{
-            items: [{ question: "", gold_doc_id: "", tags_text: "" }]
-          }}
-          onFinish={(values) => {
-            createSetMutation.mutate(values);
-          }}
-        >
-          <Form.Item name="name" label="评测集名称" rules={[{ required: true, message: "请输入名称" }]}>
-            <Input placeholder="例如：教务评测集_v1" />
-          </Form.Item>
-          <Form.Item name="description" label="描述（可选）">
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.List name="items">
-            {(fields, { add, remove }) => (
-              <Space direction="vertical" style={{ width: "100%" }}>
-                {fields.map((field, index) => (
-                  <Card key={field.key} size="small" title={`样本 ${index + 1}`} className="card-inset">
-                    <Form.Item
-                      name={[field.name, "question"]}
-                      label="问题"
-                      rules={[{ required: true, message: "请输入问题" }]}
-                    >
-                      <Input.TextArea rows={2} />
-                    </Form.Item>
-                    <Space wrap>
-                      <Form.Item name={[field.name, "gold_doc_id"]} label="标准文档ID">
-                        <Input style={{ width: 220 }} />
-                      </Form.Item>
-                      <Form.Item name={[field.name, "gold_page_start"]} label="起始页">
-                        <InputNumber min={1} />
-                      </Form.Item>
-                      <Form.Item name={[field.name, "gold_page_end"]} label="结束页">
-                        <InputNumber min={1} />
-                      </Form.Item>
-                      <Form.Item name={[field.name, "tags_text"]} label="标签（逗号分隔）">
-                        <Input style={{ width: 260 }} placeholder="policy,exam" />
-                      </Form.Item>
+      <div className="ops-workbench">
+        <Card title="创建评测集" className="card-soft ops-pane-card">
+          <div className="ops-pane-body">
+            <div className="ops-scroll-pane">
+              <Form<EvalSetFormValues>
+                form={setForm}
+                layout="vertical"
+                initialValues={{
+                  items: [{ question: "", gold_doc_id: "", tags_text: "" }]
+                }}
+                onFinish={(values) => {
+                  createSetMutation.mutate(values);
+                }}
+              >
+                <Form.Item
+                  name="name"
+                  label="评测集名称"
+                  rules={[{ required: true, message: "请输入名称" }]}
+                >
+                  <Input placeholder="例如：教务评测集_v1" />
+                </Form.Item>
+                <Form.Item name="description" label="描述（可选）">
+                  <Input.TextArea rows={2} />
+                </Form.Item>
+                <Form.List name="items">
+                  {(fields, { add, remove }) => (
+                    <Space direction="vertical" style={{ width: "100%" }}>
+                      {fields.map((field, index) => (
+                        <Card key={field.key} size="small" title={`样本 ${index + 1}`} className="card-inset">
+                          <Form.Item
+                            name={[field.name, "question"]}
+                            label="问题"
+                            rules={[{ required: true, message: "请输入问题" }]}
+                          >
+                            <Input.TextArea rows={2} />
+                          </Form.Item>
+                          <Space wrap>
+                            <Form.Item name={[field.name, "gold_doc_id"]} label="标准文档ID">
+                              <Input style={{ width: 220 }} />
+                            </Form.Item>
+                            <Form.Item name={[field.name, "gold_page_start"]} label="起始页">
+                              <InputNumber min={1} />
+                            </Form.Item>
+                            <Form.Item name={[field.name, "gold_page_end"]} label="结束页">
+                              <InputNumber min={1} />
+                            </Form.Item>
+                            <Form.Item name={[field.name, "tags_text"]} label="标签（逗号分隔）">
+                              <Input style={{ width: 260 }} placeholder="policy, exam" />
+                            </Form.Item>
+                          </Space>
+                          <Button
+                            danger
+                            onClick={() => {
+                              remove(field.name);
+                            }}
+                            disabled={fields.length <= 1}
+                          >
+                            删除样本
+                          </Button>
+                        </Card>
+                      ))}
+                      <Space>
+                        <Button
+                          onClick={() => {
+                            add({ question: "", gold_doc_id: "", tags_text: "" });
+                          }}
+                        >
+                          新增样本
+                        </Button>
+                        <Button type="primary" htmlType="submit" loading={createSetMutation.isPending}>
+                          创建评测集
+                        </Button>
+                      </Space>
                     </Space>
-                    <Button
-                      danger
-                      onClick={() => {
-                        remove(field.name);
-                      }}
-                      disabled={fields.length <= 1}
-                    >
-                      删除样本
-                    </Button>
-                  </Card>
-                ))}
-                <Space>
-                  <Button
-                    onClick={() => {
-                      add({ question: "", gold_doc_id: "", tags_text: "" });
-                    }}
+                  )}
+                </Form.List>
+              </Form>
+            </div>
+          </div>
+        </Card>
+
+        <Card title="运行与结果" className="card-soft ops-pane-card">
+          <div className="ops-pane-body">
+            <div className="ops-scroll-pane">
+              <div className="density-toolbar">
+                <Typography.Text className="density-meta">
+                  评测集缓存 {recentSetIds.length}，运行缓存 {recentRunIds.length}
+                </Typography.Text>
+                <Segmented<TableDensity>
+                  size="small"
+                  value={tableDensity}
+                  options={[
+                    { label: "舒适", value: "middle" },
+                    { label: "紧凑", value: "small" }
+                  ]}
+                  onChange={(value) => {
+                    setTableDensity(value);
+                  }}
+                />
+              </div>
+              <Card size="small" className="card-inset" title="运行评测">
+                <Form<EvalRunFormValues>
+                  form={runForm}
+                  layout="vertical"
+                  initialValues={{ topk: 5 }}
+                  onFinish={(values) => {
+                    runEvalMutation.mutate(values);
+                  }}
+                >
+                  <Form.Item
+                    name="eval_set_id"
+                    label="评测集ID"
+                    rules={[{ required: true, message: "请输入评测集ID" }]}
                   >
-                    新增样本
-                  </Button>
-                  <Button type="primary" htmlType="submit" loading={createSetMutation.isPending}>
-                    创建评测集
-                  </Button>
-                </Space>
-              </Space>
-            )}
-          </Form.List>
-        </Form>
-      </Card>
+                    <Select
+                      showSearch
+                      placeholder="输入或选择评测集ID"
+                      options={recentSetIds.map((id) => ({ value: id, label: id }))}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name="kb_id"
+                    label="知识库"
+                    rules={[{ required: true, message: "请选择知识库" }]}
+                  >
+                    <Select
+                      loading={kbQuery.isLoading}
+                      options={(kbQuery.data?.items ?? []).map((item) => ({
+                        value: item.kb_id,
+                        label: `${item.name} (${item.kb_id})`
+                      }))}
+                    />
+                  </Form.Item>
+                  <Space wrap>
+                    <Form.Item name="topk" label="TopK">
+                      <InputNumber min={1} />
+                    </Form.Item>
+                    <Form.Item name="threshold" label="阈值（可选）">
+                      <InputNumber min={0} max={1} step={0.01} />
+                    </Form.Item>
+                    <Form.Item name="rerank_enabled" label="重排（可选）">
+                      <Select
+                        allowClear
+                        style={{ width: 160 }}
+                        options={[
+                          { value: true, label: "true" },
+                          { value: false, label: "false" }
+                        ]}
+                      />
+                    </Form.Item>
+                  </Space>
+                  <Form.Item>
+                    <Button type="primary" htmlType="submit" loading={runEvalMutation.isPending}>
+                      开始评测
+                    </Button>
+                  </Form.Item>
+                </Form>
+              </Card>
 
-      <Card title="运行评测" className="card-soft">
-        <Form<EvalRunFormValues>
-          form={runForm}
-          layout="vertical"
-          initialValues={{ topk: 5 }}
-          onFinish={(values) => {
-            runEvalMutation.mutate(values);
-          }}
-        >
-          <Space wrap>
-            <Form.Item
-              name="eval_set_id"
-              label="评测集ID"
-              rules={[{ required: true, message: "请输入评测集ID" }]}
-            >
-              <Select
-                showSearch
-                style={{ width: 320 }}
-                placeholder="输入或选择评测集ID"
-                options={recentSetIds.map((id) => ({ value: id, label: id }))}
-              />
-            </Form.Item>
-            <Form.Item
-              name="kb_id"
-              label="知识库"
-              rules={[{ required: true, message: "请选择知识库" }]}
-            >
-              <Select
-                style={{ width: 320 }}
-                loading={kbQuery.isLoading}
-                options={(kbQuery.data?.items ?? []).map((item) => ({
-                  value: item.kb_id,
-                  label: `${item.name} (${item.kb_id})`
-                }))}
-              />
-            </Form.Item>
-            <Form.Item name="topk" label="TopK">
-              <InputNumber min={1} />
-            </Form.Item>
-            <Form.Item name="threshold" label="阈值（可选）">
-              <InputNumber min={0} max={1} step={0.01} />
-            </Form.Item>
-            <Form.Item name="rerank_enabled" label="重排（可选）">
-              <Select
-                allowClear
-                style={{ width: 160 }}
-                options={[
-                  { value: true, label: "true" },
-                  { value: false, label: "false" }
-                ]}
-              />
-            </Form.Item>
-          </Space>
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={runEvalMutation.isPending}>
-              开始评测
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
+              <Card size="small" title="查询评测结果" style={{ marginTop: 12 }}>
+                <Form<FetchRunFormValues>
+                  form={fetchRunForm}
+                  layout="inline"
+                  onFinish={(values) => {
+                    fetchRunMutation.mutate(values.run_id);
+                  }}
+                >
+                  <Form.Item
+                    name="run_id"
+                    rules={[{ required: true, message: "请输入运行ID" }]}
+                    style={{ width: 320 }}
+                  >
+                    <Select
+                      showSearch
+                      placeholder="输入或选择运行ID"
+                      options={recentRunIds.map((id) => ({ value: id, label: id }))}
+                    />
+                  </Form.Item>
+                  <Form.Item>
+                    <Button htmlType="submit" loading={fetchRunMutation.isPending}>
+                      查询
+                    </Button>
+                  </Form.Item>
+                </Form>
 
-      <Card title="查询评测结果" className="card-soft">
-        <Form<FetchRunFormValues>
-          form={fetchRunForm}
-          layout="inline"
-          onFinish={(values) => {
-            fetchRunMutation.mutate(values.run_id);
-          }}
-        >
-          <Form.Item
-            name="run_id"
-            rules={[{ required: true, message: "请输入运行ID" }]}
-            style={{ width: 360 }}
-          >
-            <Select
-              showSearch
-              placeholder="输入或选择运行ID"
-              options={recentRunIds.map((id) => ({ value: id, label: id }))}
-            />
-          </Form.Item>
-          <Form.Item>
-            <Button htmlType="submit" loading={fetchRunMutation.isPending}>
-              查询
-            </Button>
-          </Form.Item>
-        </Form>
-
-        {!runDetail ? (
-          <Typography.Text type="secondary">暂无评测结果。</Typography.Text>
-        ) : (
-          <Space direction="vertical" style={{ width: "100%", marginTop: 12 }}>
-            <CopyableField label="run_id" value={runDetail.run_id} />
-            <CopyableField label="eval_set_id" value={runDetail.eval_set_id} />
-            <CopyableField label="kb_id" value={runDetail.kb_id} />
-            <CopyableField label="request_id" value={runDetail.request_id} />
-            <Space wrap>
-              <Tag>topk: {runDetail.topk}</Tag>
-              <Tag>threshold: {runDetail.threshold ?? "-"}</Tag>
-              <Tag>rerank: {String(runDetail.rerank_enabled)}</Tag>
-            </Space>
-            <Table
-              size="small"
-              rowKey="metric"
-              pagination={false}
-              dataSource={[
-                { metric: "recall_at_k", value: runDetail.metrics?.recall_at_k ?? "-" },
-                { metric: "mrr", value: runDetail.metrics?.mrr ?? "-" },
-                { metric: "avg_ms", value: runDetail.metrics?.avg_ms ?? "-" },
-                { metric: "p95_ms", value: runDetail.metrics?.p95_ms ?? "-" },
-                { metric: "samples", value: runDetail.metrics?.samples ?? "-" }
-              ]}
-              columns={[
-                { title: "指标", dataIndex: "metric", width: 180 },
-                { title: "值", dataIndex: "value" }
-              ]}
-            />
-          </Space>
-        )}
-      </Card>
+                {!runDetail ? (
+                  <Typography.Text type="secondary">暂无评测结果。</Typography.Text>
+                ) : (
+                  <Space direction="vertical" style={{ width: "100%", marginTop: 12 }}>
+                    <CopyableField label="run_id" value={runDetail.run_id} />
+                    <CopyableField label="eval_set_id" value={runDetail.eval_set_id} />
+                    <CopyableField label="kb_id" value={runDetail.kb_id} />
+                    <CopyableField label="request_id" value={runDetail.request_id} />
+                    <Space wrap>
+                      <Tag>topk: {runDetail.topk}</Tag>
+                      <Tag>threshold: {runDetail.threshold ?? "-"}</Tag>
+                      <Tag>rerank: {String(runDetail.rerank_enabled)}</Tag>
+                    </Space>
+                    <Table
+                      size={tableDensity}
+                      className={tableDensity === "small" ? "dense-table" : undefined}
+                      rowKey="metric"
+                      pagination={false}
+                      dataSource={[
+                        { metric: "recall_at_k", value: runDetail.metrics?.recall_at_k ?? "-" },
+                        { metric: "mrr", value: runDetail.metrics?.mrr ?? "-" },
+                        { metric: "avg_ms", value: runDetail.metrics?.avg_ms ?? "-" },
+                        { metric: "p95_ms", value: runDetail.metrics?.p95_ms ?? "-" },
+                        { metric: "samples", value: runDetail.metrics?.samples ?? "-" }
+                      ]}
+                      columns={[
+                        { title: "指标", dataIndex: "metric", width: 180 },
+                        { title: "值", dataIndex: "value" }
+                      ]}
+                    />
+                  </Space>
+                )}
+              </Card>
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
