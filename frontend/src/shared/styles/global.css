@@ -1,0 +1,222 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", sans-serif;
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at 8% 4%, rgba(15, 91, 216, 0.08) 0, transparent 38%),
+    radial-gradient(circle at 92% 12%, rgba(14, 165, 160, 0.08) 0, transparent 32%),
+    linear-gradient(180deg, #f7f9fd 0%, #eef3fa 100%);
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-sider {
+  border-right: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%) !important;
+}
+
+.brand-block {
+  padding: 22px 16px 14px;
+  margin: 10px 10px 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: linear-gradient(140deg, rgba(15, 91, 216, 0.1), rgba(14, 165, 160, 0.08));
+}
+
+.brand-title {
+  margin: 0 !important;
+  color: var(--brand-ink) !important;
+}
+
+.brand-subtitle {
+  color: var(--text-secondary);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  height: auto;
+  min-height: 64px;
+  padding: 12px 20px !important;
+  border-bottom: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(12px);
+}
+
+.app-header--with-tools {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.header-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.header-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--brand-ink);
+}
+
+.header-text {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.app-content {
+  padding: 20px;
+}
+
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hero-card {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-soft);
+}
+
+.hero-title {
+  margin: 0 !important;
+}
+
+.hero-desc {
+  color: var(--text-secondary);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.summary-item {
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.summary-item-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.summary-item-value {
+  margin-top: 6px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--brand-ink);
+}
+
+.card-soft {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line-soft);
+}
+
+.card-soft .ant-card-head {
+  border-bottom-color: var(--line-soft);
+}
+
+.card-inset {
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--line-strong);
+  background: var(--bg-surface);
+}
+
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.toolbar-row__left,
+.toolbar-row__right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.menu-footer {
+  margin: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.muted-list {
+  margin: 0;
+  padding-inline-start: 18px;
+  color: var(--text-secondary);
+}
+
+.answer-block {
+  margin-bottom: 0;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #fbfdff;
+  white-space: pre-wrap;
+}
+
+.answer-marker {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 0 2px;
+  border-radius: 4px;
+  color: var(--brand-main);
+  cursor: pointer;
+}
+
+.answer-marker:hover,
+.answer-marker:focus-visible {
+  background: #e8f1ff;
+  outline: none;
+}
+
+.citation-card {
+  border-color: var(--line-soft);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.citation-card--active {
+  border-color: var(--brand-main) !important;
+  box-shadow: 0 0 0 2px rgba(15, 91, 216, 0.12);
+}
+
+@media (max-width: 1200px) {
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .app-content {
+    padding: 14px;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
