@@ -25,7 +25,7 @@ class ContextBuilder:
         used_tokens = 0
         seen = set()
 
-        for hit in hits:
+        for index, hit in enumerate(hits, start=1):
             payload = hit.payload
             key = (payload.get("doc_id"), payload.get("chunk_index"))
             if key in seen:
@@ -39,7 +39,7 @@ class ContextBuilder:
                 continue
             used_tokens += tokens
             selected.append(hit)
-            texts.append(self._format_context(payload, text))
+            texts.append(self._format_context(index, payload, text))
 
         context = "\n".join(texts)
         return ContextBuildResult(context=context, hits=selected)
@@ -49,7 +49,7 @@ class ContextBuilder:
 
         return max(1, len(text))
 
-    def _format_context(self, payload: dict, text: str) -> str:
+    def _format_context(self, index: int, payload: dict, text: str) -> str:
         """格式化单条上下文。"""
 
         doc_name = payload.get("doc_name") or "未知文档"
@@ -61,4 +61,4 @@ class ContextBuilder:
             location = f"章节:{section_path}"
         elif page_start is not None:
             location = f"页码:{page_start}-{page_end or page_start}"
-        return f"[来源:{doc_name} {location}]\n{text}"
+        return f"[证据{index} 来源:{doc_name} {location}]\n{text}"

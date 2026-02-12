@@ -110,6 +110,9 @@ class KnowledgeBaseService:
             "threshold": self._settings.rag_threshold,
             "rerank_enabled": self._settings.rerank_enabled,
             "max_context_tokens": self._settings.rag_max_context_tokens,
+            "min_evidence_chunks": self._settings.rag_min_evidence_chunks,
+            "min_context_chars": self._settings.rag_min_context_chars,
+            "min_keyword_coverage": self._settings.rag_min_keyword_coverage,
         }
 
 

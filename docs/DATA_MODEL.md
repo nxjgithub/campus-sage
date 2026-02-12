@@ -65,12 +65,14 @@
 字段：
 - `conversation_id`（PK，string）
 - `kb_id`（FK）
+- `user_id`（string，nullable：归属用户，匿名会话为空）
 - `title`（string，nullable）
 - `created_at`（datetime）
 - `updated_at`（datetime）
 
 索引：
 - index(`kb_id`)
+- index(`user_id`)
 - index(`updated_at`)
 
 
@@ -174,3 +176,61 @@
 索引：
 - index(`run_id`)
 - index(`eval_item_id`)
+
+
+## 10. user / role / user_role（用户与角色）
+### 10.1 user
+- `user_id`（PK，string）
+- `email`（string，唯一）
+- `password_hash`（string）
+- `status`（string：active/disabled/deleted）
+- `created_at`（datetime）
+- `updated_at`（datetime）
+- `last_login_at`（datetime，nullable）
+
+索引：
+- unique(`email`)
+- index(`status`)
+
+### 10.2 role
+- `role_id`（PK，string）
+- `name`（string，唯一）
+- `permissions_json`（text/json：权限列表）
+- `created_at`（datetime）
+
+### 10.3 user_role
+- `user_id`（FK -> user.user_id）
+- `role_id`（FK -> role.role_id）
+- `created_at`（datetime）
+
+索引：
+- PK(`user_id`, `role_id`)
+
+
+## 11. kb_access（知识库访问控制）
+字段：
+- `user_id`（FK -> user.user_id）
+- `kb_id`（FK -> knowledge_base.kb_id）
+- `access_level`（string：read/write/admin）
+- `created_at`（datetime）
+- `updated_at`（datetime）
+
+索引：
+- PK(`user_id`, `kb_id`)
+- index(`user_id`)
+- index(`kb_id`)
+
+
+## 12. refresh_token（刷新令牌）
+字段：
+- `token_id`（PK，string）
+- `user_id`（FK -> user.user_id）
+- `token_hash`（string，唯一）
+- `expires_at`（datetime）
+- `revoked`（bool）
+- `created_at`（datetime）
+- `revoked_at`（datetime，nullable）
+
+索引：
+- unique(`token_hash`)
+- index(`user_id`)

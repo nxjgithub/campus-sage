@@ -8,6 +8,10 @@
 `编码`：UTF-8  
 `request_id`：建议每个响应返回 `request_id`，并在 Header 返回 `X-Request-ID`
 
+认证约定：
+- 除 `/auth/*` 接口外，默认需要 `Authorization: Bearer <access_token>`  
+- 若知识库 `visibility=public`，问答接口可匿名访问
+
 
 ## 0. 统一响应与错误格式
 ### 0.1 成功响应
@@ -93,6 +97,22 @@
 `timing: object | null`（retrieve_ms/rerank_ms/context_ms/generate_ms/total_ms）  
 `request_id: str | null`
 
+### 1.6 User
+`user_id: str`  
+`email: str`  
+`status: str`（"active" | "disabled" | "deleted"）  
+`roles: List[str]`  
+`created_at: str`  
+`updated_at: str`  
+`last_login_at: str | null`
+
+### 1.7 TokenResponse
+`access_token: str`  
+`refresh_token: str`  
+`token_type: str`（"bearer"）  
+`expires_in: int`  
+`request_id: str | null`
+
 
 ## 2. Knowledge Base 接口
 ### 2.1 创建知识库
@@ -108,7 +128,10 @@
     "topk": 5,
     "threshold": 0.25,
     "rerank_enabled": false,
-    "max_context_tokens": 3000
+    "max_context_tokens": 3000,
+    "min_evidence_chunks": 1,
+    "min_context_chars": 20,
+    "min_keyword_coverage": 0.3
   }
 }
 ```
@@ -120,7 +143,7 @@
   "name": "教务知识库",
   "description": "选课、考试、补考等制度",
   "visibility": "internal",
-  "config": {"topk": 5, "threshold": 0.25, "rerank_enabled": false, "max_context_tokens": 3000},
+  "config": {"topk": 5, "threshold": 0.25, "rerank_enabled": false, "max_context_tokens": 3000, "min_evidence_chunks": 1, "min_context_chars": 20, "min_keyword_coverage": 0.3},
   "created_at": "2026-02-07T10:00:00Z",
   "updated_at": "2026-02-07T10:00:00Z",
   "request_id": "req_xxx"
@@ -150,7 +173,7 @@
 ```json
 {
   "description": "更新说明",
-  "config": {"topk": 8, "threshold": 0.22, "rerank_enabled": true}
+  "config": {"topk": 8, "threshold": 0.22, "rerank_enabled": true, "min_evidence_chunks": 1, "min_keyword_coverage": 0.3}
 }
 ```
 
@@ -434,9 +457,154 @@ Content-Type：`multipart/form-data`
 }
 ```
 
+## 6.2 认证（Auth）
+### 6.2.1 登录
+`POST /api/v1/auth/login`
 
-## 7. 评测（Eval，可选但建议）
-说明：MVP 可先用脚本完成评测。如需 API，可按以下接口扩展。
+请求示例：
+```json
+{"email": "admin@example.com", "password": "Admin1234"}
+```
+
+响应示例：
+```json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "rt_xxx",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "request_id": "req_xxx"
+}
+```
+
+### 6.2.2 刷新令牌
+`POST /api/v1/auth/refresh`
+
+请求示例：
+```json
+{"refresh_token": "rt_xxx"}
+```
+
+### 6.2.3 退出登录
+`POST /api/v1/auth/logout`
+
+请求示例：
+```json
+{"refresh_token": "rt_xxx"}
+```
+
+## 6.3 用户（Users）
+### 6.3.1 获取当前用户
+`GET /api/v1/users/me`
+
+响应示例：
+```json
+{
+  "user_id": "user_001",
+  "email": "admin@example.com",
+  "status": "active",
+  "roles": ["admin"],
+  "created_at": "2026-02-12T10:00:00Z",
+  "updated_at": "2026-02-12T10:00:00Z",
+  "last_login_at": "2026-02-12T10:10:00Z",
+  "request_id": "req_xxx"
+}
+```
+
+### 6.3.2 创建用户（管理员）
+`POST /api/v1/users`
+
+请求示例：
+```json
+{"email": "user@example.com", "password": "User1234", "roles": ["user"]}
+```
+
+### 6.3.3 获取用户列表（管理员）
+`GET /api/v1/users?status=&keyword=&limit=&offset=`
+
+参数说明：
+- `status`：可选，`active` / `disabled` / `deleted`
+- `keyword`：可选，模糊匹配邮箱或用户ID
+- `limit`：可选，默认 20
+- `offset`：可选，默认 0
+
+响应示例：
+```json
+{
+  "items": [
+    {
+      "user_id": "user_001",
+      "email": "admin@example.com",
+      "status": "active",
+      "roles": ["admin"],
+      "created_at": "2026-02-12T10:00:00Z"
+    }
+  ],
+  "total": 12,
+  "limit": 20,
+  "offset": 0,
+  "request_id": "req_xxx"
+}
+```
+
+### 6.3.4 更新用户（管理员）
+`PATCH /api/v1/users/{user_id}`
+
+请求示例：
+```json
+{"status": "disabled", "roles": ["user"]}
+```
+
+### 6.3.5 设置用户知识库权限（管理员）
+`POST /api/v1/users/{user_id}/kb-access`
+
+请求示例：
+```json
+{"kb_id": "kb_123", "access_level": "write"}
+```
+说明：`access_level` 取值 `read` / `write` / `admin`
+
+### 6.3.6 获取用户知识库权限（管理员）
+`GET /api/v1/users/{user_id}/kb-access`
+
+### 6.3.7 撤销用户知识库权限（管理员）
+`DELETE /api/v1/users/{user_id}/kb-access/{kb_id}`
+
+响应示例：
+```json
+{"user_id": "user_001", "kb_id": "kb_123", "status": "deleted", "request_id": "req_xxx"}
+```
+
+### 6.3.8 批量更新用户知识库权限（管理员）
+`PUT /api/v1/users/{user_id}/kb-access`
+
+请求示例：
+```json
+{
+  "items": [
+    {"kb_id": "kb_123", "access_level": "read"},
+    {"kb_id": "kb_456", "access_level": "admin"}
+  ]
+}
+```
+说明：该接口会全量替换该用户的权限列表。
+
+### 6.3.9 获取角色列表（管理员）
+`GET /api/v1/roles`
+
+响应示例：
+```json
+{
+  "items": [
+    {"name": "admin", "permissions": ["*"]},
+    {"name": "user", "permissions": ["kb.read", "rag.ask"]}
+  ],
+  "request_id": "req_xxx"
+}
+```
+
+## 7. 评测（Eval）
+说明：支持通过 API 进行评测集创建与评测运行。
 
 ### 7.1 创建评测集
 `POST /api/v1/eval/sets`
@@ -463,6 +631,27 @@ Content-Type：`multipart/form-data`
 `GET /api/v1/eval/runs/{run_id}`
 
 响应建议包含：`recall_at_k`、`mrr`、`avg_ms`、`p95_ms`
+
+响应示例：
+```json
+{
+  "run_id": "erun_001",
+  "eval_set_id": "es_001",
+  "kb_id": "kb_123",
+  "topk": 5,
+  "threshold": 0.25,
+  "rerank_enabled": false,
+  "metrics": {
+    "recall_at_k": 0.8,
+    "mrr": 0.6,
+    "avg_ms": 120,
+    "p95_ms": 240,
+    "samples": 10
+  },
+  "created_at": "2026-02-12T10:00:00Z",
+  "request_id": "req_xxx"
+}
+```
 
 
 ## 8. 监控（Queue Monitor，可选）

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 
 from app.core.error_codes import ErrorCode
@@ -9,7 +10,7 @@ from app.core.settings import Settings
 from app.core.utils import new_id
 from app.rag.context_builder import ContextBuilder
 from app.rag.dto import AskResult, CitationDTO
-from app.rag.embedding import SimpleEmbedder
+from app.rag.embedding import Embedder, get_embedder
 from app.rag.llm_client import VllmClient
 from app.db.repos.conversation import ConversationRepository
 from app.db.database import get_database
@@ -25,7 +26,7 @@ class RagService:
     def __init__(self, kb_repo: KnowledgeBaseRepositoryProtocol, settings: Settings) -> None:
         self._kb_repo = kb_repo
         self._settings = settings
-        self._embedder = SimpleEmbedder(settings.vector_dim)
+        self._embedder: Embedder = get_embedder(settings)
         self._vector_store: VectorStore = get_vector_store(settings)
         self._context_builder = ContextBuilder(settings.rag_max_context_tokens)
         self._llm_client = VllmClient(settings)
@@ -41,6 +42,7 @@ class RagService:
         question: str,
         request_id: str | None,
         conversation_id: str | None,
+        user_id: str | None,
         topk: int | None,
         threshold: float | None,
         rerank_enabled: bool | None,
@@ -62,6 +64,7 @@ class RagService:
             kb_id=kb_id,
             conversation_id=conversation_id,
             title=question.strip()[:50] if question.strip() else None,
+            user_id=user_id,
         )
 
         topk = topk or kb.config.get("topk", self._settings.rag_topk)
@@ -73,7 +76,15 @@ class RagService:
             if rerank_enabled is not None
             else kb.config.get("rerank_enabled", self._settings.rerank_enabled)
         )
-        min_chunks = self._settings.rag_min_evidence_chunks
+        min_chunks = kb.config.get("min_evidence_chunks")
+        if min_chunks is None:
+            min_chunks = self._settings.rag_min_evidence_chunks
+        min_context_chars = kb.config.get("min_context_chars")
+        if min_context_chars is None:
+            min_context_chars = self._settings.rag_min_context_chars
+        min_coverage = kb.config.get("min_keyword_coverage")
+        if min_coverage is None:
+            min_coverage = self._settings.rag_min_keyword_coverage
 
         total_start = time.perf_counter()
         query_vector = self._embedder.embed_query(question)
@@ -85,7 +96,9 @@ class RagService:
             filters=filters,
         )
         retrieve_ms = int((time.perf_counter() - retrieve_start) * 1000)
-        refusal_reason = self._get_refusal_reason(question, hits, threshold, min_chunks)
+        refusal_reason = self._get_refusal_reason(
+            question, hits, threshold, min_chunks, min_coverage
+        )
         if refusal_reason is not None:
             total_ms = int((time.perf_counter() - total_start) * 1000)
             response = self._build_refusal(
@@ -123,13 +136,13 @@ class RagService:
         context_start = time.perf_counter()
         context_result = self._context_builder.build(hits)
         context_ms = int((time.perf_counter() - context_start) * 1000)
-        if not context_result.hits:
+        if not context_result.hits or len(context_result.context.strip()) < min_context_chars:
             total_ms = int((time.perf_counter() - total_start) * 1000)
             response = self._build_refusal(
                 question,
                 request_id,
                 conversation.conversation_id,
-                "LOW_COVERAGE",
+                "LOW_EVIDENCE",
                 retrieve_ms,
                 0,
                 total_ms,
@@ -147,7 +160,7 @@ class RagService:
                 generate_ms=0,
                 total_ms=total_ms,
                 hits=context_result.hits,
-                refusal_reason="LOW_COVERAGE",
+                refusal_reason="LOW_EVIDENCE",
             )
             return response
 
@@ -155,6 +168,7 @@ class RagService:
         generate_start = time.perf_counter()
         if self._settings.vllm_enabled:
             answer = self._llm_client.generate(question=question, context=context_result.context)
+            answer = self._ensure_citations_in_answer(answer, citations)
         else:
             answer = self._build_answer(citations)
         generate_ms = int((time.perf_counter() - generate_start) * 1000)
@@ -199,6 +213,7 @@ class RagService:
         hits: list[VectorHit],
         threshold: float,
         min_chunks: int,
+        min_coverage: float,
     ) -> str | None:
         """判断是否需要拒答并返回原因码。"""
 
@@ -208,7 +223,7 @@ class RagService:
             return "LOW_SCORE"
         if len(hits) < min_chunks:
             return "LOW_EVIDENCE"
-        if not self._has_keyword_overlap(question, hits):
+        if self._keyword_coverage_ratio(question, hits) < min_coverage:
             return "LOW_COVERAGE"
         return None
 
@@ -272,7 +287,8 @@ class RagService:
         """生成引用片段。"""
 
         limit = self._settings.rag_max_snippet_chars
-        return text.strip().replace("\n", " ")[:limit]
+        cleaned = " ".join(text.strip().split())
+        return cleaned[:limit]
 
     def _build_answer(self, citations: list[CitationDTO]) -> str:
         """构建答案文本。"""
@@ -282,17 +298,32 @@ class RagService:
         head = citations[0].snippet
         return f"根据检索到的证据，相关内容如下：[1] {head}"
 
-    def _has_keyword_overlap(self, question: str, hits: list[VectorHit]) -> bool:
-        """判断问题与命中文本是否存在关键词覆盖。"""
+    def _ensure_citations_in_answer(
+        self, answer: str, citations: list[CitationDTO]
+    ) -> str:
+        """确保答案中包含引用编号。"""
 
-        tokens = self._tokenize_question(question)
+        if not citations:
+            return answer
+        content = answer.strip()
+        if not content:
+            return self._build_answer(citations)
+        if re.search(r"\[\d+\]", content):
+            return content
+        markers = "".join(f"[{item.citation_id}]" for item in citations)
+        return f"{content}\n\n参考：{markers}"
+
+    def _keyword_coverage_ratio(self, question: str, hits: list[VectorHit]) -> float:
+        """计算问题关键词在命中文本中的覆盖率。"""
+
+        tokens = {token for token in self._tokenize_question(question) if token.strip()}
         if not tokens:
-            return True
-        for hit in hits:
-            text = (hit.payload.get("text") or "").lower()
-            if any(token in text for token in tokens):
-                return True
-        return False
+            return 1.0
+        content = " ".join((hit.payload.get("text") or "") for hit in hits).lower()
+        if not content:
+            return 0.0
+        covered = sum(1 for token in tokens if token.lower() in content)
+        return covered / max(1, len(tokens))
 
     def _tokenize_question(self, question: str) -> list[str]:
         """拆分问题关键词（中文以字符兜底）。"""

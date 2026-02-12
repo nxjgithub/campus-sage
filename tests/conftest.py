@@ -14,6 +14,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
+os.environ.setdefault("EMBEDDING_BACKEND", "simple")
+os.environ.setdefault("VECTOR_BACKEND", "memory")
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret")
+
+
 QDRANT_COLLECTIONS_PATH: Final[str] = "/collections"
 
 

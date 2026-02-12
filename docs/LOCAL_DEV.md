@@ -128,6 +128,12 @@ uvicorn app.main:app --reload
 打开：
 `http://127.0.0.1:8000/docs`（Swagger）
 
+## 6.1 创建管理员账号
+首次使用需创建管理员账号：
+```powershell
+python scripts/create_admin.py --email admin@example.com --password Admin1234
+```
+
 
 ## 7. 运行质量门禁
 ```powershell
@@ -135,8 +141,24 @@ ruff check .
 pytest -q
 ```
 
+## 8. 运行评测脚本
+评测集 JSON 格式示例：
+```json
+{
+  "name": "教务评测集_v1",
+  "items": [
+    {"question": "缓考申请流程是什么？", "gold_doc_id": "doc_123", "gold_page_start": 5, "gold_page_end": 6}
+  ]
+}
+```
 
-## 8. vLLM 启动说明（可选）
+执行评测：
+```powershell
+python scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --topk 5
+```
+
+
+## 9. vLLM 启动说明（可选）
 - 本机有 GPU：可本机启动 vLLM
 - 没有 GPU：可用远端 vLLM，将 `VLLM_BASE_URL` 指向远端
 
@@ -147,7 +169,7 @@ VLLM_ENABLED=true
 ```
 
 
-## 9. 启用 Qdrant 向量库
+## 10. 启用 Qdrant 向量库
 1. 安装依赖：
 ```powershell
 pip install qdrant-client
@@ -160,7 +182,7 @@ QDRANT_URL=http://127.0.0.1:6333
 3. 重启服务后即可使用 Qdrant 作为向量库后端。
 
 
-## 10. 常见问题
+## 11. 常见问题
 - Qdrant 端口冲突：检查 6333/6334 是否被占用
 - Windows 换行符：仓库要求 LF，提交前避免把配置文件转为 CRLF
 - `.env` 不要提交：必须被 `.gitignore` 忽略

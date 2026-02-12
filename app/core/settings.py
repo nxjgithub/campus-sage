@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     qdrant_collection_prefix: str = Field(
         default="csage_", description="向量库集合前缀"
     )
-    vector_backend: str = Field(default="memory", description="向量库后端（memory/qdrant）")
+    vector_backend: str = Field(default="qdrant", description="向量库后端（memory/qdrant）")
     vector_dim: int = Field(default=1024, description="向量维度")
 
     vllm_base_url: str = Field(default="http://127.0.0.1:8001/v1", description="vLLM 地址")
@@ -31,6 +31,21 @@ class Settings(BaseSettings):
     vllm_timeout_s: int = Field(default=60, description="vLLM 超时秒数")
     vllm_enabled: bool = Field(default=False, description="是否启用 vLLM 生成")
 
+    jwt_secret_key: str = Field(default="CHANGE_ME", description="JWT 密钥")
+    jwt_algorithm: str = Field(default="HS256", description="JWT 算法")
+    jwt_issuer: str = Field(default="csage", description="JWT 签发者")
+    access_token_expire_minutes: int = Field(default=60, description="访问令牌过期分钟")
+    refresh_token_expire_days: int = Field(default=7, description="刷新令牌过期天数")
+    password_min_length: int = Field(default=8, description="密码最小长度")
+
+    embedding_backend: str = Field(
+        default="http", description="Embedding 后端（http/simple）"
+    )
+    embedding_base_url: str = Field(
+        default="http://127.0.0.1:8001/v1", description="Embedding 服务地址"
+    )
+    embedding_timeout_s: int = Field(default=60, description="Embedding 超时秒数")
+    embedding_api_key: str | None = Field(default=None, description="Embedding API Key")
     embedding_model_name: str = Field(default="bge-m3", description="Embedding 模型名")
     embedding_batch_size: int = Field(default=32, description="Embedding 批大小")
 
@@ -42,6 +57,8 @@ class Settings(BaseSettings):
     rag_max_context_tokens: int = Field(default=3000, description="上下文预算")
     rag_max_snippet_chars: int = Field(default=200, description="引用片段长度")
     rag_min_evidence_chunks: int = Field(default=1, description="最少证据数")
+    rag_min_context_chars: int = Field(default=20, description="最少上下文字符数")
+    rag_min_keyword_coverage: float = Field(default=0.3, description="关键词覆盖率阈值")
     chunk_size: int = Field(default=500, description="分块大小（字符数）")
     chunk_overlap: int = Field(default=100, description="分块重叠（字符数）")
 
@@ -67,6 +84,9 @@ class Settings(BaseSettings):
         default=False, description="是否启用 RQ Dashboard"
     )
     ingest_queue_alert_threshold: int = Field(default=200, description="队列告警阈值")
+    ingest_queue_failed_alert_threshold: int = Field(
+        default=10, description="失败任务告警阈值"
+    )
     ingest_queue_dead_max: int = Field(default=200, description="死信队列保留上限")
 
     debug_mode: bool = Field(default=False, description="调试模式")
@@ -83,3 +103,10 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
     return _settings
+
+
+def reset_settings() -> None:
+    """重置配置单例（测试使用）。"""
+
+    global _settings
+    _settings = None

@@ -16,6 +16,9 @@ class KnowledgeBaseConfig(BaseModel):
     threshold: float = Field(description="拒答阈值")
     rerank_enabled: bool = Field(description="是否启用重排")
     max_context_tokens: int = Field(description="上下文预算")
+    min_evidence_chunks: int | None = Field(default=None, description="最小证据数")
+    min_context_chars: int | None = Field(default=None, description="最小上下文字符数")
+    min_keyword_coverage: float | None = Field(default=None, description="关键词覆盖率阈值")
 
 
 class KnowledgeBaseCreateRequest(BaseModel):

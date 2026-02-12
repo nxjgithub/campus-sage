@@ -7,6 +7,7 @@ from rq.job import Job
 from redis import Redis
 
 from app.core.error_codes import ErrorCode
+from app.core.logging import get_logger, log_event
 from app.core.settings import get_settings
 from app.ingest.worker_utils import build_document_service
 
@@ -23,6 +24,17 @@ def on_ingest_failure(job: Job, exc_type: type[BaseException], exc_value: BaseEx
         job_id=job_id,
         error_message=error_message,
         error_code=ErrorCode.INGEST_WORKER_FAILED.value,
+    )
+    logger = get_logger()
+    log_event(
+        logger,
+        event="ingest_queue_failure",
+        fields={
+            "doc_id": doc_id,
+            "job_id": job_id,
+            "queue": job.origin,
+            "error_message": error_message,
+        },
     )
     if _should_move_to_dead(job):
         _move_to_dead(job, settings)

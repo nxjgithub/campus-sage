@@ -69,9 +69,11 @@
 错误码必须集中定义（建议 `app/core/error_codes.py`），禁止散落字符串。
 示例类别：
 - INGEST_*：解析、切分、embedding、upsert 失败
+- EMBEDDING_*：向量模型调用失败
 - VECTOR_*：向量库连接/写入/删除失败
 - RAG_*：检索无证据、上下文构造失败、模型调用失败
-- AUTH_*：鉴权失败
+- AUTH_*：认证/授权/令牌错误
+- USER_*：用户管理相关错误
 - VALIDATION_*：入参校验失败
 - KB_*：知识库相关错误（如唯一性冲突）
 - INGEST_JOB_*：入库任务相关错误（如不可重试）

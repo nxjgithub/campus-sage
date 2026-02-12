@@ -22,7 +22,7 @@
 - `QDRANT_URL`：如 `http://127.0.0.1:6333`
 - `QDRANT_API_KEY`：可选
 - `QDRANT_COLLECTION_PREFIX`：默认 `csage_`（用于区分环境）
-- `VECTOR_BACKEND`：向量库后端（memory/qdrant），默认 memory
+- `VECTOR_BACKEND`：向量库后端（memory/qdrant），默认 qdrant
 - `VECTOR_DIM`：embedding 维度（与 embedding 模型一致）
 
 
@@ -33,12 +33,25 @@
 - `VLLM_TIMEOUT_S`：默认 60
 - `VLLM_ENABLED`：true/false，是否启用 vLLM 生成
 ### 4.2 Embedding（向量模型）
+- `EMBEDDING_BACKEND`：Embedding 后端（http/simple），默认 http
+- `EMBEDDING_BASE_URL`：Embedding 服务地址（OpenAI 兼容），默认 `http://127.0.0.1:8001/v1`
+- `EMBEDDING_TIMEOUT_S`：默认 60
+- `EMBEDDING_API_KEY`：可选
 - `EMBEDDING_MODEL_NAME`：如 `bge-m3`（示例）
 - `EMBEDDING_BATCH_SIZE`：默认 32
 
 ### 4.3 Rerank（可选）
 - `RERANK_ENABLED`：true/false
 - `RERANK_MODEL_NAME`：如 `bge-reranker`（示例）
+
+## 4.4 认证与安全
+- `JWT_SECRET_KEY`：JWT 密钥（必须修改）
+- `JWT_ALGORITHM`：默认 HS256
+- `JWT_ISSUER`：默认 csage
+- `ACCESS_TOKEN_EXPIRE_MINUTES`：访问令牌过期分钟
+- `REFRESH_TOKEN_EXPIRE_DAYS`：刷新令牌过期天数
+- `PASSWORD_MIN_LENGTH`：密码最小长度
+说明：密码必须包含字母与数字，长度不足将返回 `PASSWORD_TOO_WEAK`。
 
 
 ## 5. RAG 参数（可被 KB config 覆盖）
@@ -47,6 +60,8 @@
 - `RAG_MAX_CONTEXT_TOKENS`：默认 3000（上下文预算）
 - `RAG_MAX_SNIPPET_CHARS`：默认 200（引用片段长度）
 - `RAG_MIN_EVIDENCE_CHUNKS`：默认 1（最少有效证据数）
+- `RAG_MIN_CONTEXT_CHARS`：默认 20（最少上下文字符数）
+- `RAG_MIN_KEYWORD_COVERAGE`：默认 0.3（关键词覆盖率阈值）
 - `CHUNK_SIZE`：默认 500（分块大小，字符数）
 - `CHUNK_OVERLAP`：默认 100（分块重叠，字符数）
 
@@ -69,6 +84,7 @@
 - `INGEST_QUEUE_TTL_S`：排队任务保留秒数，默认 86400
 - `INGEST_QUEUE_DASHBOARD_ENABLED`：是否启用队列面板，默认 false
 - `INGEST_QUEUE_ALERT_THRESHOLD`：队列告警阈值，默认 200
+- `INGEST_QUEUE_FAILED_ALERT_THRESHOLD`：失败任务告警阈值，默认 10
 - `INGEST_QUEUE_DEAD_MAX`：死信队列保留上限，默认 200
 
 ## 8. 开关与调试

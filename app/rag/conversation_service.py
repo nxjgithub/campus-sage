@@ -14,7 +14,11 @@ class ConversationService:
         self._repository = repository
 
     def ensure_conversation(
-        self, kb_id: str, conversation_id: str | None, title: str | None
+        self,
+        kb_id: str,
+        conversation_id: str | None,
+        title: str | None,
+        user_id: str | None,
     ) -> ConversationRecord:
         """获取或创建会话。"""
 
@@ -25,6 +29,7 @@ class ConversationService:
             record = ConversationRecord(
                 conversation_id=conv_id,
                 kb_id=kb_id,
+                user_id=user_id,
                 title=title,
                 created_at=now,
                 updated_at=now,
@@ -38,17 +43,29 @@ class ConversationService:
                 detail={"conversation_id": conv_id, "kb_id": kb_id},
                 status_code=400,
             )
+        if record.user_id != user_id:
+            raise AppError(
+                code=ErrorCode.AUTH_FORBIDDEN,
+                message="无权访问该会话",
+                detail={"conversation_id": conv_id},
+                status_code=403,
+            )
         record.updated_at = utc_now_iso()
         if title and not record.title:
             record.title = title
         return self._repository.update_conversation(record)
 
     def list_conversations(
-        self, kb_id: str | None, limit: int, offset: int
+        self, kb_id: str | None, user_id: str | None, limit: int, offset: int
     ) -> list[ConversationRecord]:
         """列出会话列表。"""
 
-        return self._repository.list_conversations(kb_id=kb_id, limit=limit, offset=offset)
+        return self._repository.list_conversations(
+            kb_id=kb_id,
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+        )
 
     def get_conversation(self, conversation_id: str) -> ConversationRecord:
         """获取会话。"""

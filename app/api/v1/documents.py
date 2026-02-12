@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile
 
-from app.api.v1.deps import get_document_service, get_kb_service
+from app.api.v1.deps import get_authorization_service, get_document_service, get_kb_service, require_permission
 from app.api.v1.mappers import doc_to_response, job_to_response
 from app.api.v1.upload_utils import save_upload_file
 from app.api.v1.schemas.documents import (
@@ -13,6 +13,9 @@ from app.api.v1.schemas.documents import (
     DocumentUploadResponse,
 )
 from app.api.v1.schemas.ingest import IngestJobDetailResponse
+from app.auth.dto import CurrentUser
+from app.auth.permissions import Permission
+from app.auth.service import AuthorizationService
 from app.core.errors import AppError
 from app.core.settings import Settings, get_settings
 from app.ingest.service import DocumentService, KnowledgeBaseService
@@ -30,13 +33,22 @@ async def upload_document(
     doc_name: str | None = Form(default=None),
     doc_version: str | None = Form(default=None),
     published_at: str | None = Form(default=None),
+    current_user: CurrentUser = Depends(require_permission(Permission.DOC_WRITE)),
+    authz: AuthorizationService = Depends(get_authorization_service),
     kb_service: KnowledgeBaseService = Depends(get_kb_service),
     doc_service: DocumentService = Depends(get_document_service),
     settings: Settings = Depends(get_settings),
 ) -> DocumentUploadResponse:
     """上传文档并触发入库任务。"""
 
-    kb_service.get(kb_id)
+    kb_record = kb_service.get(kb_id)
+    authz.ensure_kb_access(
+        current_user=current_user,
+        kb_id=kb_record.kb_id,
+        visibility=kb_record.visibility,
+        required_level="write",
+        allow_public=False,
+    )
     prepared = doc_service.prepare_document(
         kb_id=kb_id,
         filename=file.filename,
@@ -79,12 +91,21 @@ async def upload_document(
 def list_documents(
     request: Request,
     kb_id: str,
+    current_user: CurrentUser = Depends(require_permission(Permission.DOC_READ)),
+    authz: AuthorizationService = Depends(get_authorization_service),
     kb_service: KnowledgeBaseService = Depends(get_kb_service),
     doc_service: DocumentService = Depends(get_document_service),
 ) -> DocumentListResponse:
     """获取知识库下的文档列表。"""
 
-    kb_service.get(kb_id)
+    kb_record = kb_service.get(kb_id)
+    authz.ensure_kb_access(
+        current_user=current_user,
+        kb_id=kb_record.kb_id,
+        visibility=kb_record.visibility,
+        required_level="read",
+        allow_public=False,
+    )
     items = [doc_to_response(record) for record in doc_service.list_documents(kb_id)]
     return DocumentListResponse(items=items, request_id=request.state.request_id)
 
@@ -93,11 +114,22 @@ def list_documents(
 def get_document(
     request: Request,
     doc_id: str,
+    current_user: CurrentUser = Depends(require_permission(Permission.DOC_READ)),
+    authz: AuthorizationService = Depends(get_authorization_service),
     service: DocumentService = Depends(get_document_service),
+    kb_service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> DocumentDetailResponse:
     """获取文档详情。"""
 
     record = service.get_document(doc_id)
+    kb_record = kb_service.get(record.kb_id)
+    authz.ensure_kb_access(
+        current_user=current_user,
+        kb_id=record.kb_id,
+        visibility=kb_record.visibility,
+        required_level="read",
+        allow_public=False,
+    )
     return DocumentDetailResponse(
         **doc_to_response(record).model_dump(),
         request_id=request.state.request_id,
@@ -106,10 +138,24 @@ def get_document(
 
 @router.delete("/documents/{doc_id}")
 def delete_document(
-    request: Request, doc_id: str, service: DocumentService = Depends(get_document_service)
+    request: Request,
+    doc_id: str,
+    current_user: CurrentUser = Depends(require_permission(Permission.DOC_WRITE)),
+    authz: AuthorizationService = Depends(get_authorization_service),
+    service: DocumentService = Depends(get_document_service),
+    kb_service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> dict:
     """删除文档并清理向量与存储文件。"""
 
+    record = service.get_document(doc_id)
+    kb_record = kb_service.get(record.kb_id)
+    authz.ensure_kb_access(
+        current_user=current_user,
+        kb_id=record.kb_id,
+        visibility=kb_record.visibility,
+        required_level="write",
+        allow_public=False,
+    )
     service.delete_document(doc_id)
     return {"status": "deleted", "request_id": request.state.request_id}
 
@@ -119,11 +165,23 @@ def reindex_document(
     request: Request,
     doc_id: str,
     background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_permission(Permission.DOC_WRITE)),
+    authz: AuthorizationService = Depends(get_authorization_service),
     service: DocumentService = Depends(get_document_service),
+    kb_service: KnowledgeBaseService = Depends(get_kb_service),
     settings: Settings = Depends(get_settings),
 ) -> IngestJobDetailResponse:
     """重新入库指定文档。"""
 
+    record = service.get_document(doc_id)
+    kb_record = kb_service.get(record.kb_id)
+    authz.ensure_kb_access(
+        current_user=current_user,
+        kb_id=record.kb_id,
+        visibility=kb_record.visibility,
+        required_level="write",
+        allow_public=False,
+    )
     job = service.reindex(
         doc_id,
         request_id=request.state.request_id,

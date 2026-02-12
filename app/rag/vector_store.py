@@ -49,6 +49,7 @@ class InMemoryVectorStore:
     def upsert(self, kb_id: str, entries: list[VectorEntry]) -> None:
         """写入向量数据。"""
 
+        _validate_entries(entries)
         with self._lock:
             self._items.setdefault(kb_id, [])
             self._items[kb_id].extend(entries)
@@ -138,6 +139,7 @@ class QdrantVectorStore:
 
     def upsert(self, kb_id: str, entries: list[VectorEntry]) -> None:
         try:
+            _validate_entries(entries)
             self._ensure_collection(kb_id)
             points = [
                 self._rest.PointStruct(
@@ -274,3 +276,90 @@ def get_vector_store(settings: Settings) -> VectorStore:
         else:
             _vector_store = InMemoryVectorStore()
     return _vector_store
+
+
+def _validate_entries(entries: list[VectorEntry]) -> None:
+    """校验向量 payload 是否符合契约。"""
+
+    for entry in entries:
+        _validate_payload(entry.payload)
+
+
+def _validate_payload(payload: dict[str, Any]) -> None:
+    """校验单条 payload 字段完整性与类型。"""
+
+    required_fields = [
+        "contract_version",
+        "kb_id",
+        "doc_id",
+        "doc_name",
+        "doc_version",
+        "published_at",
+        "page_start",
+        "page_end",
+        "section_path",
+        "chunk_id",
+        "chunk_index",
+        "text",
+    ]
+    missing = [field for field in required_fields if field not in payload]
+    if missing:
+        raise AppError(
+            code=ErrorCode.RAG_PAYLOAD_INVALID,
+            message="向量 payload 缺少必填字段",
+            detail={"missing": missing},
+            status_code=500,
+        )
+    if payload.get("contract_version") != "0.1":
+        raise AppError(
+            code=ErrorCode.RAG_PAYLOAD_INVALID,
+            message="向量 payload 契约版本不匹配",
+            detail={"contract_version": payload.get("contract_version")},
+            status_code=500,
+        )
+    if not _is_non_empty_str(payload.get("kb_id")):
+        _raise_payload_type_error("kb_id")
+    if not _is_non_empty_str(payload.get("doc_id")):
+        _raise_payload_type_error("doc_id")
+    if not _is_non_empty_str(payload.get("doc_name")):
+        _raise_payload_type_error("doc_name")
+    if not _is_optional_str(payload.get("doc_version")):
+        _raise_payload_type_error("doc_version")
+    if not _is_optional_str(payload.get("published_at")):
+        _raise_payload_type_error("published_at")
+    if not _is_optional_int(payload.get("page_start")):
+        _raise_payload_type_error("page_start")
+    if not _is_optional_int(payload.get("page_end")):
+        _raise_payload_type_error("page_end")
+    if not _is_optional_str(payload.get("section_path")):
+        _raise_payload_type_error("section_path")
+    if not _is_non_empty_str(payload.get("chunk_id")):
+        _raise_payload_type_error("chunk_id")
+    if not isinstance(payload.get("chunk_index"), int):
+        _raise_payload_type_error("chunk_index")
+    text = payload.get("text")
+    if not isinstance(text, str) or not text.strip():
+        _raise_payload_type_error("text")
+
+
+def _raise_payload_type_error(field: str) -> None:
+    """抛出 payload 字段类型错误。"""
+
+    raise AppError(
+        code=ErrorCode.RAG_PAYLOAD_INVALID,
+        message="向量 payload 字段类型不合法",
+        detail={"field": field},
+        status_code=500,
+    )
+
+
+def _is_non_empty_str(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_optional_str(value: object) -> bool:
+    return value is None or isinstance(value, str)
+
+
+def _is_optional_int(value: object) -> bool:
+    return value is None or isinstance(value, int)

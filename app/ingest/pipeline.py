@@ -11,7 +11,7 @@ from app.core.utils import new_id, utc_now_iso
 from app.ingest.chunker import Chunker
 from app.ingest.dto import IngestResult
 from app.ingest.parser import DocumentParser
-from app.rag.embedding import SimpleEmbedder
+from app.rag.embedding import Embedder, get_embedder
 from app.rag.vector_store import VectorEntry, VectorStore, get_vector_store
 
 class IngestPipeline:
@@ -21,7 +21,7 @@ class IngestPipeline:
         self._settings = settings
         self._parser = DocumentParser()
         self._chunker = Chunker(settings.chunk_size, settings.chunk_overlap)
-        self._embedder = SimpleEmbedder(settings.vector_dim)
+        self._embedder: Embedder = get_embedder(settings)
         self._vector_store: VectorStore = get_vector_store(settings)
 
     def run(
@@ -126,7 +126,7 @@ class IngestPipeline:
                 "published_at": published_at,
                 "page_start": chunk.page_start,
                 "page_end": chunk.page_end,
-                "section_path": None,
+                "section_path": chunk.section_path,
                 "chunk_id": new_id("chunk"),
                 "chunk_index": chunk.chunk_index,
                 "text": chunk.text,

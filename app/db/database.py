@@ -174,6 +174,7 @@ def init_database(settings: Settings) -> None:
         CREATE TABLE IF NOT EXISTS conversation (
             conversation_id TEXT PRIMARY KEY,
             kb_id TEXT NOT NULL,
+            user_id TEXT,
             title TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
@@ -181,6 +182,7 @@ def init_database(settings: Settings) -> None:
         );
         """
     )
+    _try_add_column(database, "conversation", "user_id", "TEXT")
     database.execute(
         """
         CREATE TABLE IF NOT EXISTS message (
@@ -195,6 +197,33 @@ def init_database(settings: Settings) -> None:
             created_at TEXT NOT NULL,
             FOREIGN KEY(conversation_id) REFERENCES conversation(conversation_id)
         );
+        """
+    )
+    database.execute(
+        """
+        CREATE TABLE IF NOT EXISTS citation (
+            citation_row_id TEXT PRIMARY KEY,
+            message_id TEXT NOT NULL,
+            citation_id INTEGER NOT NULL,
+            doc_id TEXT NOT NULL,
+            doc_name TEXT NOT NULL,
+            doc_version TEXT,
+            published_at TEXT,
+            page_start INTEGER,
+            page_end INTEGER,
+            section_path TEXT,
+            chunk_id TEXT NOT NULL,
+            snippet TEXT NOT NULL,
+            score REAL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(message_id) REFERENCES message(message_id)
+        );
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_citation_message_id
+        ON citation(message_id);
         """
     )
     database.execute(
@@ -214,8 +243,170 @@ def init_database(settings: Settings) -> None:
     )
     database.execute(
         """
+        CREATE TABLE IF NOT EXISTS eval_set (
+            eval_set_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL
+        );
+        """
+    )
+    database.execute(
+        """
+        CREATE TABLE IF NOT EXISTS eval_item (
+            eval_item_id TEXT PRIMARY KEY,
+            eval_set_id TEXT NOT NULL,
+            question TEXT NOT NULL,
+            gold_doc_id TEXT,
+            gold_page_start INTEGER,
+            gold_page_end INTEGER,
+            tags_json TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(eval_set_id) REFERENCES eval_set(eval_set_id)
+        );
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_eval_item_set
+        ON eval_item(eval_set_id);
+        """
+    )
+    database.execute(
+        """
+        CREATE TABLE IF NOT EXISTS eval_run (
+            run_id TEXT PRIMARY KEY,
+            eval_set_id TEXT NOT NULL,
+            kb_id TEXT NOT NULL,
+            topk INTEGER NOT NULL,
+            threshold REAL,
+            rerank_enabled INTEGER NOT NULL,
+            metrics_json TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(eval_set_id) REFERENCES eval_set(eval_set_id),
+            FOREIGN KEY(kb_id) REFERENCES knowledge_base(kb_id)
+        );
+        """
+    )
+    database.execute(
+        """
+        CREATE TABLE IF NOT EXISTS eval_result (
+            run_result_id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL,
+            eval_item_id TEXT NOT NULL,
+            hit INTEGER NOT NULL,
+            rank INTEGER,
+            retrieve_ms INTEGER,
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(run_id) REFERENCES eval_run(run_id),
+            FOREIGN KEY(eval_item_id) REFERENCES eval_item(eval_item_id)
+        );
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_eval_result_run
+        ON eval_result(run_id);
+        """
+    )
+    database.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user (
+            user_id TEXT PRIMARY KEY,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_login_at TEXT
+        );
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_user_status
+        ON user(status);
+        """
+    )
+    database.execute(
+        """
+        CREATE TABLE IF NOT EXISTS role (
+            role_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            permissions_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        """
+    )
+    database.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_role (
+            user_id TEXT NOT NULL,
+            role_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, role_id),
+            FOREIGN KEY(user_id) REFERENCES user(user_id),
+            FOREIGN KEY(role_id) REFERENCES role(role_id)
+        );
+        """
+    )
+    database.execute(
+        """
+        CREATE TABLE IF NOT EXISTS kb_access (
+            user_id TEXT NOT NULL,
+            kb_id TEXT NOT NULL,
+            access_level TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, kb_id),
+            FOREIGN KEY(user_id) REFERENCES user(user_id),
+            FOREIGN KEY(kb_id) REFERENCES knowledge_base(kb_id)
+        );
+        """
+    )
+    database.execute(
+        """
+        CREATE TABLE IF NOT EXISTS refresh_token (
+            token_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            revoked INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            revoked_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES user(user_id)
+        );
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_refresh_token_user_id
+        ON refresh_token(user_id);
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_kb_access_user_id
+        ON kb_access(user_id);
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_kb_access_kb_id
+        ON kb_access(kb_id);
+        """
+    )
+    database.execute(
+        """
         CREATE INDEX IF NOT EXISTS idx_conversation_kb_id
         ON conversation(kb_id);
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_conversation_user_id
+        ON conversation(user_id);
         """
     )
     database.execute(
@@ -230,18 +421,30 @@ def init_database(settings: Settings) -> None:
         ON feedback(message_id);
         """
     )
+    _seed_default_roles(database)
 
 
 def reset_database(settings: Settings) -> None:
     """清空数据库表数据（测试使用）。"""
 
     database = get_database(settings)
+    database.execute("DELETE FROM eval_result;")
+    database.execute("DELETE FROM eval_run;")
+    database.execute("DELETE FROM eval_item;")
+    database.execute("DELETE FROM eval_set;")
+    database.execute("DELETE FROM citation;")
+    database.execute("DELETE FROM refresh_token;")
+    database.execute("DELETE FROM kb_access;")
+    database.execute("DELETE FROM user_role;")
+    database.execute("DELETE FROM role;")
+    database.execute("DELETE FROM user;")
     database.execute("DELETE FROM feedback;")
     database.execute("DELETE FROM message;")
     database.execute("DELETE FROM conversation;")
     database.execute("DELETE FROM ingest_job;")
     database.execute("DELETE FROM document;")
     database.execute("DELETE FROM knowledge_base;")
+    _seed_default_roles(database)
 
 
 def _parse_sqlite_path(database_url: str) -> Path:
@@ -267,3 +470,32 @@ def _try_add_column(database: Database, table: str, column: str, column_type: st
         database.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type};")
     except sqlite3.OperationalError:
         return
+
+
+def _seed_default_roles(database: Database) -> None:
+    """写入默认角色数据。"""
+
+    from app.auth.permissions import DEFAULT_ROLE_PERMISSIONS
+    import json
+
+    from app.core.utils import utc_now_iso
+
+    for name, permissions in DEFAULT_ROLE_PERMISSIONS.items():
+        exists = database.fetch_one(
+            "SELECT role_id FROM role WHERE name = ?;",
+            (name,),
+        )
+        if exists:
+            continue
+        database.execute(
+            """
+            INSERT INTO role (role_id, name, permissions_json, created_at)
+            VALUES (?, ?, ?, ?);
+            """,
+            (
+                f"role_{name}",
+                name,
+                json.dumps(permissions, ensure_ascii=False),
+                utc_now_iso(),
+            ),
+        )

@@ -11,6 +11,7 @@ class ConversationRecord:
 
     conversation_id: str
     kb_id: str
+    user_id: str | None
     title: str | None
     created_at: str
     updated_at: str

@@ -11,6 +11,7 @@ class Chunk:
     text: str
     page_start: int | None
     page_end: int | None
+    section_path: str | None
 
 
 class Chunker:
@@ -26,6 +27,7 @@ class Chunker:
         chunks: list[Chunk] = []
         chunk_index = 0
         for page in pages:
+            section_path = self._extract_section_path(page.text)
             for text in self._split_text(page.text):
                 chunks.append(
                     Chunk(
@@ -33,6 +35,7 @@ class Chunker:
                         text=text,
                         page_start=page.page_number,
                         page_end=page.page_number,
+                        section_path=section_path,
                     )
                 )
                 chunk_index += 1
@@ -55,3 +58,29 @@ class Chunker:
                 break
             start = max(0, end - overlap)
         return result
+
+    def _extract_section_path(self, text: str) -> str | None:
+        """从页面文本中提取章节标题（启发式）。"""
+
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            if self._is_heading(line):
+                return line[:100]
+        return None
+
+    def _is_heading(self, line: str) -> bool:
+        """判断是否为章节标题（简单规则）。"""
+
+        if len(line) > 60:
+            return False
+        prefixes = ("第", "一、", "二、", "三、", "四、", "五、", "六、", "七、", "八、", "九、", "十、")
+        if line.startswith(prefixes):
+            return True
+        for marker in ("章", "节"):
+            if line.startswith("第") and marker in line:
+                return True
+        if line[:1].isdigit() and (". " in line or "、" in line):
+            return True
+        return False
