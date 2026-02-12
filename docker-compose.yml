@@ -12,7 +12,27 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+  tei:
+    image: ghcr.io/huggingface/text-embeddings-inference:86-1.8
+    ports:
+      - "8080:80"
+      - "9000:9000"
+    volumes:
+      - tei_data:/data
+    shm_size: "1g"
+    gpus: all
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+    command:
+      - "--model-id"
+      - "${TEI_MODEL_ID:-BAAI/bge-m3}"
+      - "--auto-truncate"
+      - "--max-client-batch-size"
+      - "${TEI_MAX_CLIENT_BATCH_SIZE:-8}"
+      - "--max-concurrent-requests"
+      - "${TEI_MAX_CONCURRENT_REQUESTS:-64}"
 
 volumes:
   qdrant_data:
   redis_data:
+  tei_data:

@@ -96,9 +96,14 @@ INGEST_QUEUE_ENABLED=true
 REDIS_URL=redis://127.0.0.1:6379/0
 INGEST_QUEUE_NAME=ingest
 ```
-3) 启动 RQ Worker：
+3) 启动 RQ Worker（跨平台推荐命令，已内置 Windows 兼容超时机制）：
 ```powershell
-python -m rq worker ingest
+python -m app.ingest.worker_runner --queue ingest
+```
+
+如需执行一次后退出（排障常用）：
+```powershell
+python -m app.ingest.worker_runner --queue ingest --burst
 ```
 
 ## 5.2 启用队列监控面板（可选）

@@ -92,6 +92,17 @@ class IngestPipeline:
         embed_start = time.perf_counter()
         try:
             vectors = self._embedder.embed_texts(texts)
+        except AppError as exc:
+            raise AppError(
+                code=ErrorCode.INGEST_EMBED_FAILED,
+                message="向量化失败",
+                detail={
+                    "source_code": exc.code.value,
+                    "source_message": exc.message,
+                    "source_detail": exc.detail,
+                },
+                status_code=exc.status_code,
+            ) from exc
         except Exception as exc:
             raise AppError(
                 code=ErrorCode.INGEST_EMBED_FAILED,

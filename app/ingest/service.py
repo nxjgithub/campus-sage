@@ -496,9 +496,24 @@ class DocumentService:
             return current_job.status == "canceled"
 
         try:
-            self._vector_store.delete_by_doc_id(
-                kb_id=document.kb_id, doc_id=document.doc_id
-            )
+            try:
+                self._vector_store.delete_by_doc_id(
+                    kb_id=document.kb_id, doc_id=document.doc_id
+                )
+            except AppError as exc:
+                # 删除旧向量是幂等清理动作，遇到瞬时断连时记录告警并继续主流程。
+                log_event(
+                    self._logger,
+                    event="vector_cleanup_skipped",
+                    fields={
+                        "request_id": request_id,
+                        "kb_id": document.kb_id,
+                        "doc_id": document.doc_id,
+                        "error_code": exc.code,
+                        "error_message": exc.message,
+                        "error_detail": exc.detail,
+                    },
+                )
             result = self._pipeline.run(
                 kb_id=document.kb_id,
                 doc_id=document.doc_id,
@@ -546,6 +561,9 @@ class DocumentService:
             job.error_code = None
             job.finished_at = utc_now_iso()
         except IngestCanceled:
+            latest_job = self._job_repo.get(job_id)
+            if latest_job is not None:
+                job.progress = latest_job.progress
             job.status = "canceled"
             job.error_message = "入库已取消"
             job.error_code = ErrorCode.INGEST_CANCELED.value
@@ -558,13 +576,34 @@ class DocumentService:
                 kb_id=document.kb_id, doc_id=document.doc_id
             )
         except AppError as exc:
+            latest_job = self._job_repo.get(job_id)
+            if latest_job is not None:
+                job.progress = latest_job.progress
+            detail_error = None
+            if exc.detail and isinstance(exc.detail.get("error"), str):
+                detail_error = exc.detail["error"]
+            source_message = None
+            if exc.detail and isinstance(exc.detail.get("source_message"), str):
+                source_message = exc.detail["source_message"]
+            source_detail_message = None
+            if exc.detail and isinstance(exc.detail.get("source_detail"), dict):
+                source_detail = exc.detail["source_detail"]
+                if isinstance(source_detail.get("body"), dict):
+                    body = source_detail["body"]
+                    if isinstance(body.get("message"), str):
+                        source_detail_message = body["message"]
+            error_text = exc.message if detail_error is None else f"{exc.message}: {detail_error}"
+            if source_message:
+                error_text = f"{exc.message}: {source_message}"
+            if source_detail_message:
+                error_text = f"{error_text} ({source_detail_message})"
             document.status = "failed"
-            document.error_message = exc.message
+            document.error_message = error_text
             job.status = "failed"
-            job.error_message = exc.message
+            job.error_message = error_text
             job.error_code = exc.code.value
             job.progress = self._with_stage(job.progress, "failed")
-            error_message = exc.message
+            error_message = error_text
             job.finished_at = utc_now_iso()
         document.updated_at = utc_now_iso()
         job.updated_at = utc_now_iso()

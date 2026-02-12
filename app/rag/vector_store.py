@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Protocol
+from typing import Any, Callable, TypeVar, Protocol
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
@@ -128,28 +128,19 @@ class QdrantVectorStore:
                 status_code=500,
             ) from exc
 
-        self._client = QdrantClient(
-            url=settings.qdrant_url,
-            api_key=settings.qdrant_api_key,
-            check_compatibility=False,
-        )
+        self._client_cls = QdrantClient
+        self._qdrant_url = settings.qdrant_url
+        self._qdrant_api_key = settings.qdrant_api_key
+        self._client_lock = Lock()
+        self._operation_lock = Lock()
+        self._client = self._create_client()
         self._collection_prefix = settings.qdrant_collection_prefix
         self._vector_dim = settings.vector_dim
         self._rest = rest
 
     def upsert(self, kb_id: str, entries: list[VectorEntry]) -> None:
         try:
-            _validate_entries(entries)
-            self._ensure_collection(kb_id)
-            points = [
-                self._rest.PointStruct(
-                    id=entry.payload["chunk_id"],
-                    vector=entry.vector,
-                    payload=entry.payload,
-                )
-                for entry in entries
-            ]
-            self._client.upsert(collection_name=self._collection_name(kb_id), points=points)
+            self._run_with_retry(lambda: self._upsert_impl(kb_id, entries))
         except Exception as exc:
             raise AppError(
                 code=ErrorCode.VECTOR_UPSERT_FAILED,
@@ -160,15 +151,7 @@ class QdrantVectorStore:
 
     def delete_by_doc_id(self, kb_id: str, doc_id: str) -> None:
         try:
-            if not self._collection_exists(kb_id):
-                return
-            condition = self._rest.FieldCondition(
-                key="doc_id", match=self._rest.MatchValue(value=doc_id)
-            )
-            self._client.delete(
-                collection_name=self._collection_name(kb_id),
-                points_selector=self._rest.Filter(must=[condition]),
-            )
+            self._run_with_retry(lambda: self._delete_by_doc_id_impl(kb_id, doc_id))
         except Exception as exc:
             raise AppError(
                 code=ErrorCode.VECTOR_UPSERT_FAILED,
@@ -179,9 +162,7 @@ class QdrantVectorStore:
 
     def delete_by_kb_id(self, kb_id: str) -> None:
         try:
-            if not self._collection_exists(kb_id):
-                return
-            self._client.delete_collection(collection_name=self._collection_name(kb_id))
+            self._run_with_retry(lambda: self._delete_by_kb_id_impl(kb_id))
         except Exception as exc:
             raise AppError(
                 code=ErrorCode.VECTOR_UPSERT_FAILED,
@@ -198,7 +179,7 @@ class QdrantVectorStore:
         filters: dict[str, Any] | None = None,
     ) -> list[VectorHit]:
         try:
-            if not self._collection_exists(kb_id):
+            if not self._run_with_retry(lambda: self._collection_exists(kb_id)):
                 return []
         except Exception as exc:
             raise AppError(
@@ -217,12 +198,14 @@ class QdrantVectorStore:
             query_filter = self._rest.Filter(must=[condition])
 
         try:
-            results = self._client.search(
-                collection_name=self._collection_name(kb_id),
-                query_vector=query_vector,
-                limit=topk,
-                with_payload=True,
-                query_filter=query_filter,
+            results = self._run_with_retry(
+                lambda: self._client.search(
+                    collection_name=self._collection_name(kb_id),
+                    query_vector=query_vector,
+                    limit=topk,
+                    with_payload=True,
+                    query_filter=query_filter,
+                )
             )
             hits = [
                 VectorHit(score=result.score, payload=result.payload or {})
@@ -246,6 +229,64 @@ class QdrantVectorStore:
     def _collection_name(self, kb_id: str) -> str:
         return f"{self._collection_prefix}{kb_id}"
 
+    def _create_client(self) -> Any:
+        """创建 Qdrant 客户端。"""
+
+        return self._client_cls(
+            url=self._qdrant_url,
+            api_key=self._qdrant_api_key,
+            check_compatibility=False,
+            timeout=10,
+        )
+
+    def _reset_client(self) -> None:
+        """重建 Qdrant 客户端（处理连接断开场景）。"""
+
+        with self._client_lock:
+            old_client = self._client
+            self._client = self._create_client()
+            close = getattr(old_client, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:
+                    pass
+
+    def _upsert_impl(self, kb_id: str, entries: list[VectorEntry]) -> None:
+        """写入向量数据。"""
+
+        _validate_entries(entries)
+        self._ensure_collection(kb_id)
+        points = [
+            self._rest.PointStruct(
+                id=entry.payload["chunk_id"],
+                vector=entry.vector,
+                payload=entry.payload,
+            )
+            for entry in entries
+        ]
+        self._client.upsert(collection_name=self._collection_name(kb_id), points=points)
+
+    def _delete_by_doc_id_impl(self, kb_id: str, doc_id: str) -> None:
+        """按 doc_id 删除向量数据。"""
+
+        if not self._collection_exists(kb_id):
+            return
+        condition = self._rest.FieldCondition(
+            key="doc_id", match=self._rest.MatchValue(value=doc_id)
+        )
+        self._client.delete(
+            collection_name=self._collection_name(kb_id),
+            points_selector=self._rest.Filter(must=[condition]),
+        )
+
+    def _delete_by_kb_id_impl(self, kb_id: str) -> None:
+        """按 kb_id 删除集合。"""
+
+        if not self._collection_exists(kb_id):
+            return
+        self._client.delete_collection(collection_name=self._collection_name(kb_id))
+
     def _ensure_collection(self, kb_id: str) -> None:
         name = self._collection_name(kb_id)
         if self._collection_exists(kb_id):
@@ -261,6 +302,20 @@ class QdrantVectorStore:
         name = self._collection_name(kb_id)
         collections = self._client.get_collections().collections
         return name in {collection.name for collection in collections}
+
+    _T = TypeVar("_T")
+
+    def _run_with_retry(self, operation: Callable[[], _T]) -> _T:
+        """执行向量库操作，遇到断连时重试一次。"""
+
+        with self._operation_lock:
+            try:
+                return operation()
+            except Exception as exc:
+                if not _is_disconnect_error(exc):
+                    raise
+                self._reset_client()
+                return operation()
 
 
 _vector_store: VectorStore | None = None
@@ -363,3 +418,18 @@ def _is_optional_str(value: object) -> bool:
 
 def _is_optional_int(value: object) -> bool:
     return value is None or isinstance(value, int)
+
+
+def _is_disconnect_error(exc: Exception) -> bool:
+    """判断是否为连接中断类错误。"""
+
+    message = str(exc).lower()
+    disconnect_patterns = [
+        "server disconnected without sending a response",
+        "connection reset by peer",
+        "connection aborted",
+        "connection refused",
+        "remoteprotocolerror",
+        "timed out",
+    ]
+    return any(pattern in message for pattern in disconnect_patterns)

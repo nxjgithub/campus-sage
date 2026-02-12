@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -65,6 +65,21 @@ class Settings(BaseSettings):
     local_embedding_normalize: bool = Field(
         default=True, description="本地 Embedding 是否归一化"
     )
+    tei_model_id: str = Field(
+        default="BAAI/bge-m3", description="TEI 模型 ID（供本地部署配置使用）"
+    )
+    tei_served_model_name: str = Field(
+        default="bge-m3", description="TEI 对外服务模型名（供本地部署配置使用）"
+    )
+    tei_max_client_batch_size: int = Field(
+        default=8, description="TEI 单次请求最大批量（供本地部署配置使用）"
+    )
+    tei_max_concurrent_requests: int = Field(
+        default=64, description="TEI 最大并发请求数（供本地部署配置使用）"
+    )
+    hf_token: str | None = Field(
+        default=None, description="Hugging Face 访问令牌（私有模型时使用）"
+    )
 
     rerank_enabled: bool = Field(default=False, description="是否启用重排")
     rerank_model_name: str = Field(default="bge-reranker", description="重排模型名")
@@ -108,6 +123,29 @@ class Settings(BaseSettings):
 
     debug_mode: bool = Field(default=False, description="调试模式")
     enable_swagger: bool = Field(default=True, description="是否启用 Swagger")
+
+    @field_validator("embedding_dimensions", mode="before")
+    @classmethod
+    def _normalize_embedding_dimensions(cls, value: object) -> object:
+        """兼容空字符串配置，避免 Optional[int] 解析失败。"""
+
+        if value == "":
+            return None
+        return value
+
+    @field_validator(
+        "qdrant_api_key",
+        "embedding_api_key",
+        "hf_token",
+        mode="before",
+    )
+    @classmethod
+    def _normalize_optional_secret(cls, value: object) -> object:
+        """将空字符串密钥统一视为 None，避免客户端携带空凭据。"""
+
+        if value == "":
+            return None
+        return value
 
 
 _settings: Settings | None = None
