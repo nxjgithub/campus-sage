@@ -79,6 +79,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 
 说明：
 - 若未启动 Qdrant/Redis，相关集成测试可能被跳过或返回依赖不可用错误，这属于可预期行为。
+- 所有 Python 命令默认在 Conda 环境 `campus-sage` 执行；禁止 `pip --user` 用户级安装。
 
 ### 5.2 前端（工程创建后）
 - 安装依赖：`pnpm install`

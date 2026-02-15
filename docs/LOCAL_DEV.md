@@ -17,27 +17,32 @@ conda create -n campus-sage python=3.12 -y
 conda activate campus-sage
 ```
 
+执行前建议核对当前解释器（必须指向 `campus-sage`）：
+```powershell
+python -c "import sys; print(sys.executable)"
+```
+
 
 ## 3. 安装依赖
 依赖以你的 `pyproject.toml` / `requirements.txt` 为准。
 
 方案一（requirements）：
 ```powershell
-pip install -U pip
-pip install -r requirements.txt
+python -m pip install -U pip
+python -m pip install -r requirements.txt
 ```
 
 方案二（pyproject）：
 ```powershell
-pip install -e .
+python -m pip install -e .
 ```
 
 补充：PDF 解析依赖 `pypdf`，若解析失败请确认已安装：
 ```powershell
-pip install pypdf
+python -m pip install pypdf
 ```
 
-## 3.1 重要提示：避免 pip 安装到用户目录（导致 PyCharm 无法识别）
+## 3.1 重要提示：禁止 pip 安装到用户目录（强制）
 有些环境的 pip 被配置为默认 `--user`，会把依赖装到：
 `C:\Users\用户名\AppData\Roaming\Python\Python312\site-packages`
 而不是 conda 环境目录，导致 PyCharm 报“未解析的引用”，或者运行时混用包路径。
@@ -48,6 +53,11 @@ conda activate campus-sage
 python -m pip config set global.user false
 python -m pip install -r requirements.txt
 ```
+
+**禁止行为（强制）**：
+- 禁止执行 `pip install --user ...`
+- 禁止让 Codex / 其他 AI 工具安装到 `C:\Users\用户名\AppData\Roaming\Python\...`
+- 环境异常时必须先修复 Conda 环境，不得以用户级安装“临时通过”
 
 **核对路径**（必须确保在 conda 环境内）：
 ```powershell
@@ -60,6 +70,11 @@ python -c "import fastapi, uvicorn; print(fastapi.__file__); print(uvicorn.__fil
 ```powershell
 python -m pip uninstall -y fastapi uvicorn
 python -m pip install --no-user -r requirements.txt
+```
+
+如需清理用户目录中的历史污染包，可按需执行：
+```powershell
+python -m pip uninstall -y fastapi starlette rq rq-dashboard
 ```
 
 ## 3.2 依赖冲突提示的处理方式
