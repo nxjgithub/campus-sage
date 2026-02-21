@@ -59,6 +59,8 @@
     - chunk 文本 hash（用于去重/增量更新）
 - `tokens: int | null`
     - chunk token 估计值（可选，用于上下文预算）
+- `published_at_ts: int | null`
+    - 发布日期的 UTC 秒级时间戳（可选，用于向量库范围过滤加速）
 - `created_at: str`
     - 写入时间（ISO8601）
 
@@ -107,6 +109,13 @@
 - 允许做轻度清洗：去多余空白、去页眉页脚残留
 - 不允许生成“模型自己总结”的 snippet（否则证据链断裂）
 
+### 4.4 Ask 响应追踪字段（强制）
+- 同步问答响应（`POST /api/v1/kb/{kb_id}/ask`）除 `message_id` 外，必须返回：
+  - `user_message_id`：本次提问对应的用户消息 ID
+  - `assistant_created_at`：助手消息创建时间（ISO8601）
+- `message_id` 表示助手消息 ID。前端不得假设 `message_id == user_message_id`。
+- 在重生成场景中，`user_message_id` 可以复用历史用户消息，而 `message_id` 必须是新的助手消息。
+
 
 ## 5. Refusal（拒答）契约（强制）
 ### 5.1 必须拒答的情况（满足任一即 refusal=true）
@@ -148,3 +157,28 @@
 - 新增字段：允许（保持向后兼容）
 - 删除/更名字段：不允许在 0.x 内直接做（必须提升 major 或提供兼容层）
 - citations 字段缺失：视为严重缺陷（违反证据链）
+
+## 9. 流式事件契约（SSE，强制）
+适用接口：`POST /api/v1/kb/{kb_id}/ask/stream`
+
+### 9.1 事件类型
+- `start`：流开始，至少包含 `run_id`、`conversation_id`、`request_id`
+- `ping`：心跳事件，至少包含 `run_id`、`request_id`
+- `token`：增量文本，至少包含 `run_id`、`delta`、`request_id`
+- `citation`：单条引用，至少包含 `run_id`、`citation`、`request_id`
+- `refusal`：拒答结果，至少包含 `run_id`、`answer`、`refusal_reason`、`suggestions`、`request_id`
+- `done`：流结束，至少包含 `run_id`、`status`、`request_id`
+- `error`：流内错误，至少包含 `run_id`、`code`、`message`、`request_id`
+
+### 9.2 request_id 一致性（强制）
+- 同一个 SSE 请求内，所有事件的 `request_id` 必须一致。
+- `done` 事件的 `request_id` 必须与对应 HTTP 响应头 `X-Request-ID` 一致。
+
+### 9.3 done 事件字段约束
+- `status` 取值：`succeeded` / `failed` / `canceled`
+- 建议返回：`conversation_id`、`user_message_id`、`message_id`（助手消息 ID）、`assistant_created_at`、`refusal`、`timing`
+- 即使发生异常，也必须尽量补发 `done` 事件，保证前端状态机可收敛。
+
+### 9.4 取消与断连约束
+- 服务端检测到客户端断连后，应尽快将 run 标记为 `canceled`。
+- 取消相关错误事件应使用枚举错误码（如 `CHAT_RUN_CANCELED`），禁止散落硬编码字符串。

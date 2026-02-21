@@ -39,6 +39,8 @@
 - ORM 模型 / Repository / 数据迁移（如 Alembic）
 - 禁止在业务层散落 SQL；统一在 db 层封装。
 - 会话/消息/反馈必须落库，保证服务重启后可追溯。
+- 聊天运行（chat_run）必须落库，记录流式运行状态与取消标记。
+- message 表必须支持会话分支追踪字段：`parent_message_id`、`edited_from_message_id`、`sequence_no`。
 
 
 ## 3. 命名规范（强制）
@@ -79,6 +81,7 @@
 - INGEST_JOB_*：入库任务相关错误（如不可重试）
 - CONVERSATION_*：会话相关错误
 - MESSAGE_*：消息相关错误
+- CHAT_RUN_*：流式运行相关错误
 
 ### 5.2 统一错误响应格式
 建议统一为：
@@ -106,6 +109,7 @@ API 层统一捕获并映射 HTTP 状态码
 ## 6. 日志与可观测性（强制）
 ### 6.1 request_id
 - 每个请求必须有 request_id（可由中间件生成），贯穿日志与错误响应。
+- SSE 场景中，同一请求的所有事件必须携带一致的 `request_id`。
 
 ### 6.2 必填日志字段
 
@@ -129,8 +133,15 @@ API 层统一捕获并映射 HTTP 状态码
 2. 引用必须可定位：至少包含文档名、页码/章节、命中片段。
 3. 引用字段不可缺失：引用 schema 以 docs/RAG_CONTRACT.md 为准。
 4. 上下文构造必须有 token 预算并去重，避免“把所有 chunk 全塞进去”。
+5. 流式问答必须有 `start -> ... -> done` 的可收敛事件序列，错误与取消也要落到 `done`。
 
-## 8. 测试与质量门禁（强制）
+## 8. 权限与路由一致性（强制）
+1. 会话写操作（创建、重命名、删除）必须要求 `conversation.write`。
+2. 消息写操作（取消 run、重生成、编辑重发）必须要求 `message.write`。
+3. 监控接口统一挂载在 `/api/v1/monitor/*`，禁止额外暴露重复入口。
+4. chat run 查询/取消必须校验运行归属（`chat_run.user_id`），禁止仅凭权限操作任意 `run_id`。
+
+## 9. 测试与质量门禁（强制）
 1. 每新增一个核心行为必须配测试：
   - 正常路径 1 个
   - 边界/错误路径 1 个（例如：无证据拒答、文档不存在、向量库不可用等）
@@ -140,7 +151,7 @@ API 层统一捕获并映射 HTTP 状态码
 3. 关键结构建议做“金样测试（Golden Test）”：
   - 固定输入时，至少保证 response 的字段结构稳定（尤其 citations）。
 
-## 9. 配置与依赖（强制）
+## 10. 配置与依赖（强制）
 1. 配置必须来自环境变量 + Settings（建议 Pydantic Settings）。
 2. 必须提供 .env.example（不含密钥）。
 3. 禁止硬编码：Qdrant/vLLM 地址、模型名、TopK、阈值、上下文 token 上限等都要可配置。
@@ -148,7 +159,7 @@ API 层统一捕获并映射 HTTP 状态码
 5. Python 依赖安装与测试命令必须在 Conda 环境 `campus-sage` 内执行，禁止使用系统 Python 混跑。
 6. 严禁用户级安装（`pip install --user`）；若环境权限不足，应先修复 Conda 环境而不是回退到用户目录安装。
 
-## 10. Git 与提交规范（强制）
+## 11. Git 与提交规范（强制）
 1. 禁止提交：.idea/、.env、.venv/、__pycache__/、日志、权重、大数据文件。
 2. 提交信息建议采用 Conventional Commits：
  - feat: ... fix: ... chore: ... docs: ... test: ...

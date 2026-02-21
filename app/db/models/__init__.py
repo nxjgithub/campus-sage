@@ -1,6 +1,7 @@
 """数据记录模型统一导出。"""
 
 from app.db.models.citation import CitationRecord
+from app.db.models.chat_run import ChatRunRecord
 from app.db.models.conversation import ConversationRecord
 from app.db.models.document import DocumentRecord
 from app.db.models.eval_item import EvalItemRecord
@@ -20,6 +21,7 @@ from app.db.models.user_role import UserRoleRecord
 
 __all__ = [
     "CitationRecord",
+    "ChatRunRecord",
     "ConversationRecord",
     "DocumentRecord",
     "EvalItemRecord",

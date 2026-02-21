@@ -94,6 +94,8 @@
 `citations: List[Citation]`  
 `conversation_id: str | null`  
 `message_id: str | null`  
+`user_message_id: str | null`  
+`assistant_created_at: str | null`  
 `timing: object | null`（retrieve_ms/rerank_ms/context_ms/generate_ms/total_ms）  
 `request_id: str | null`
 
@@ -111,6 +113,19 @@
 `refresh_token: str`  
 `token_type: str`（"bearer"）  
 `expires_in: int`  
+`request_id: str | null`
+
+### 1.8 ChatRun
+`run_id: str`  
+`kb_id: str | null`  
+`user_id: str | null`  
+`conversation_id: str | null`  
+`user_message_id: str | null`  
+`assistant_message_id: str | null`  
+`status: str`（"running" | "succeeded" | "failed" | "canceled"）  
+`cancel_flag: bool`  
+`started_at: str`  
+`finished_at: str | null`  
 `request_id: str | null`
 
 
@@ -326,7 +341,7 @@ Content-Type：`multipart/form-data`
 
 
 ## 4. 问答接口（RAG）
-### 4.1 发起问答
+### 4.1 发起问答（同步）
 `POST /api/v1/kb/{kb_id}/ask`
 
 最小请求：
@@ -370,7 +385,9 @@ Content-Type：`multipart/form-data`
     }
   ],
   "conversation_id": "conv_001",
-  "message_id": "msg_789",
+  "message_id": "msg_790",
+  "user_message_id": "msg_789",
+  "assistant_created_at": "2026-02-07T10:10:02Z",
   "timing": {"retrieve_ms": 45, "rerank_ms": 0, "context_ms": 12, "generate_ms": 380, "total_ms": 450},
   "request_id": "req_xxx"
 }
@@ -385,23 +402,181 @@ Content-Type：`multipart/form-data`
   "suggestions": ["建议关键词：补考 申请 条件", "建议到：教务处官网 考试管理栏目"],
   "citations": [],
   "conversation_id": "conv_001",
-  "message_id": "msg_790",
+  "message_id": "msg_792",
+  "user_message_id": "msg_791",
+  "assistant_created_at": "2026-02-07T10:12:02Z",
   "timing": {"retrieve_ms": 35, "rerank_ms": 0, "context_ms": 8, "generate_ms": 120, "total_ms": 180},
   "request_id": "req_xxx"
 }
 ```
-说明：`debug=true` 时会返回 `citations.score`，否则可为 `null`。
-
+说明：`debug=true` 时返回 `citations.score`，否则可为 `null`。  
 约束：`citations` 与 `refusal` 规则必须符合 `docs/RAG_CONTRACT.md`。
 
+### 4.2 发起问答（流式 SSE）
+`POST /api/v1/kb/{kb_id}/ask/stream`  
+`Content-Type: application/json`  
+`Accept: text/event-stream`
 
-## 5. 会话与历史（MVP 可简化）
-### 5.1 获取会话列表
+请求体与 `POST /api/v1/kb/{kb_id}/ask` 一致。
+
+SSE 事件约定（每个事件都必须带 `request_id`）：
+- `start`：流式启动
+- `ping`：心跳事件（保活）
+- `token`：增量文本片段（`delta`）
+- `citation`：单条引用对象
+- `refusal`：拒答结果
+- `done`：流结束（`status` 为 `succeeded/failed/canceled`）
+- `error`：流内错误（包括取消信号）
+
+事件示例：
+```text
+event: start
+data: {"run_id":"run_123","conversation_id":"conv_001","request_id":"req_xxx"}
+
+event: token
+data: {"run_id":"run_123","delta":"根据教务管理规定","request_id":"req_xxx"}
+
+event: ping
+data: {"run_id":"run_123","request_id":"req_xxx"}
+
+event: citation
+data: {"run_id":"run_123","citation":{"citation_id":1,"doc_id":"doc_123","doc_name":"教务管理规定.pdf","doc_version":"2025-09","published_at":"2025-09-01","page_start":12,"page_end":12,"section_path":"考试管理/补考规定","chunk_id":"chunk_a","snippet":"……补考申请条件包括……","score":null},"request_id":"req_xxx"}
+
+event: done
+data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","user_message_id":"msg_789","message_id":"msg_790","assistant_created_at":"2026-02-07T10:10:02Z","refusal":false,"timing":{"retrieve_ms":45,"rerank_ms":0,"context_ms":12,"generate_ms":380,"total_ms":450},"request_id":"req_xxx"}
+```
+说明：
+- 服务端会周期性发送 `ping` 事件，降低中间层静默断连风险。
+- 连接断开后，服务端会标记对应 run 取消（`status=canceled`）。
+
+### 4.3 获取运行状态
+`GET /api/v1/chat/runs/{run_id}`
+
+响应示例：
+```json
+{
+  "run_id": "run_123",
+  "kb_id": "kb_123",
+  "conversation_id": "conv_001",
+  "user_message_id": "msg_789",
+  "assistant_message_id": "msg_790",
+  "status": "running",
+  "cancel_flag": false,
+  "started_at": "2026-02-07T10:10:00Z",
+  "finished_at": null,
+  "request_id": "req_xxx"
+}
+```
+说明：仅允许 run 归属用户（或管理员）查询。
+
+### 4.4 取消流式生成
+`POST /api/v1/chat/runs/{run_id}/cancel`
+
+响应示例：
+```json
+{
+  "run_id": "run_123",
+  "status": "canceled",
+  "cancel_flag": true,
+  "request_id": "req_xxx"
+}
+```
+说明：
+- 仅允许 run 归属用户（或管理员）取消。
+- 若 run 已结束，接口仍可调用，返回当前状态并设置/保持 `cancel_flag`（幂等语义）。
+
+### 4.5 重新生成回答
+`POST /api/v1/messages/{message_id}/regenerate`
+
+请求示例：
+```json
+{
+  "topk": 8,
+  "threshold": 0.22,
+  "rerank_enabled": true,
+  "filters": {"doc_ids": ["doc_123"], "published_after": "2024-01-01"},
+  "debug": false
+}
+```
+说明：
+- `message_id` 可是用户消息或助手消息。
+- 若传助手消息，系统会回溯到该消息前最近一条用户消息作为重生成问题。
+- 返回 `AskResponse`，`conversation_id` 与来源会话一致，`user_message_id` 复用来源用户消息，`message_id` 为新助手消息。
+
+### 4.6 编辑后重发（新分支会话）
+`POST /api/v1/messages/{message_id}/edit-and-resend`
+
+请求示例：
+```json
+{
+  "question": "编辑后的问题：补考申请条件",
+  "topk": 8,
+  "threshold": 0.22,
+  "rerank_enabled": true,
+  "filters": {"doc_ids": ["doc_123"]},
+  "debug": false
+}
+```
+说明：
+- 服务端会创建新会话分支。
+- 编辑后的用户消息会记录 `edited_from_message_id` 指向原消息。
+- 返回 `AskResponse`，其中 `conversation_id` 为新分支会话 ID。
+
+
+## 5. 会话与消息接口
+### 5.1 创建空会话
+`POST /api/v1/conversations`
+
+请求示例：
+```json
+{
+  "kb_id": "kb_123",
+  "title": "补考咨询"
+}
+```
+
+响应示例：
+```json
+{
+  "conversation_id": "conv_001",
+  "kb_id": "kb_123",
+  "title": "补考咨询",
+  "created_at": "2026-02-07T10:10:00Z",
+  "updated_at": "2026-02-07T10:10:00Z",
+  "request_id": "req_xxx"
+}
+```
+
+### 5.2 获取会话列表（侧栏场景）
 `GET /api/v1/conversations`
 
-可选查询参数：`kb_id`、`limit`、`offset`
+可选查询参数：
+- `kb_id: str`
+- `keyword: str`（按标题与消息内容模糊匹配）
+- `cursor: str`（格式：`<updated_at>|<conversation_id>`）
+- `limit: int`（1~100，默认 20）
+- `offset: int`（默认 0，兼容保留）
 
-### 5.2 获取会话详情（含消息与引用）
+响应示例：
+```json
+{
+  "items": [
+    {
+      "conversation_id": "conv_001",
+      "kb_id": "kb_123",
+      "title": "补考咨询",
+      "last_message_preview": "补考申请需要满足什么条件？",
+      "last_message_at": "2026-02-07T10:10:02Z",
+      "updated_at": "2026-02-07T10:10:02Z"
+    }
+  ],
+  "total": 12,
+  "next_cursor": "2026-02-07T10:10:02Z|conv_001",
+  "request_id": "req_xxx"
+}
+```
+
+### 5.3 获取会话详情（全量消息）
 `GET /api/v1/conversations/{conversation_id}`
 
 响应示例：
@@ -430,7 +605,64 @@ Content-Type：`multipart/form-data`
   "request_id": "req_xxx"
 }
 ```
-说明：`assistant` 消息包含 `citations/refusal/refusal_reason/timing` 字段，`user` 消息不包含这些字段。
+说明：`assistant` 消息包含 `citations/refusal/refusal_reason/timing` 字段，`user` 消息这些字段为 `null` 或省略。
+
+### 5.4 重命名会话
+`PATCH /api/v1/conversations/{conversation_id}`
+
+请求示例：
+```json
+{"title": "补考咨询（已确认）"}
+```
+
+响应结构与“创建空会话”一致。
+
+### 5.5 软删除会话
+`DELETE /api/v1/conversations/{conversation_id}`
+
+响应示例：
+```json
+{
+  "conversation_id": "conv_001",
+  "status": "deleted",
+  "request_id": "req_xxx"
+}
+```
+
+### 5.6 分页获取会话消息
+`GET /api/v1/conversations/{conversation_id}/messages?before=<message_id>&limit=50`
+
+说明：
+- 首次拉取不传 `before`。
+- `before` 表示“取该消息之前”的历史消息。
+- 默认 `limit=50`，最大 100。
+
+响应示例：
+```json
+{
+  "items": [
+    {
+      "message_id": "msg_100",
+      "role": "user",
+      "content": "补考申请条件是什么？",
+      "created_at": "2026-02-07T10:08:00Z"
+    },
+    {
+      "message_id": "msg_101",
+      "role": "assistant",
+      "content": "根据规定……[1]",
+      "citations": [],
+      "refusal": false,
+      "refusal_reason": null,
+      "timing": {"retrieve_ms": 40, "rerank_ms": 0, "context_ms": 9, "generate_ms": 210, "total_ms": 259},
+      "created_at": "2026-02-07T10:08:02Z"
+    }
+  ],
+  "has_more": true,
+  "next_before": "msg_100",
+  "request_id": "req_xxx"
+}
+```
 
 
 ## 6. 反馈（Feedback）
@@ -597,7 +829,7 @@ Content-Type：`multipart/form-data`
 {
   "items": [
     {"name": "admin", "permissions": ["*"]},
-    {"name": "user", "permissions": ["kb.read", "rag.ask"]}
+    {"name": "user", "permissions": ["kb.read", "rag.ask", "conversation.read", "conversation.write", "message.write", "feedback.write"]}
   ],
   "request_id": "req_xxx"
 }
@@ -655,6 +887,8 @@ Content-Type：`multipart/form-data`
 
 
 ## 8. 监控（Queue Monitor，可选）
+说明：监控路由统一挂载在 `/api/v1/monitor/*`，不再提供重复的 `/monitor/*` 入口。
+
 ### 8.1 获取队列统计
 `GET /api/v1/monitor/queues`
 

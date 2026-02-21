@@ -16,6 +16,8 @@ class Permission:
     INGEST_WRITE = "ingest.write"
     RAG_ASK = "rag.ask"
     CONVERSATION_READ = "conversation.read"
+    CONVERSATION_WRITE = "conversation.write"
+    MESSAGE_WRITE = "message.write"
     FEEDBACK_WRITE = "feedback.write"
     USER_MANAGE = "user.manage"
     MONITOR_READ = "monitor.read"
@@ -32,6 +34,8 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         Permission.INGEST_WRITE,
         Permission.RAG_ASK,
         Permission.CONVERSATION_READ,
+        Permission.CONVERSATION_WRITE,
+        Permission.MESSAGE_WRITE,
         Permission.FEEDBACK_WRITE,
         Permission.MONITOR_READ,
     ],
@@ -39,6 +43,8 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         Permission.KB_READ,
         Permission.RAG_ASK,
         Permission.CONVERSATION_READ,
+        Permission.CONVERSATION_WRITE,
+        Permission.MESSAGE_WRITE,
         Permission.FEEDBACK_WRITE,
     ],
 }

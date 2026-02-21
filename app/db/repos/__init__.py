@@ -1,5 +1,6 @@
 """仓库层统一导出。"""
 
+from app.db.repos.chat_run import ChatRunRepository
 from app.db.repos.conversation import ConversationRepository
 from app.db.repos.document import DocumentRepository
 from app.db.repos.eval_item import EvalItemRepository
@@ -8,6 +9,7 @@ from app.db.repos.eval_run import EvalRunRepository
 from app.db.repos.eval_set import EvalSetRepository
 from app.db.repos.ingest_job import IngestJobRepository
 from app.db.repos.interfaces import (
+    ChatRunRepositoryProtocol,
     ConversationRepositoryProtocol,
     DocumentRepositoryProtocol,
     EvalItemRepositoryProtocol,
@@ -29,6 +31,8 @@ from app.db.repos.role import RoleRepository
 from app.db.repos.user import UserRepository
 
 __all__ = [
+    "ChatRunRepository",
+    "ChatRunRepositoryProtocol",
     "ConversationRepository",
     "ConversationRepositoryProtocol",
     "DocumentRepository",

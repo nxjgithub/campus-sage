@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from app.db.database import Database
 from app.core.utils import new_id, utc_now_iso
@@ -20,9 +21,23 @@ class ConversationRepository:
 
         row = self._db.fetch_one(
             """
-            SELECT conversation_id, kb_id, user_id, title, created_at, updated_at, deleted
-            FROM conversation
-            WHERE conversation_id = ? AND deleted = 0;
+            SELECT c.conversation_id, c.kb_id, c.user_id, c.title, c.created_at, c.updated_at, c.deleted,
+                   (
+                     SELECT substr(m.content, 1, 120)
+                     FROM message m
+                     WHERE m.conversation_id = c.conversation_id
+                     ORDER BY COALESCE(m.sequence_no, 0) DESC, m.created_at DESC
+                     LIMIT 1
+                   ) AS last_message_preview,
+                   (
+                     SELECT m.created_at
+                     FROM message m
+                     WHERE m.conversation_id = c.conversation_id
+                     ORDER BY COALESCE(m.sequence_no, 0) DESC, m.created_at DESC
+                     LIMIT 1
+                   ) AS last_message_at
+            FROM conversation c
+            WHERE c.conversation_id = ? AND c.deleted = 0;
             """,
             (conversation_id,),
         )
@@ -36,6 +51,8 @@ class ConversationRepository:
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             deleted=bool(row["deleted"]),
+            last_message_preview=row["last_message_preview"],
+            last_message_at=row["last_message_at"],
         )
 
     def create_conversation(self, record: ConversationRecord) -> ConversationRecord:
@@ -79,25 +96,62 @@ class ConversationRepository:
         return record
 
     def list_conversations(
-        self, kb_id: str | None, user_id: str | None, limit: int, offset: int
+        self,
+        kb_id: str | None,
+        user_id: str | None,
+        keyword: str | None,
+        cursor: str | None,
+        limit: int,
+        offset: int,
     ) -> list[ConversationRecord]:
         """查询会话列表。"""
 
         params: list[object] = []
-        where_clause = "WHERE deleted = 0"
+        where_clause = "WHERE c.deleted = 0"
         if kb_id:
-            where_clause += " AND kb_id = ?"
+            where_clause += " AND c.kb_id = ?"
             params.append(kb_id)
         if user_id:
-            where_clause += " AND user_id = ?"
+            where_clause += " AND c.user_id = ?"
             params.append(user_id)
+        if keyword:
+            where_clause += """
+            AND (
+                c.title LIKE ?
+                OR EXISTS (
+                    SELECT 1 FROM message mkw
+                    WHERE mkw.conversation_id = c.conversation_id
+                    AND mkw.content LIKE ?
+                )
+            )
+            """
+            keyword_like = f"%{keyword}%"
+            params.extend([keyword_like, keyword_like])
+        cursor_updated_at, cursor_conversation_id = self._parse_cursor(cursor)
+        if cursor_updated_at is not None and cursor_conversation_id is not None:
+            where_clause += " AND (c.updated_at < ? OR (c.updated_at = ? AND c.conversation_id < ?))"
+            params.extend([cursor_updated_at, cursor_updated_at, cursor_conversation_id])
         params.extend([limit, offset])
         rows = self._db.fetch_all(
             f"""
-            SELECT conversation_id, kb_id, user_id, title, created_at, updated_at, deleted
-            FROM conversation
+            SELECT c.conversation_id, c.kb_id, c.user_id, c.title, c.created_at, c.updated_at, c.deleted,
+                   (
+                     SELECT substr(m.content, 1, 120)
+                     FROM message m
+                     WHERE m.conversation_id = c.conversation_id
+                     ORDER BY COALESCE(m.sequence_no, 0) DESC, m.created_at DESC
+                     LIMIT 1
+                   ) AS last_message_preview,
+                   (
+                     SELECT m.created_at
+                     FROM message m
+                     WHERE m.conversation_id = c.conversation_id
+                     ORDER BY COALESCE(m.sequence_no, 0) DESC, m.created_at DESC
+                     LIMIT 1
+                   ) AS last_message_at
+            FROM conversation c
             {where_clause}
-            ORDER BY updated_at DESC
+            ORDER BY c.updated_at DESC, c.conversation_id DESC
             LIMIT ? OFFSET ?;
             """,
             tuple(params),
@@ -111,19 +165,62 @@ class ConversationRepository:
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
                 deleted=bool(row["deleted"]),
+                last_message_preview=row["last_message_preview"],
+                last_message_at=row["last_message_at"],
             )
             for row in rows
         ]
 
+    def count_conversations(
+        self, kb_id: str | None, user_id: str | None, keyword: str | None
+    ) -> int:
+        """统计会话数量。"""
+
+        params: list[object] = []
+        where_clause = "WHERE c.deleted = 0"
+        if kb_id:
+            where_clause += " AND c.kb_id = ?"
+            params.append(kb_id)
+        if user_id:
+            where_clause += " AND c.user_id = ?"
+            params.append(user_id)
+        if keyword:
+            where_clause += """
+            AND (
+                c.title LIKE ?
+                OR EXISTS (
+                    SELECT 1 FROM message mkw
+                    WHERE mkw.conversation_id = c.conversation_id
+                    AND mkw.content LIKE ?
+                )
+            )
+            """
+            keyword_like = f"%{keyword}%"
+            params.extend([keyword_like, keyword_like])
+        row = self._db.fetch_one(
+            f"""
+            SELECT COUNT(1) AS total
+            FROM conversation c
+            {where_clause};
+            """,
+            tuple(params),
+        )
+        if row is None:
+            return 0
+        return int(row["total"] or 0)
+
     def create_message(self, record: MessageRecord) -> MessageRecord:
         """创建消息记录。"""
 
+        sequence_no = record.sequence_no or self._next_sequence_no(record.conversation_id)
+        record.sequence_no = sequence_no
         self._db.execute(
             """
             INSERT INTO message (
                 message_id, conversation_id, role, content, refusal, refusal_reason,
-                timing_json, citations_json, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                timing_json, citations_json, parent_message_id, edited_from_message_id,
+                sequence_no, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             (
                 record.message_id,
@@ -134,8 +231,19 @@ class ConversationRepository:
                 record.refusal_reason,
                 self._dumps(record.timing),
                 self._dumps(record.citations),
+                record.parent_message_id,
+                record.edited_from_message_id,
+                record.sequence_no,
                 record.created_at,
             ),
+        )
+        self._db.execute(
+            """
+            UPDATE conversation
+            SET updated_at = ?
+            WHERE conversation_id = ?;
+            """,
+            (record.created_at, record.conversation_id),
         )
         if record.citations:
             self._insert_citations(record.message_id, record.citations)
@@ -147,10 +255,11 @@ class ConversationRepository:
         rows = self._db.fetch_all(
             """
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, citations_json, created_at
+                   timing_json, citations_json, parent_message_id, edited_from_message_id,
+                   sequence_no, created_at
             FROM message
             WHERE conversation_id = ?
-            ORDER BY created_at ASC;
+            ORDER BY COALESCE(sequence_no, 0) ASC, created_at ASC;
             """,
             (conversation_id,),
         )
@@ -164,10 +273,65 @@ class ConversationRepository:
                 refusal_reason=row["refusal_reason"],
                 timing=self._loads(row["timing_json"]),
                 citations=self._loads(row["citations_json"]) or [],
+                parent_message_id=row["parent_message_id"],
+                edited_from_message_id=row["edited_from_message_id"],
+                sequence_no=row["sequence_no"],
                 created_at=row["created_at"],
             )
             for row in rows
         ]
+
+    def list_messages_page(
+        self, conversation_id: str, before_message_id: str | None, limit: int
+    ) -> tuple[list[MessageRecord], bool, str | None]:
+        """按游标分页查询会话消息。"""
+
+        before_sequence = None
+        if before_message_id:
+            before_record = self.get_message(before_message_id)
+            if before_record is None or before_record.conversation_id != conversation_id:
+                return [], False, None
+            before_sequence = before_record.sequence_no
+        params: list[Any] = [conversation_id]
+        where_clause = "WHERE conversation_id = ?"
+        if before_sequence is not None:
+            where_clause += " AND COALESCE(sequence_no, 0) < ?"
+            params.append(before_sequence)
+        params.append(limit + 1)
+        rows = self._db.fetch_all(
+            f"""
+            SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
+                   timing_json, citations_json, parent_message_id, edited_from_message_id,
+                   sequence_no, created_at
+            FROM message
+            {where_clause}
+            ORDER BY COALESCE(sequence_no, 0) DESC, created_at DESC
+            LIMIT ?;
+            """,
+            tuple(params),
+        )
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        rows.reverse()
+        items = [
+            MessageRecord(
+                message_id=row["message_id"],
+                conversation_id=row["conversation_id"],
+                role=row["role"],
+                content=row["content"],
+                refusal=bool(row["refusal"]),
+                refusal_reason=row["refusal_reason"],
+                timing=self._loads(row["timing_json"]),
+                citations=self._loads(row["citations_json"]) or [],
+                parent_message_id=row["parent_message_id"],
+                edited_from_message_id=row["edited_from_message_id"],
+                sequence_no=row["sequence_no"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+        next_before = items[0].message_id if has_more and items else None
+        return items, has_more, next_before
 
     def get_message(self, message_id: str) -> MessageRecord | None:
         """获取单条消息。"""
@@ -175,7 +339,8 @@ class ConversationRepository:
         row = self._db.fetch_one(
             """
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, citations_json, created_at
+                   timing_json, citations_json, parent_message_id, edited_from_message_id,
+                   sequence_no, created_at
             FROM message
             WHERE message_id = ?;
             """,
@@ -192,6 +357,47 @@ class ConversationRepository:
             refusal_reason=row["refusal_reason"],
             timing=self._loads(row["timing_json"]),
             citations=self._loads(row["citations_json"]) or [],
+            parent_message_id=row["parent_message_id"],
+            edited_from_message_id=row["edited_from_message_id"],
+            sequence_no=row["sequence_no"],
+            created_at=row["created_at"],
+        )
+
+    def get_previous_user_message(
+        self, conversation_id: str, before_message_id: str
+    ) -> MessageRecord | None:
+        """获取指定消息之前最近的一条用户消息。"""
+
+        before = self.get_message(before_message_id)
+        if before is None:
+            return None
+        before_sequence = before.sequence_no or 0
+        row = self._db.fetch_one(
+            """
+            SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
+                   timing_json, citations_json, parent_message_id, edited_from_message_id,
+                   sequence_no, created_at
+            FROM message
+            WHERE conversation_id = ? AND role = 'user' AND COALESCE(sequence_no, 0) < ?
+            ORDER BY COALESCE(sequence_no, 0) DESC, created_at DESC
+            LIMIT 1;
+            """,
+            (conversation_id, before_sequence),
+        )
+        if row is None:
+            return None
+        return MessageRecord(
+            message_id=row["message_id"],
+            conversation_id=row["conversation_id"],
+            role=row["role"],
+            content=row["content"],
+            refusal=bool(row["refusal"]),
+            refusal_reason=row["refusal_reason"],
+            timing=self._loads(row["timing_json"]),
+            citations=self._loads(row["citations_json"]) or [],
+            parent_message_id=row["parent_message_id"],
+            edited_from_message_id=row["edited_from_message_id"],
+            sequence_no=row["sequence_no"],
             created_at=row["created_at"],
         )
 
@@ -279,3 +485,31 @@ class ConversationRepository:
         if not payload:
             return None
         return json.loads(payload)
+
+    def _next_sequence_no(self, conversation_id: str) -> int:
+        """获取会话内下一条消息序号。"""
+
+        row = self._db.fetch_one(
+            """
+            SELECT MAX(COALESCE(sequence_no, 0)) AS max_sequence_no
+            FROM message
+            WHERE conversation_id = ?;
+            """,
+            (conversation_id,),
+        )
+        max_sequence_no = int((row or {}).get("max_sequence_no") or 0)
+        return max_sequence_no + 1
+
+    @staticmethod
+    def _parse_cursor(cursor: str | None) -> tuple[str | None, str | None]:
+        """解析游标字符串。"""
+
+        if not cursor:
+            return None, None
+        parts = cursor.split("|", 1)
+        if len(parts) != 2:
+            return None, None
+        updated_at, conversation_id = parts[0].strip(), parts[1].strip()
+        if not updated_at or not conversation_id:
+            return None, None
+        return updated_at, conversation_id

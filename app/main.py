@@ -11,7 +11,6 @@ from app.core.error_codes import ErrorCode
 from app.core.errors import AppError, build_error_response
 from app.core.middlewares import request_id_middleware
 from app.core.settings import get_settings
-from app.api.v1.monitor import router as monitor_router
 from app.db.database import init_database
 
 
@@ -34,7 +33,6 @@ def create_app() -> FastAPI:
     init_database(settings)
     app.middleware("http")(request_id_middleware)
     app.include_router(api_router)
-    app.include_router(monitor_router)
     _mount_rq_dashboard(app, settings)
 
     @app.exception_handler(AppError)

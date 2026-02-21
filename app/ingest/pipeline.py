@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+from datetime import datetime, timezone
 from typing import Callable
 
 from app.core.error_codes import ErrorCode
@@ -124,10 +125,18 @@ class IngestPipeline:
             embed_ms=embed_ms,
         )
         self._check_cancel(cancel_checker)
+        if len(chunks) != len(vectors):
+            raise AppError(
+                code=ErrorCode.INGEST_EMBED_FAILED,
+                message="向量化结果数量与分块数量不一致",
+                detail={"chunk_count": len(chunks), "vector_count": len(vectors)},
+                status_code=500,
+            )
 
         entries = []
         created_at = utc_now_iso()
-        for chunk, vector in zip(chunks, vectors, strict=False):
+        published_at_ts = _parse_timestamp(published_at)
+        for chunk, vector in zip(chunks, vectors, strict=True):
             payload = {
                 "contract_version": "0.1",
                 "kb_id": kb_id,
@@ -135,6 +144,7 @@ class IngestPipeline:
                 "doc_name": doc_name,
                 "doc_version": doc_version,
                 "published_at": published_at,
+                "published_at_ts": published_at_ts,
                 "page_start": chunk.page_start,
                 "page_end": chunk.page_end,
                 "section_path": chunk.section_path,
@@ -230,3 +240,23 @@ class IngestPipeline:
 
 class IngestCanceled(Exception):
     """入库取消异常（用于主动中断流程）。"""
+
+
+def _parse_timestamp(value: str | None) -> int | None:
+    """解析日期时间为 UTC 秒级时间戳。"""
+
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return int(dt.timestamp())

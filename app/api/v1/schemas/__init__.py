@@ -3,10 +3,15 @@
 from app.api.v1.schemas.common import RequestIdMixin
 from app.api.v1.schemas.auth import LoginRequest, LogoutRequest, LogoutResponse, RefreshRequest, TokenResponse
 from app.api.v1.schemas.conversations import (
+    ConversationCreateRequest,
+    ConversationCreateResponse,
+    ConversationDeleteResponse,
     ConversationDetailResponse,
     ConversationListItem,
     ConversationListResponse,
+    ConversationRenameRequest,
     MessageItem,
+    MessagePageResponse,
 )
 from app.api.v1.schemas.documents import (
     DocumentDetailResponse,
@@ -35,7 +40,17 @@ from app.api.v1.schemas.kb import (
     KnowledgeBaseResponse,
     KnowledgeBaseUpdateRequest,
 )
-from app.api.v1.schemas.rag import AskFilters, AskRequest, AskResponse, Citation
+from app.api.v1.schemas.rag import (
+    AskFilters,
+    AskRequest,
+    AskResponse,
+    AskStreamRequest,
+    ChatRunCancelResponse,
+    ChatRunResponse,
+    Citation,
+    EditAndResendRequest,
+    RegenerateRequest,
+)
 from app.api.v1.schemas.roles import RoleItem, RoleListResponse
 from app.api.v1.schemas.users import (
     KbAccessItem,
@@ -56,8 +71,12 @@ __all__ = [
     "AskResponse",
     "Citation",
     "ConversationDetailResponse",
+    "ConversationCreateRequest",
+    "ConversationCreateResponse",
+    "ConversationDeleteResponse",
     "ConversationListItem",
     "ConversationListResponse",
+    "ConversationRenameRequest",
     "DocumentDetailResponse",
     "DocumentListResponse",
     "DocumentResponse",
@@ -87,10 +106,16 @@ __all__ = [
     "LogoutRequest",
     "LogoutResponse",
     "MessageItem",
+    "MessagePageResponse",
     "RefreshRequest",
     "RequestIdMixin",
     "RoleItem",
     "RoleListResponse",
+    "AskStreamRequest",
+    "RegenerateRequest",
+    "EditAndResendRequest",
+    "ChatRunCancelResponse",
+    "ChatRunResponse",
     "TokenResponse",
     "UserCreateRequest",
     "UserListItem",

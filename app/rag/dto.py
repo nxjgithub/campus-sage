@@ -31,5 +31,7 @@ class AskResult(BaseModel):
     citations: list[CitationDTO] = Field(description="引用列表")
     conversation_id: str | None = Field(default=None, description="会话ID")
     message_id: str | None = Field(default=None, description="消息ID")
+    user_message_id: str | None = Field(default=None, description="用户消息ID")
+    assistant_created_at: str | None = Field(default=None, description="助手消息创建时间")
     timing: dict[str, int] | None = Field(default=None, description="耗时信息")
     request_id: str | None = Field(default=None, description="请求ID")

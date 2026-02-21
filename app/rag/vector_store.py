@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Callable, TypeVar, Protocol
 
@@ -97,8 +98,7 @@ class InMemoryVectorStore:
             return False
         published_after = filters.get("published_after")
         if published_after:
-            published_at = payload.get("published_at")
-            if published_at is None or published_at < published_after:
+            if not _is_published_after_matched(payload, published_after):
                 return False
         return True
 
@@ -189,20 +189,20 @@ class QdrantVectorStore:
                 status_code=503,
             ) from exc
 
-        query_filter = None
-        if filters and filters.get("doc_ids"):
-            condition = self._rest.FieldCondition(
-                key="doc_id",
-                match=self._rest.MatchAny(any=filters["doc_ids"]),
-            )
-            query_filter = self._rest.Filter(must=[condition])
+        query_filter, _ = self._build_query_filter(
+            filters, include_published_after=True
+        )
+        search_limit = topk
+        if filters and filters.get("published_after"):
+            # 过滤发生在检索后时需要拉取更多候选，避免 TopK 被不满足条件的数据占满。
+            search_limit = max(topk, min(max(1, topk) * 5, 200))
 
         try:
             results = self._run_with_retry(
                 lambda: self._client.search(
                     collection_name=self._collection_name(kb_id),
                     query_vector=query_vector,
-                    limit=topk,
+                    limit=search_limit,
                     with_payload=True,
                     query_filter=query_filter,
                 )
@@ -218,13 +218,38 @@ class QdrantVectorStore:
                 detail={"error": str(exc)},
                 status_code=503,
             ) from exc
-        if filters and filters.get("published_after"):
-            hits = [
-                hit
-                for hit in hits
-                if (hit.payload.get("published_at") or "") >= filters["published_after"]
-            ]
-        return hits
+        hits = self._apply_post_filters(hits, filters)
+        if not filters or not filters.get("published_after"):
+            return hits[: max(0, topk)]
+
+        if len(hits) >= topk:
+            return hits[: max(0, topk)]
+
+        # 兼容历史数据：旧向量可能没有 published_at_ts，补一次无发布日期下推的查询。
+        fallback_filter, _ = self._build_query_filter(
+            filters, include_published_after=False
+        )
+        fallback_limit = max(search_limit, min(max(1, topk) * 10, 500))
+        try:
+            fallback_results = self._run_with_retry(
+                lambda: self._client.search(
+                    collection_name=self._collection_name(kb_id),
+                    query_vector=query_vector,
+                    limit=fallback_limit,
+                    with_payload=True,
+                    query_filter=fallback_filter,
+                )
+            )
+        except Exception:
+            return hits[: max(0, topk)]
+        merged = self._merge_hits(
+            hits,
+            [
+                VectorHit(score=result.score, payload=result.payload or {})
+                for result in fallback_results
+            ],
+        )
+        return self._apply_post_filters(merged, filters)[: max(0, topk)]
 
     def _collection_name(self, kb_id: str) -> str:
         return f"{self._collection_prefix}{kb_id}"
@@ -302,6 +327,79 @@ class QdrantVectorStore:
         name = self._collection_name(kb_id)
         collections = self._client.get_collections().collections
         return name in {collection.name for collection in collections}
+
+    def _build_query_filter(
+        self,
+        filters: dict[str, Any] | None,
+        include_published_after: bool,
+    ) -> tuple[Any | None, bool]:
+        """构建 Qdrant 查询过滤器。"""
+
+        if not filters:
+            return None, False
+        must_conditions: list[Any] = []
+        doc_ids = filters.get("doc_ids")
+        if doc_ids:
+            must_conditions.append(
+                self._rest.FieldCondition(
+                    key="doc_id",
+                    match=self._rest.MatchAny(any=doc_ids),
+                )
+            )
+        published_after_pushed = False
+        published_after = filters.get("published_after")
+        if include_published_after and published_after:
+            published_after_ts = _parse_timestamp(published_after)
+            if published_after_ts is not None:
+                must_conditions.append(
+                    self._rest.FieldCondition(
+                        key="published_at_ts",
+                        range=self._rest.Range(gte=published_after_ts),
+                    )
+                )
+                published_after_pushed = True
+        if not must_conditions:
+            return None, False
+        return self._rest.Filter(must=must_conditions), published_after_pushed
+
+    def _apply_post_filters(
+        self, hits: list[VectorHit], filters: dict[str, Any] | None
+    ) -> list[VectorHit]:
+        """统一应用后置过滤，确保行为在不同后端保持一致。"""
+
+        if not filters:
+            return hits
+        filtered = hits
+        doc_ids = filters.get("doc_ids")
+        if doc_ids:
+            filtered = [
+                hit for hit in filtered if hit.payload.get("doc_id") in doc_ids
+            ]
+        published_after = filters.get("published_after")
+        if published_after:
+            filtered = [
+                hit
+                for hit in filtered
+                if _is_published_after_matched(hit.payload, published_after)
+            ]
+        return filtered
+
+    def _merge_hits(
+        self, base_hits: list[VectorHit], fallback_hits: list[VectorHit]
+    ) -> list[VectorHit]:
+        """按分数去重合并两批命中结果。"""
+
+        seen: set[str] = set()
+        merged: list[VectorHit] = []
+        for hit in [*base_hits, *fallback_hits]:
+            key = str(hit.payload.get("chunk_id") or "")
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            merged.append(hit)
+        merged.sort(key=lambda item: item.score, reverse=True)
+        return merged
 
     _T = TypeVar("_T")
 
@@ -382,6 +480,8 @@ def _validate_payload(payload: dict[str, Any]) -> None:
         _raise_payload_type_error("doc_version")
     if not _is_optional_str(payload.get("published_at")):
         _raise_payload_type_error("published_at")
+    if "published_at_ts" in payload and not _is_optional_int(payload.get("published_at_ts")):
+        _raise_payload_type_error("published_at_ts")
     if not _is_optional_int(payload.get("page_start")):
         _raise_payload_type_error("page_start")
     if not _is_optional_int(payload.get("page_end")):
@@ -418,6 +518,41 @@ def _is_optional_str(value: object) -> bool:
 
 def _is_optional_int(value: object) -> bool:
     return value is None or isinstance(value, int)
+
+
+def _parse_timestamp(value: object) -> int | None:
+    """解析日期时间为 UTC 秒级时间戳。"""
+
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return int(dt.timestamp())
+
+
+def _is_published_after_matched(payload: dict[str, Any], published_after: object) -> bool:
+    """判断单条 payload 是否满足发布日期下限。"""
+
+    if not isinstance(published_after, str) or not published_after.strip():
+        return True
+    threshold_ts = _parse_timestamp(published_after)
+    payload_ts = payload.get("published_at_ts")
+    if threshold_ts is not None and isinstance(payload_ts, int):
+        return payload_ts >= threshold_ts
+    published_at = payload.get("published_at")
+    if published_at is None:
+        return False
+    return str(published_at) >= published_after
 
 
 def _is_disconnect_error(exc: Exception) -> bool:

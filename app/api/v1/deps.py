@@ -15,6 +15,7 @@ from app.db.repos import RepositoryProvider
 from app.eval.service import EvalService
 from app.ingest.service import DocumentService, KnowledgeBaseService
 from app.rag.conversation_service import ConversationService
+from app.rag.chat_run_service import ChatRunService
 from app.rag.feedback_service import FeedbackService
 from app.rag.service import RagService
 
@@ -78,6 +79,14 @@ def get_feedback_service(
 
     repository = provider.conversation()
     return FeedbackService(repository)
+
+
+def get_chat_run_service(
+    provider: RepositoryProvider = Depends(get_repo_provider),
+) -> ChatRunService:
+    """获取聊天运行服务。"""
+
+    return ChatRunService(provider.chat_run())
 
 
 def get_user_service(

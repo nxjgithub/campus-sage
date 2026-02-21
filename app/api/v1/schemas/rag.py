@@ -26,6 +26,26 @@ class AskRequest(BaseModel):
     debug: bool = Field(default=False, description="是否开启调试")
 
 
+class AskStreamRequest(AskRequest):
+    """流式问答请求。"""
+
+
+class RegenerateRequest(BaseModel):
+    """重新生成请求。"""
+
+    topk: int | None = Field(default=None, description="TopK")
+    threshold: float | None = Field(default=None, description="拒答阈值")
+    rerank_enabled: bool | None = Field(default=None, description="是否启用重排")
+    filters: AskFilters | None = Field(default=None, description="检索过滤条件")
+    debug: bool = Field(default=False, description="是否开启调试")
+
+
+class EditAndResendRequest(RegenerateRequest):
+    """编辑后重发请求。"""
+
+    question: str = Field(description="编辑后的问题")
+
+
 class Citation(BaseModel):
     """引用条目。"""
 
@@ -52,4 +72,28 @@ class AskResponse(RequestIdMixin):
     citations: list[Citation] = Field(description="引用列表")
     conversation_id: str | None = Field(default=None, description="会话ID")
     message_id: str | None = Field(default=None, description="消息ID")
+    user_message_id: str | None = Field(default=None, description="用户消息ID")
+    assistant_created_at: str | None = Field(default=None, description="助手消息创建时间")
     timing: dict[str, int] | None = Field(default=None, description="耗时信息")
+
+
+class ChatRunCancelResponse(RequestIdMixin):
+    """取消聊天运行响应。"""
+
+    run_id: str = Field(description="运行ID")
+    status: str = Field(description="运行状态")
+    cancel_flag: bool = Field(description="是否已取消")
+
+
+class ChatRunResponse(RequestIdMixin):
+    """聊天运行详情响应。"""
+
+    run_id: str = Field(description="运行ID")
+    kb_id: str | None = Field(default=None, description="知识库ID")
+    conversation_id: str | None = Field(default=None, description="会话ID")
+    user_message_id: str | None = Field(default=None, description="用户消息ID")
+    assistant_message_id: str | None = Field(default=None, description="助手消息ID")
+    status: str = Field(description="运行状态")
+    cancel_flag: bool = Field(description="是否已取消")
+    started_at: str = Field(description="开始时间")
+    finished_at: str | None = Field(default=None, description="结束时间")

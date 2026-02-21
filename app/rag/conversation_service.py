@@ -1,10 +1,30 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
 from app.core.utils import new_id, utc_now_iso
 from app.db.repos.interfaces import ConversationRepositoryProtocol
 from app.db.models import ConversationRecord, MessageRecord
+
+
+@dataclass(slots=True)
+class ConversationListResult:
+    """会话列表查询结果。"""
+
+    items: list[ConversationRecord]
+    total: int
+    next_cursor: str | None
+
+
+@dataclass(slots=True)
+class MessagePageResult:
+    """消息分页查询结果。"""
+
+    items: list[MessageRecord]
+    has_more: bool
+    next_before: str | None
 
 
 class ConversationService:
@@ -55,17 +75,76 @@ class ConversationService:
             record.title = title
         return self._repository.update_conversation(record)
 
-    def list_conversations(
-        self, kb_id: str | None, user_id: str | None, limit: int, offset: int
-    ) -> list[ConversationRecord]:
-        """列出会话列表。"""
+    def create_conversation(
+        self,
+        kb_id: str,
+        user_id: str | None,
+        title: str | None = None,
+    ) -> ConversationRecord:
+        """创建空会话。"""
 
-        return self._repository.list_conversations(
+        now = utc_now_iso()
+        record = ConversationRecord(
+            conversation_id=new_id("conv"),
             kb_id=kb_id,
             user_id=user_id,
-            limit=limit,
+            title=title,
+            created_at=now,
+            updated_at=now,
+            deleted=False,
+        )
+        return self._repository.create_conversation(record)
+
+    def rename_conversation(
+        self, conversation_id: str, title: str | None
+    ) -> ConversationRecord:
+        """重命名会话。"""
+
+        record = self.get_conversation(conversation_id)
+        record.title = title
+        record.updated_at = utc_now_iso()
+        return self._repository.update_conversation(record)
+
+    def delete_conversation(self, conversation_id: str) -> ConversationRecord:
+        """软删除会话。"""
+
+        record = self.get_conversation(conversation_id)
+        record.deleted = True
+        record.updated_at = utc_now_iso()
+        return self._repository.update_conversation(record)
+
+    def list_conversations(
+        self,
+        kb_id: str | None,
+        user_id: str | None,
+        keyword: str | None,
+        cursor: str | None,
+        limit: int,
+        offset: int,
+    ) -> ConversationListResult:
+        """列出会话列表。"""
+
+        query_limit = max(1, limit)
+        records = self._repository.list_conversations(
+            kb_id=kb_id,
+            user_id=user_id,
+            keyword=keyword,
+            cursor=cursor,
+            limit=query_limit + 1,
             offset=offset,
         )
+        total = self._repository.count_conversations(
+            kb_id=kb_id,
+            user_id=user_id,
+            keyword=keyword,
+        )
+        has_more = len(records) > query_limit
+        records = records[:query_limit]
+        next_cursor = None
+        if has_more and records:
+            tail = records[-1]
+            next_cursor = f"{tail.updated_at}|{tail.conversation_id}"
+        return ConversationListResult(items=records, total=total, next_cursor=next_cursor)
 
     def get_conversation(self, conversation_id: str) -> ConversationRecord:
         """获取会话。"""
@@ -85,6 +164,30 @@ class ConversationService:
 
         return self._repository.list_messages(conversation_id)
 
+    def list_messages_page(
+        self, conversation_id: str, before_message_id: str | None, limit: int
+    ) -> MessagePageResult:
+        """按游标分页拉取消息。"""
+
+        if before_message_id is not None:
+            before = self.get_message(before_message_id)
+            if before.conversation_id != conversation_id:
+                raise AppError(
+                    code=ErrorCode.VALIDATION_FAILED,
+                    message="消息游标不属于当前会话",
+                    detail={
+                        "conversation_id": conversation_id,
+                        "before": before_message_id,
+                    },
+                    status_code=400,
+                )
+        items, has_more, next_before = self._repository.list_messages_page(
+            conversation_id=conversation_id,
+            before_message_id=before_message_id,
+            limit=max(1, limit),
+        )
+        return MessagePageResult(items=items, has_more=has_more, next_before=next_before)
+
     def save_message(
         self,
         conversation_id: str,
@@ -95,6 +198,8 @@ class ConversationService:
         timing: dict[str, int] | None,
         citations: list[dict[str, object]] | None,
         message_id: str | None = None,
+        parent_message_id: str | None = None,
+        edited_from_message_id: str | None = None,
     ) -> MessageRecord:
         """保存消息记录。"""
 
@@ -109,6 +214,8 @@ class ConversationService:
             timing=timing,
             citations=citations or [],
             created_at=utc_now_iso(),
+            parent_message_id=parent_message_id,
+            edited_from_message_id=edited_from_message_id,
         )
         return self._repository.create_message(record)
 
@@ -124,3 +231,13 @@ class ConversationService:
                 status_code=404,
             )
         return record
+
+    def get_previous_user_message(
+        self, conversation_id: str, before_message_id: str
+    ) -> MessageRecord | None:
+        """获取指定消息之前最近的用户消息。"""
+
+        return self._repository.get_previous_user_message(
+            conversation_id=conversation_id,
+            before_message_id=before_message_id,
+        )

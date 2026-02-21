@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from typing import Protocol
 
 from app.db.models import (
+    ChatRunRecord,
     ConversationRecord,
     DocumentRecord,
     EvalItemRecord,
@@ -73,16 +74,44 @@ class ConversationRepositoryProtocol(Protocol):
     def update_conversation(self, record: ConversationRecord) -> ConversationRecord: ...
 
     def list_conversations(
-        self, kb_id: str | None, user_id: str | None, limit: int, offset: int
+        self,
+        kb_id: str | None,
+        user_id: str | None,
+        keyword: str | None,
+        cursor: str | None,
+        limit: int,
+        offset: int,
     ) -> list[ConversationRecord]: ...
+
+    def count_conversations(
+        self, kb_id: str | None, user_id: str | None, keyword: str | None
+    ) -> int: ...
 
     def create_message(self, record: MessageRecord) -> MessageRecord: ...
 
     def list_messages(self, conversation_id: str) -> list[MessageRecord]: ...
 
+    def list_messages_page(
+        self, conversation_id: str, before_message_id: str | None, limit: int
+    ) -> tuple[list[MessageRecord], bool, str | None]: ...
+
     def get_message(self, message_id: str) -> MessageRecord | None: ...
 
+    def get_previous_user_message(
+        self, conversation_id: str, before_message_id: str
+    ) -> MessageRecord | None: ...
+
     def create_feedback(self, record: FeedbackRecord) -> FeedbackRecord: ...
+
+
+class ChatRunRepositoryProtocol(Protocol):
+    """聊天运行仓库接口。"""
+
+    def create(self, record: ChatRunRecord) -> ChatRunRecord: ...
+
+    def get(self, run_id: str) -> ChatRunRecord | None: ...
+
+    def update(self, record: ChatRunRecord) -> ChatRunRecord: ...
 
 
 class UserRepositoryProtocol(Protocol):

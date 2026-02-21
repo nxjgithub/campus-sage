@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.db.database import Database
+from app.db.repos.chat_run import ChatRunRepository
 from app.db.repos.conversation import ConversationRepository
 from app.db.repos.document import DocumentRepository
 from app.db.repos.eval_item import EvalItemRepository
@@ -42,6 +43,11 @@ class RepositoryProvider:
         """获取会话仓库。"""
 
         return ConversationRepository(self._db)
+
+    def chat_run(self) -> ChatRunRepository:
+        """获取聊天运行仓库。"""
+
+        return ChatRunRepository(self._db)
 
     def user(self) -> UserRepository:
         """获取用户仓库。"""

@@ -89,6 +89,8 @@ def conversation_to_list_item(record: ConversationRecord) -> ConversationListIte
         conversation_id=record.conversation_id,
         kb_id=record.kb_id,
         title=record.title,
+        last_message_preview=record.last_message_preview,
+        last_message_at=record.last_message_at,
         updated_at=record.updated_at,
     )
 
@@ -119,6 +121,8 @@ def rag_result_to_response(result: AskResult) -> AskResponse:
         citations=[_citation_from_dto(item) for item in result.citations],
         conversation_id=result.conversation_id,
         message_id=result.message_id,
+        user_message_id=result.user_message_id,
+        assistant_created_at=result.assistant_created_at,
         timing=result.timing,
         request_id=result.request_id,
     )

@@ -22,15 +22,27 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 1. 创建知识库
 2. 上传文档并触发入库
 3. 查看入库任务状态
-4. 发起问答并展示引用
-5. 触发拒答场景并展示建议
-6. 查看会话历史并提交反馈
+4. 发起问答（同步与流式）并展示引用
+5. 演示流式取消（run cancel）
+6. 展示会话列表侧栏能力（搜索、分页、重命名、删除）
+7. 演示重新生成与编辑后重发（新会话分支）
+8. 触发拒答场景并展示建议
+9. 查看会话历史并提交反馈
 
 ## 2.1 最新能力快照（已落地）
 - 真实 Embedding 已支持 OpenAI 兼容 HTTP 接入，并可通过配置开关切换后端。
 - 向量库默认后端已切换为 Qdrant，写入前执行 payload 契约校验。
 - 问答上下文已附证据编号，vLLM 提示词要求强制引用编号；缺引用时服务层自动补全。
 - 拒答策略已强化，增加关键词覆盖率阈值与最小上下文长度约束。
+- 已支持流式问答 SSE：`start/token/citation/refusal/done/error` 事件并携带 request_id。
+- SSE 已增强心跳 `ping` 与断连取消处理，长连接稳定性更高。
+- 已支持 chat run 取消接口：`POST /api/v1/chat/runs/{run_id}/cancel`。
+- 已支持 chat run 状态查询接口：`GET /api/v1/chat/runs/{run_id}`（断线恢复）。
+- 会话能力已补齐：创建、重命名、软删除、关键词检索、游标分页、消息分页。
+- 消息能力已补齐：重新生成、编辑后重发（分支会话）。
+- Ask 响应新增 `user_message_id` 与 `assistant_created_at`，便于前端稳定渲染。
+- 数据层新增 `chat_run`，message 新增 `parent_message_id`、`edited_from_message_id`、`sequence_no`。
+- 监控路由统一为 `/api/v1/monitor/*`，去除重复挂载路径。
 - chunk 元数据增加页内标题启发式抽取，snippet 清洗稳定性提升。
 - `app/eval/` 评测模块已落地，支持 Recall@K、MRR、延迟统计。
 - 队列监控已增强：Redis 不可用统一错误、失败告警阈值、死信裁剪。
@@ -70,12 +82,12 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 
 ## 5. 开发命令参考
 ### 5.1 后端
-- 安装依赖：`pip install -r requirements.txt`
+- 安装依赖：`conda run -n campus-sage pip install -r requirements.txt`
 - 启动依赖：`docker compose up -d`
-- 启动 API：`uvicorn app.main:app --reload`
-- 代码检查：`ruff check .`
-- 单元测试：`pytest -q`
-- 运行评测：`python scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --topk 5`
+- 启动 API：`conda run -n campus-sage uvicorn app.main:app --reload`
+- 代码检查：`conda run -n campus-sage ruff check .`
+- 单元测试：`conda run -n campus-sage pytest -q`
+- 运行评测：`conda run -n campus-sage python scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --topk 5`
 
 说明：
 - 若未启动 Qdrant/Redis，相关集成测试可能被跳过或返回依赖不可用错误，这属于可预期行为。

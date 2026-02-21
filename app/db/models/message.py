@@ -18,3 +18,6 @@ class MessageRecord:
     timing: dict[str, int] | None
     citations: list[dict[str, object]]
     created_at: str
+    parent_message_id: str | None = None
+    edited_from_message_id: str | None = None
+    sequence_no: int | None = None

@@ -194,11 +194,19 @@ def init_database(settings: Settings) -> None:
             refusal_reason TEXT,
             timing_json TEXT,
             citations_json TEXT,
+            parent_message_id TEXT,
+            edited_from_message_id TEXT,
+            sequence_no INTEGER,
             created_at TEXT NOT NULL,
-            FOREIGN KEY(conversation_id) REFERENCES conversation(conversation_id)
+            FOREIGN KEY(conversation_id) REFERENCES conversation(conversation_id),
+            FOREIGN KEY(parent_message_id) REFERENCES message(message_id),
+            FOREIGN KEY(edited_from_message_id) REFERENCES message(message_id)
         );
         """
     )
+    _try_add_column(database, "message", "parent_message_id", "TEXT")
+    _try_add_column(database, "message", "edited_from_message_id", "TEXT")
+    _try_add_column(database, "message", "sequence_no", "INTEGER")
     database.execute(
         """
         CREATE TABLE IF NOT EXISTS citation (
@@ -417,8 +425,68 @@ def init_database(settings: Settings) -> None:
     )
     database.execute(
         """
+        CREATE INDEX IF NOT EXISTS idx_message_conversation_sequence
+        ON message(conversation_id, sequence_no);
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_conversation_updated_at
+        ON conversation(updated_at);
+        """
+    )
+    database.execute(
+        """
         CREATE INDEX IF NOT EXISTS idx_feedback_message_id
         ON feedback(message_id);
+        """
+    )
+    database.execute(
+        """
+        CREATE TABLE IF NOT EXISTS chat_run (
+            run_id TEXT PRIMARY KEY,
+            kb_id TEXT,
+            user_id TEXT,
+            conversation_id TEXT,
+            user_message_id TEXT,
+            assistant_message_id TEXT,
+            status TEXT NOT NULL,
+            cancel_flag INTEGER NOT NULL DEFAULT 0,
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            request_id TEXT,
+            FOREIGN KEY(kb_id) REFERENCES knowledge_base(kb_id),
+            FOREIGN KEY(user_id) REFERENCES user(user_id),
+            FOREIGN KEY(conversation_id) REFERENCES conversation(conversation_id),
+            FOREIGN KEY(user_message_id) REFERENCES message(message_id),
+            FOREIGN KEY(assistant_message_id) REFERENCES message(message_id)
+        );
+        """
+    )
+    _try_add_column(database, "chat_run", "kb_id", "TEXT")
+    _try_add_column(database, "chat_run", "user_id", "TEXT")
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_chat_run_conversation_id
+        ON chat_run(conversation_id);
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_chat_run_kb_id
+        ON chat_run(kb_id);
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_chat_run_user_id
+        ON chat_run(user_id);
+        """
+    )
+    database.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_chat_run_status
+        ON chat_run(status);
         """
     )
     _seed_default_roles(database)
@@ -438,6 +506,7 @@ def reset_database(settings: Settings) -> None:
     database.execute("DELETE FROM user_role;")
     database.execute("DELETE FROM role;")
     database.execute("DELETE FROM user;")
+    database.execute("DELETE FROM chat_run;")
     database.execute("DELETE FROM feedback;")
     database.execute("DELETE FROM message;")
     database.execute("DELETE FROM conversation;")
@@ -481,11 +550,17 @@ def _seed_default_roles(database: Database) -> None:
     from app.core.utils import utc_now_iso
 
     for name, permissions in DEFAULT_ROLE_PERMISSIONS.items():
+        permissions_json = json.dumps(permissions, ensure_ascii=False)
         exists = database.fetch_one(
-            "SELECT role_id FROM role WHERE name = ?;",
+            "SELECT role_id, permissions_json FROM role WHERE name = ?;",
             (name,),
         )
         if exists:
+            if exists.get("permissions_json") != permissions_json:
+                database.execute(
+                    "UPDATE role SET permissions_json = ? WHERE name = ?;",
+                    (permissions_json, name),
+                )
             continue
         database.execute(
             """
@@ -495,7 +570,7 @@ def _seed_default_roles(database: Database) -> None:
             (
                 f"role_{name}",
                 name,
-                json.dumps(permissions, ensure_ascii=False),
+                permissions_json,
                 utc_now_iso(),
             ),
         )

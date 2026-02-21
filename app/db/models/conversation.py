@@ -16,3 +16,5 @@ class ConversationRecord:
     created_at: str
     updated_at: str
     deleted: bool
+    last_message_preview: str | None = None
+    last_message_at: str | None = None
