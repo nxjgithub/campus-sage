@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Button,
@@ -16,13 +16,11 @@ import {
 } from "antd";
 import { fetchKbList } from "../../shared/api/modules/kb";
 import { createEvalSet, EvalRunResponse, fetchEvalRun, runEval } from "../../shared/api/modules/eval";
-import { normalizeApiError } from "../../shared/api/errors";
-import { CopyableField } from "../../shared/components/CopyableField";
+import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 
 interface EvalItemFormRow {
   question: string;
-  gold_doc_id?: string;
   gold_page_start?: number;
   gold_page_end?: number;
   tags_text?: string;
@@ -47,6 +45,19 @@ interface FetchRunFormValues {
 }
 type TableDensity = "middle" | "small";
 
+interface RecentEvalSetOption {
+  eval_set_id: string;
+  name: string;
+  created_at: string;
+}
+
+interface RecentEvalRunOption {
+  run_id: string;
+  eval_set_id: string;
+  kb_id: string;
+  created_at: string;
+}
+
 function parseTags(value?: string) {
   if (!value) {
     return undefined;
@@ -62,8 +73,8 @@ export function EvalPage() {
   const [setForm] = Form.useForm<EvalSetFormValues>();
   const [runForm] = Form.useForm<EvalRunFormValues>();
   const [fetchRunForm] = Form.useForm<FetchRunFormValues>();
-  const [recentSetIds, setRecentSetIds] = useState<string[]>([]);
-  const [recentRunIds, setRecentRunIds] = useState<string[]>([]);
+  const [recentSets, setRecentSets] = useState<RecentEvalSetOption[]>([]);
+  const [recentRuns, setRecentRuns] = useState<RecentEvalRunOption[]>([]);
   const [runDetail, setRunDetail] = useState<EvalRunResponse | null>(null);
   const [tableDensity, setTableDensity] = useState<TableDensity>("small");
 
@@ -79,7 +90,6 @@ export function EvalPage() {
         description: values.description?.trim() || undefined,
         items: values.items.map((item) => ({
           question: item.question.trim(),
-          gold_doc_id: item.gold_doc_id?.trim() || undefined,
           gold_page_start: item.gold_page_start,
           gold_page_end: item.gold_page_end,
           tags: parseTags(item.tags_text)
@@ -87,12 +97,21 @@ export function EvalPage() {
       }),
     onSuccess: (data) => {
       message.success("评测集创建成功");
-      setRecentSetIds((prev) => [data.eval_set_id, ...prev.filter((id) => id !== data.eval_set_id)].slice(0, 10));
+      setRecentSets((prev) =>
+        [
+          {
+            eval_set_id: data.eval_set_id,
+            name: data.name,
+            created_at: data.created_at
+          },
+          ...prev.filter((item) => item.eval_set_id !== data.eval_set_id)
+        ].slice(0, 10)
+      );
       runForm.setFieldValue("eval_set_id", data.eval_set_id);
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -101,12 +120,22 @@ export function EvalPage() {
     onSuccess: (data) => {
       message.success("评测运行完成");
       setRunDetail(data);
-      setRecentRunIds((prev) => [data.run_id, ...prev.filter((id) => id !== data.run_id)].slice(0, 10));
+      setRecentRuns((prev) =>
+        [
+          {
+            run_id: data.run_id,
+            eval_set_id: data.eval_set_id,
+            kb_id: data.kb_id,
+            created_at: data.created_at
+          },
+          ...prev.filter((item) => item.run_id !== data.run_id)
+        ].slice(0, 10)
+      );
       fetchRunForm.setFieldValue("run_id", data.run_id);
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -115,11 +144,21 @@ export function EvalPage() {
     onSuccess: (data) => {
       setRunDetail(data);
       message.success("评测结果已加载");
-      setRecentRunIds((prev) => [data.run_id, ...prev.filter((id) => id !== data.run_id)].slice(0, 10));
+      setRecentRuns((prev) =>
+        [
+          {
+            run_id: data.run_id,
+            eval_set_id: data.eval_set_id,
+            kb_id: data.kb_id,
+            created_at: data.created_at
+          },
+          ...prev.filter((item) => item.run_id !== data.run_id)
+        ].slice(0, 10)
+      );
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -141,6 +180,12 @@ export function EvalPage() {
   ]);
 
   const metrics = runDetail?.metrics ?? null;
+  const kbNameMap = useMemo(() => {
+    return new Map((kbQuery.data?.items ?? []).map((item) => [item.kb_id, item.name]));
+  }, [kbQuery.data?.items]);
+  const evalSetNameMap = useMemo(() => {
+    return new Map(recentSets.map((item) => [item.eval_set_id, item.name]));
+  }, [recentSets]);
 
   return (
     <div className="page-stack">
@@ -157,11 +202,11 @@ export function EvalPage() {
           <div className="summary-grid">
             <div className="summary-item">
               <div className="summary-item-label">最近评测集</div>
-              <div className="summary-item-value">{recentSetIds.length}</div>
+              <div className="summary-item-value">{recentSets.length}</div>
             </div>
             <div className="summary-item">
               <div className="summary-item-label">最近运行</div>
-              <div className="summary-item-value">{recentRunIds.length}</div>
+              <div className="summary-item-value">{recentRuns.length}</div>
             </div>
             <div className="summary-item">
               <div className="summary-item-label">Recall@K</div>
@@ -183,7 +228,7 @@ export function EvalPage() {
                 form={setForm}
                 layout="vertical"
                 initialValues={{
-                  items: [{ question: "", gold_doc_id: "", tags_text: "" }]
+                  items: [{ question: "", tags_text: "" }]
                 }}
                 onFinish={(values) => {
                   createSetMutation.mutate(values);
@@ -212,9 +257,6 @@ export function EvalPage() {
                             <Input.TextArea rows={2} />
                           </Form.Item>
                           <Space wrap>
-                            <Form.Item name={[field.name, "gold_doc_id"]} label="标准文档ID">
-                              <Input style={{ width: 220 }} />
-                            </Form.Item>
                             <Form.Item name={[field.name, "gold_page_start"]} label="起始页">
                               <InputNumber min={1} />
                             </Form.Item>
@@ -239,7 +281,7 @@ export function EvalPage() {
                       <Space>
                         <Button
                           onClick={() => {
-                            add({ question: "", gold_doc_id: "", tags_text: "" });
+                            add({ question: "", tags_text: "" });
                           }}
                         >
                           新增样本
@@ -261,7 +303,7 @@ export function EvalPage() {
             <div className="ops-scroll-pane">
               <div className="density-toolbar">
                 <Typography.Text className="density-meta">
-                  评测集缓存 {recentSetIds.length}，运行缓存 {recentRunIds.length}
+                  评测集缓存 {recentSets.length}，运行缓存 {recentRuns.length}
                 </Typography.Text>
                 <Segmented<TableDensity>
                   size="small"
@@ -286,15 +328,24 @@ export function EvalPage() {
                 >
                   <Form.Item
                     name="eval_set_id"
-                    label="评测集ID"
-                    rules={[{ required: true, message: "请输入评测集ID" }]}
+                    label="评测集"
+                    rules={[{ required: true, message: "请选择评测集" }]}
                   >
                     <Select
                       showSearch
-                      placeholder="输入或选择评测集ID"
-                      options={recentSetIds.map((id) => ({ value: id, label: id }))}
+                      optionFilterProp="label"
+                      placeholder="请选择最近创建的评测集"
+                      options={recentSets.map((item) => ({
+                        value: item.eval_set_id,
+                        label: `${item.name} · ${item.created_at}`
+                      }))}
                     />
                   </Form.Item>
+                  {!recentSets.length ? (
+                    <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
+                      请先创建评测集，再发起评测运行。
+                    </Typography.Paragraph>
+                  ) : null}
                   <Form.Item
                     name="kb_id"
                     label="知识库"
@@ -304,7 +355,7 @@ export function EvalPage() {
                       loading={kbQuery.isLoading}
                       options={(kbQuery.data?.items ?? []).map((item) => ({
                         value: item.kb_id,
-                        label: `${item.name} (${item.kb_id})`
+                        label: item.name
                       }))}
                     />
                   </Form.Item>
@@ -344,30 +395,48 @@ export function EvalPage() {
                 >
                   <Form.Item
                     name="run_id"
-                    rules={[{ required: true, message: "请输入运行ID" }]}
+                    rules={[{ required: true, message: "请选择评测运行" }]}
                     style={{ width: 320 }}
                   >
                     <Select
                       showSearch
-                      placeholder="输入或选择运行ID"
-                      options={recentRunIds.map((id) => ({ value: id, label: id }))}
+                      optionFilterProp="label"
+                      placeholder="选择最近评测运行"
+                      options={recentRuns.map((item) => ({
+                        value: item.run_id,
+                        label: `${evalSetNameMap.get(item.eval_set_id) ?? "评测运行"} · ${
+                          kbNameMap.get(item.kb_id) ?? "未知知识库"
+                        } · ${item.created_at}`
+                      }))}
                     />
                   </Form.Item>
                   <Form.Item>
-                    <Button htmlType="submit" loading={fetchRunMutation.isPending}>
+                    <Button
+                      htmlType="submit"
+                      loading={fetchRunMutation.isPending}
+                      disabled={!recentRuns.length}
+                    >
                       查询
                     </Button>
                   </Form.Item>
                 </Form>
+                {!recentRuns.length ? (
+                  <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
+                    暂无可查询的评测运行，请先执行一次评测。
+                  </Typography.Paragraph>
+                ) : null}
 
                 {!runDetail ? (
                   <Typography.Text type="secondary">暂无评测结果。</Typography.Text>
                 ) : (
                   <Space direction="vertical" style={{ width: "100%", marginTop: 12 }}>
-                    <CopyableField label="run_id" value={runDetail.run_id} />
-                    <CopyableField label="eval_set_id" value={runDetail.eval_set_id} />
-                    <CopyableField label="kb_id" value={runDetail.kb_id} />
-                    <CopyableField label="request_id" value={runDetail.request_id} />
+                    <Typography.Text>
+                      评测集：{evalSetNameMap.get(runDetail.eval_set_id) ?? "最近评测集"}
+                    </Typography.Text>
+                    <Typography.Text>
+                      知识库：{kbNameMap.get(runDetail.kb_id) ?? "未知知识库"}
+                    </Typography.Text>
+                    <Typography.Text>运行时间：{runDetail.created_at}</Typography.Text>
                     <Space wrap>
                       <Tag>topk: {runDetail.topk}</Tag>
                       <Tag>threshold: {runDetail.threshold ?? "-"}</Tag>
@@ -400,3 +469,4 @@ export function EvalPage() {
     </div>
   );
 }
+

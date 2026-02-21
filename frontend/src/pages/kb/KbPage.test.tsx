@@ -103,7 +103,7 @@ describe("KbPage 二次确认交互", () => {
   it("删除知识库应先确认，确认后再调用接口", async () => {
     renderWithProviders(<KbPage />);
 
-    const rowCell = await screen.findByText("kb-1");
+    const rowCell = await screen.findByText("教务知识库");
     const row = rowCell.closest("tr");
     if (!(row instanceof HTMLElement)) {
       throw new Error("未找到知识库行");

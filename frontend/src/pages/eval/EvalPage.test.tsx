@@ -87,7 +87,6 @@ describe("EvalPage", () => {
         items: [
           {
             question: "补考申请流程是什么？",
-            gold_doc_id: undefined,
             gold_page_start: undefined,
             gold_page_end: undefined,
             tags: ["policy", "exam"]

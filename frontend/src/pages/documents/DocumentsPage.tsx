@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
@@ -28,9 +28,8 @@ import {
   uploadDocument
 } from "../../shared/api/modules/documents";
 import { fetchKbList } from "../../shared/api/modules/kb";
-import { normalizeApiError } from "../../shared/api/errors";
+import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { ConfirmAction } from "../../shared/components/ConfirmAction";
-import { CopyableField } from "../../shared/components/CopyableField";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 
 interface UploadFormValues {
@@ -170,7 +169,7 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -182,7 +181,7 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -196,7 +195,7 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -210,7 +209,7 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -224,7 +223,7 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -290,6 +289,12 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     }
     return items.filter((item) => item.status === docStatusFilter);
   }, [docStatusFilter, documentsQuery.data?.items]);
+  const kbNameMap = useMemo(() => {
+    return new Map((kbQuery.data?.items ?? []).map((item) => [item.kb_id, item.name]));
+  }, [kbQuery.data?.items]);
+  const docNameMap = useMemo(() => {
+    return new Map((documentsQuery.data?.items ?? []).map((item) => [item.doc_id, item.doc_name]));
+  }, [documentsQuery.data?.items]);
 
   return (
     <div className="page-stack">
@@ -349,7 +354,7 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                 <Select
                   loading={kbQuery.isLoading}
                   options={(kbQuery.data?.items ?? []).map((item) => ({
-                    label: `${item.name} (${item.kb_id})`,
+                    label: item.name,
                     value: item.kb_id
                   }))}
                 />
@@ -397,17 +402,19 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
             className="card-soft"
             style={{ marginTop: 16 }}
             extra={
-              activeJobId ? (
-                <Typography.Text type="secondary">当前任务：{activeJobId}</Typography.Text>
-              ) : null
+              activeJobId ? <Typography.Text type="secondary">任务跟踪中</Typography.Text> : null
             }
           >
             {!activeJobId ? (
               <Typography.Text type="secondary">暂无进行中的任务。</Typography.Text>
             ) : (
               <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                <CopyableField label="job_id" value={activeJobId} />
-                <CopyableField label="request_id" value={jobQuery.data?.request_id} />
+                <Typography.Text>
+                  知识库：{kbNameMap.get(jobQuery.data?.kb_id ?? "") ?? "-"}
+                </Typography.Text>
+                <Typography.Text>
+                  文档：{docNameMap.get(jobQuery.data?.doc_id ?? "") ?? "处理中..."}
+                </Typography.Text>
                 <Typography.Text>
                   状态：<Tag>{jobQuery.data?.status ?? "-"}</Tag>
                 </Typography.Text>
@@ -513,8 +520,13 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                   pagination={false}
                   scroll={{ y: 280 }}
                   columns={[
-                    { title: "doc_id", dataIndex: "doc_id", width: 260 },
                     { title: "文档名", dataIndex: "doc_name" },
+                    {
+                      title: "版本",
+                      dataIndex: "doc_version",
+                      width: 140,
+                      render: (value: string | null | undefined) => value || "-"
+                    },
                     {
                       title: "状态",
                       dataIndex: "status",
@@ -592,8 +604,11 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                 pagination={false}
                 scroll={{ y: 280 }}
                 columns={[
-                  { title: "job_id", dataIndex: "job_id", width: 260 },
-                  { title: "doc_id", dataIndex: "doc_id", width: 240 },
+                  {
+                    title: "文档名",
+                    dataIndex: "doc_id",
+                    render: (value: string) => docNameMap.get(value) ?? "未知文档"
+                  },
                   {
                     title: "状态",
                     dataIndex: "status",
@@ -650,3 +665,4 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     </div>
   );
 }
+

@@ -163,7 +163,7 @@ describe("DocumentsPage 二次确认交互", () => {
 
     renderWithProviders(<DocumentsPage initialKbId="kb-1" />);
 
-    await screen.findByText("当前任务：job-1");
+    await screen.findByText("任务跟踪中");
     const taskCardTitle = screen.getAllByText("入库任务状态")[0];
     const taskCard = taskCardTitle.closest(".ant-card");
     if (!(taskCard instanceof HTMLElement)) {
@@ -188,7 +188,7 @@ describe("DocumentsPage 二次确认交互", () => {
 
     renderWithProviders(<DocumentsPage initialKbId="kb-1" />);
 
-    const historyJobCell = await screen.findByText("job-2");
+    const historyJobCell = await screen.findByText("running");
     const historyRow = historyJobCell.closest("tr");
     if (!(historyRow instanceof HTMLElement)) {
       throw new Error("未找到历史任务行");

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -27,7 +27,7 @@ import {
   updateUser,
   UserListItem
 } from "../../shared/api/modules/users";
-import { normalizeApiError } from "../../shared/api/errors";
+import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { ConfirmAction } from "../../shared/components/ConfirmAction";
 import { PageState } from "../../shared/components/PageState";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
@@ -162,14 +162,14 @@ export function UsersPage() {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
   const updateUserMutation = useMutation({
     mutationFn: async (values: EditUserValues) => {
       if (!editingUser) {
-        throw new Error("缺少用户 ID");
+        throw new Error("缺少用户信息");
       }
       return updateUser(editingUser.user_id, {
         status: values.status,
@@ -184,14 +184,14 @@ export function UsersPage() {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
   const accessMutation = useMutation({
     mutationFn: async (values: KbAccessValues) => {
       if (!accessUser) {
-        throw new Error("缺少用户 ID");
+        throw new Error("缺少用户信息");
       }
       return upsertUserKbAccess(accessUser.user_id, values);
     },
@@ -204,14 +204,14 @@ export function UsersPage() {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
   const deleteAccessMutation = useMutation({
     mutationFn: async (kbId: string) => {
       if (!accessUser) {
-        throw new Error("缺少用户 ID");
+        throw new Error("缺少用户信息");
       }
       return deleteUserKbAccess(accessUser.user_id, kbId);
     },
@@ -223,14 +223,14 @@ export function UsersPage() {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
   const replaceAccessMutation = useMutation({
     mutationFn: async (values: KbAccessBulkValues) => {
       if (!accessUser) {
-        throw new Error("缺少用户 ID");
+        throw new Error("缺少用户信息");
       }
       const validItems = (values.items ?? []).filter((item) => item.kb_id && item.access_level);
       return replaceUserKbAccess(accessUser.user_id, { items: validItems });
@@ -243,7 +243,7 @@ export function UsersPage() {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -300,6 +300,9 @@ export function UsersPage() {
       roleFilter === "admin" ? item.roles.includes("admin") : item.roles.includes("user")
     );
   }, [roleFilter, usersQuery.data?.items]);
+  const kbNameMap = useMemo(() => {
+    return new Map((kbQuery.data?.items ?? []).map((item) => [item.kb_id, item.name]));
+  }, [kbQuery.data?.items]);
 
   return (
     <div className="page-stack">
@@ -387,7 +390,7 @@ export function UsersPage() {
             <Space>
               <Input
                 allowClear
-                placeholder="按邮箱/用户ID搜索"
+                placeholder="按邮箱搜索"
                 value={filterKeywordInput}
                 onChange={(event) => setFilterKeywordInput(event.target.value)}
                 style={{ width: 220 }}
@@ -467,7 +470,6 @@ export function UsersPage() {
                     }
                   }}
                   columns={[
-                    { title: "用户ID", dataIndex: "user_id", width: 220 },
                     { title: "邮箱", dataIndex: "email", width: 260 },
                     {
                       title: "状态",
@@ -581,7 +583,7 @@ export function UsersPage() {
                 loading={kbQuery.isLoading}
                 options={(kbQuery.data?.items ?? []).map((item) => ({
                   value: item.kb_id,
-                  label: `${item.name} (${item.kb_id})`
+                  label: item.name
                 }))}
               />
             </Form.Item>
@@ -608,7 +610,11 @@ export function UsersPage() {
           dataSource={accessQuery.data?.items ?? []}
           pagination={false}
           columns={[
-            { title: "kb_id", dataIndex: "kb_id" },
+            {
+              title: "知识库",
+              dataIndex: "kb_id",
+              render: (value: string) => kbNameMap.get(value) ?? "未知知识库"
+            },
             { title: "访问级别", dataIndex: "access_level", width: 140 },
             {
               title: "操作",
@@ -659,7 +665,7 @@ export function UsersPage() {
                           showSearch
                           options={(kbQuery.data?.items ?? []).map((item) => ({
                             value: item.kb_id,
-                            label: `${item.name} (${item.kb_id})`
+                            label: item.name
                           }))}
                         />
                       </Form.Item>
@@ -703,3 +709,4 @@ export function UsersPage() {
     </div>
   );
 }
+

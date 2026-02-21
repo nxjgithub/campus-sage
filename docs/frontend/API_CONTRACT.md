@@ -23,7 +23,7 @@
 前端统一规则：
 - toast 展示 `message`
 - 展开详情时展示 `code`
-- 调试区展示 `request_id`
+- 错误提示中展示 `request_id`（用于排障）
 
 ## 3. 知识库接口
 - `POST /kb`
@@ -76,7 +76,7 @@
 - `POST /kb/{kb_id}/ask`
   - 请求字段：
     - 必填：`question`
-    - 选填：`conversation_id/topk/threshold/rerank_enabled/filters/debug`
+    - 选填：`conversation_id`（`topk/threshold/rerank_enabled/debug` 等运行参数由后端或知识库配置托管）
   - 成功字段：
     - `answer`
     - `refusal`
@@ -92,28 +92,69 @@
     - 若模型未输出引用标记，服务端会自动补全参考编号
   - 匿名约束：
     - 当 `kb.visibility=public` 时允许匿名访问
-    - 前端需支持手动输入 `kb_id` 发起问答（不依赖知识库列表）
+    - 前端通过知识库列表选择目标知识库，不向用户暴露 `kb_id` 手动输入
 
 前端强约束：
 - `refusal=false`：显示答案正文与引用卡片。
 - `refusal=true`：显示拒答态与建议列表，不显示“请求失败”。
 - 即使 `answer` 已带 `[1][2]`，也必须仍然展示结构化 `citations[]`。
+- 问答主界面不展示内部标识（如 `kb_id/run_id/conversation_id/message_id`）。
 - `citations[]` 每项至少渲染：
   - `doc_name`
   - `page_start/page_end` 或 `section_path`
   - `snippet`
   - 调试模式下 `score` 可能有值，生产态可为 `null`。
 
+- `POST /kb/{kb_id}/ask/stream`
+  - 类型：SSE（`Accept: text/event-stream`）
+  - 事件序列：`start -> ping/token/citation/refusal -> done`
+  - 关键事件字段：
+    - `start`: `run_id/conversation_id/request_id`
+    - `token`: `delta`
+    - `citation`: `citation`
+    - `refusal`: `answer/refusal_reason/suggestions`
+    - `done`: `status/conversation_id/user_message_id/message_id/assistant_created_at`
+    - `error`: `code/message/request_id`
+  - 前端规则：
+    - `refusal` 仍属于业务成功态，不显示接口失败。
+    - `ping` 仅保活，不更新消息正文。
+    - `done.status=canceled` 时将消息标记为“已取消生成”。
+
+- `GET /chat/runs/{run_id}`
+  - 用途：断线恢复时查询运行态
+  - 关键字段：`status/cancel_flag/conversation_id/user_message_id/assistant_message_id`
+
+- `POST /chat/runs/{run_id}/cancel`
+  - 用途：取消流式生成
+  - 说明：幂等，前端在流式进行中允许重复触发
+
+- `POST /messages/{message_id}/regenerate`
+  - 用途：对既有消息重新生成答案（同会话）
+
+- `POST /messages/{message_id}/edit-and-resend`
+  - 用途：编辑问题后重发，生成新分支会话
+  - 关键前端行为：成功后切换到返回的 `conversation_id`
+
 ## 7. 会话接口
-- `GET /conversations?kb_id=&limit=&offset=`
-  - 用途：会话列表
+- `POST /conversations`
+  - 用途：创建空会话
+- `GET /conversations?kb_id=&keyword=&cursor=&limit=&offset=`
+  - 用途：会话列表（侧栏）
+  - 返回增强：`total/next_cursor/last_message_preview/last_message_at`
 - `GET /conversations/{conversation_id}`
   - 用途：会话详情（含消息与助手引用）
+- `PATCH /conversations/{conversation_id}`
+  - 用途：重命名会话
+- `DELETE /conversations/{conversation_id}`
+  - 用途：软删除会话
+- `GET /conversations/{conversation_id}/messages?before=&limit=`
+  - 用途：历史消息分页
+  - 返回：`items/has_more/next_before`
 
 前端展示约束：
 - 用户消息与助手消息视觉区分。
-- 助手消息若有 `timing`，支持折叠查看。
-- 助手消息若有 `citations`，需可展开查看。
+- 助手消息点击后打开证据弹窗，弹窗内展示 `timing/citations`。
+- 问答主界面必须支持“加载更早消息”。
 
 ## 8. 反馈接口
 - `POST /messages/{message_id}/feedback`
@@ -183,7 +224,8 @@
 - `["documents",kbId]`
 - `["ingest-job",jobId]`
 - `["conversation","list",params]`
-- `["conversation","detail",conversationId]`
+- `["conversation","messages",conversationId,before,limit]`
+- `["chat","run",runId]`
 - `["monitor","queues"]`
 - `["auth","me"]`
 - `["users","list",status,keyword,page,pageSize]`
@@ -194,3 +236,7 @@
 - 入库任务轮询间隔：2 秒。
 - 当状态进入 `succeeded/failed/canceled` 时停止轮询。
 - 页签切后台可降频（例如 5 秒）。
+
+## 管理端展示约束补充
+- 前端在管理端调用涉及 ID 的接口时，ID 必须由已选择对象隐式携带，不要求用户感知或手动输入。
+- 可见文案优先展示业务可读字段（`name/email/doc_name/status/created_at`），内部 ID 仅用于接口路径与缓存键。

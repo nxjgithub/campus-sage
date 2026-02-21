@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -23,7 +23,7 @@ import {
   KbConfig,
   updateKb
 } from "../../shared/api/modules/kb";
-import { normalizeApiError } from "../../shared/api/errors";
+import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { ConfirmAction } from "../../shared/components/ConfirmAction";
 import { PageState } from "../../shared/components/PageState";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
@@ -115,14 +115,14 @@ export function KbPage() {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
   const updateMutation = useMutation({
     mutationFn: async (values: KbEditValues) => {
       if (!editingKbId) {
-        throw new Error("缺少知识库 ID");
+        throw new Error("缺少知识库信息");
       }
       return updateKb(editingKbId, {
         description: values.description?.trim() || null,
@@ -144,7 +144,7 @@ export function KbPage() {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -156,7 +156,7 @@ export function KbPage() {
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
     }
   });
 
@@ -184,7 +184,7 @@ export function KbPage() {
         }
         return true;
       }
-      const target = `${item.name} ${item.kb_id} ${item.description ?? ""}`.toLowerCase();
+      const target = `${item.name} ${item.description ?? ""}`.toLowerCase();
       const matchesKeyword = target.includes(keyword.toLowerCase());
       if (!matchesKeyword) {
         return false;
@@ -322,7 +322,7 @@ export function KbPage() {
             <div className="density-toolbar">
               <Space wrap>
                 <Input
-                  placeholder="搜索名称 / kb_id"
+                  placeholder="搜索名称 / 描述"
                   allowClear
                   value={keyword}
                   onChange={(event) => {
@@ -378,8 +378,12 @@ export function KbPage() {
                   dataSource={filteredItems}
                   pagination={false}
                   columns={[
-                    { title: "知识库ID", dataIndex: "kb_id", width: 280 },
                     { title: "名称", dataIndex: "name" },
+                    {
+                      title: "说明",
+                      dataIndex: "description",
+                      render: (value: string | null | undefined) => value || "-"
+                    },
                     {
                       title: "检索参数",
                       key: "retrieval",
@@ -488,3 +492,4 @@ export function KbPage() {
     </div>
   );
 }
+
