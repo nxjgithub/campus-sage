@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Button, Card, Col, Form, Input, Row, Space, Typography, message } from "antd";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { normalizeApiError } from "../../shared/api/errors";
+import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { useAuth } from "../../shared/auth/auth";
 import { getRoleHomePath } from "../../shared/auth/role";
 
@@ -94,7 +94,7 @@ export function LoginPage() {
                   navigate(nextPath, { replace: true });
                 } catch (error) {
                   const normalized = normalizeApiError(error);
-                  message.error(`${normalized.message}（${normalized.code}）`);
+                  message.error(formatApiErrorMessage(normalized));
                 } finally {
                   setSubmitting(false);
                 }
@@ -151,3 +151,4 @@ export function LoginPage() {
     </div>
   );
 }
+

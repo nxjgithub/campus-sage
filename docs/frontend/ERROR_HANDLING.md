@@ -9,6 +9,8 @@
   - 断网、DNS、超时、跨域
 - 协议层错误
   - HTTP 4xx/5xx
+- 流式层错误
+  - SSE 连接中断、事件解析失败、流内 `error` 事件
 - 业务层错误
   - 后端 `error.code`（如 `KB_NOT_FOUND`、`VECTOR_SEARCH_FAILED`）
 - 正常拒答
@@ -59,6 +61,13 @@
     - `refusal_reason`
     - `suggestions[]`
   - 若有弱相关引用，可照常展示
+
+## 7.1 流式取消处理（非错误）
+- 当 `error.code=CHAT_RUN_CANCELED` 或 `done.status=canceled`：
+  - 不展示失败 toast
+  - 将助手消息标记为“已取消生成”
+  - 保留已生成 token 供用户继续查看
+  - 允许用户直接再次发送
 
 ## 8. 观测与上报
 - 每次错误日志至少记录：

@@ -43,86 +43,104 @@ export function PortalLayout({ navItems, panelLabel }: PortalLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, role, user, signOut } = useAuth();
+  const hideGlobalSider = location.pathname.startsWith("/app/ask");
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  const canSwitchPortal = isAuthenticated && role === "admin";
   const roleText = role === "admin" ? "管理员" : "用户";
   const nextPath = encodeURIComponent(`${location.pathname}${location.search}`);
+  const contentClassName = hideGlobalSider ? "app-content app-content--ask" : "app-content";
 
   return (
-    <Layout className="app-shell">
-      <Sider width={228} className="app-sider">
-        <div className="brand-block">
-          <Typography.Title level={4} className="brand-title">
-            CampusSage
-          </Typography.Title>
-          <Typography.Text className="brand-subtitle">{panelLabel}</Typography.Text>
-        </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[resolveSelectedKey(location.pathname, navItems)]}
-          items={navItems.map((item) => ({
-            key: item.key,
-            label: (
-              <span
-                onMouseEnter={() => preloadRoute(item.key)}
-                onFocus={() => preloadRoute(item.key)}
-              >
-                {item.label}
-              </span>
-            )
-          }))}
-          onClick={(item) => {
-            navigate(item.key);
-          }}
-        />
-        <div className="menu-footer">
-          <Typography.Text className="menu-footer-key">当前模块</Typography.Text>
-          <Typography.Text className="menu-footer-value">
-            {currentModule(location.pathname)}
-          </Typography.Text>
-          <Typography.Text className="menu-footer-key">更新时间</Typography.Text>
-          <Typography.Text className="menu-footer-value">{nowText()}</Typography.Text>
-        </div>
-      </Sider>
-      <Layout>
-        <Header className="app-header app-header--with-tools">
-          <div className="header-meta">
-            <Typography.Text className="header-title">
-              Evidence-grounded University Knowledge Assistant
-            </Typography.Text>
-            <Typography.Text className="header-text">
-              RAG 检索增强问答平台 · 会话、引用、评测、监控一体化
-            </Typography.Text>
+    <Layout className={hideGlobalSider ? "app-shell app-shell--no-sider" : "app-shell"}>
+      {!hideGlobalSider ? (
+        <Sider width={228} className="app-sider">
+          <div className="brand-block">
+            <Typography.Title level={4} className="brand-title">
+              CampusSage
+            </Typography.Title>
+            <Typography.Text className="brand-subtitle">{panelLabel}</Typography.Text>
           </div>
-          {isAuthenticated ? (
-            <Space size={8}>
-              <Typography.Text>{user?.email}</Typography.Text>
-              <Tag color={role === "admin" ? "processing" : "default"}>{roleText}</Tag>
-              <Button
-                size="small"
-                onClick={() => {
-                  void signOut().then(() => {
-                    navigate("/app/ask", { replace: true });
-                  });
-                }}
-              >
-                退出登录
-              </Button>
-            </Space>
-          ) : (
-            <Space size={8}>
-              <Typography.Text type="secondary">当前为匿名访问</Typography.Text>
-              <Button
-                size="small"
-                type="primary"
-                onClick={() => {
-                  navigate(`/login?next=${nextPath}`);
-                }}
-              >
-                登录
-              </Button>
-            </Space>
-          )}
-        </Header>
-        <Content className="app-content">
+          <Menu
+            mode="inline"
+            selectedKeys={[resolveSelectedKey(location.pathname, navItems)]}
+            items={navItems.map((item) => ({
+              key: item.key,
+              label: (
+                <span
+                  onMouseEnter={() => preloadRoute(item.key)}
+                  onFocus={() => preloadRoute(item.key)}
+                >
+                  {item.label}
+                </span>
+              )
+            }))}
+            onClick={(item) => {
+              navigate(item.key);
+            }}
+          />
+          <div className="menu-footer">
+            <Typography.Text className="menu-footer-key">当前模块</Typography.Text>
+            <Typography.Text className="menu-footer-value">
+              {currentModule(location.pathname)}
+            </Typography.Text>
+            <Typography.Text className="menu-footer-key">更新时间</Typography.Text>
+            <Typography.Text className="menu-footer-value">{nowText()}</Typography.Text>
+          </div>
+        </Sider>
+      ) : null}
+      <Layout>
+        {!hideGlobalSider ? (
+          <Header className="app-header app-header--with-tools">
+            <div className="header-meta">
+              <Typography.Text className="header-title">
+                Evidence-grounded University Knowledge Assistant
+              </Typography.Text>
+              <Typography.Text className="header-text">
+                RAG 检索增强问答平台 · 会话、引用、评测、监控一体化
+              </Typography.Text>
+            </div>
+            {isAuthenticated ? (
+              <Space size={8}>
+                <Typography.Text>{user?.email}</Typography.Text>
+                <Tag color={role === "admin" ? "processing" : "default"}>{roleText}</Tag>
+                {canSwitchPortal ? (
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      navigate(isAdminRoute ? "/app/ask" : "/admin/kb");
+                    }}
+                  >
+                    {isAdminRoute ? "用户端" : "管理端"}
+                  </Button>
+                ) : null}
+                <Button
+                  size="small"
+                  onClick={() => {
+                    void signOut().then(() => {
+                      navigate("/app/ask", { replace: true });
+                    });
+                  }}
+                >
+                  退出登录
+                </Button>
+              </Space>
+            ) : (
+              <Space size={8}>
+                <Typography.Text type="secondary">当前为匿名访问</Typography.Text>
+                <Button
+                  size="small"
+                  type="primary"
+                  onClick={() => {
+                    navigate(`/login?next=${nextPath}`);
+                  }}
+                >
+                  登录
+                </Button>
+              </Space>
+            )}
+          </Header>
+        ) : null}
+        <Content className={contentClassName}>
           <Outlet />
         </Content>
       </Layout>

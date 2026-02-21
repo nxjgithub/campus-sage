@@ -12,11 +12,11 @@ export const ADMIN_NAV_ITEMS: NavEntry[] = [
 ];
 
 export const USER_NAV_ITEMS: NavEntry[] = [
-  { key: "/app/ask", label: "问答" },
-  { key: "/app/conversations", label: "会话历史" }
+  { key: "/app/ask", label: "聊天问答" },
+  { key: "/app/conversations", label: "会话审计" }
 ];
 
-export const USER_PUBLIC_NAV_ITEMS: NavEntry[] = [{ key: "/app/ask", label: "问答" }];
+export const USER_PUBLIC_NAV_ITEMS: NavEntry[] = [{ key: "/app/ask", label: "聊天问答" }];
 
 export const ROUTE_PRELOADERS: Record<string, () => Promise<unknown>> = {
   "/admin/kb": async () => import("../../pages/kb/KbPage"),

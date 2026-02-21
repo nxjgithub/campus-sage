@@ -4,9 +4,16 @@ import { App as AntdApp } from "antd";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AskResponse, askByKb } from "../../shared/api/modules/ask";
-import { submitFeedback } from "../../shared/api/modules/conversations";
-import { fetchDocuments } from "../../shared/api/modules/documents";
+import { MemoryRouter } from "react-router-dom";
+import { askStreamByKb } from "../../shared/api/modules/ask";
+import {
+  createConversation,
+  deleteConversation,
+  fetchConversationList,
+  fetchConversationMessagesPage,
+  renameConversation,
+  submitFeedback
+} from "../../shared/api/modules/conversations";
 import { fetchKbList } from "../../shared/api/modules/kb";
 import { AskPage } from "./AskPage";
 
@@ -14,20 +21,37 @@ vi.mock("../../shared/api/modules/kb", () => ({
   fetchKbList: vi.fn()
 }));
 
-vi.mock("../../shared/api/modules/documents", () => ({
-  fetchDocuments: vi.fn()
-}));
-
 vi.mock("../../shared/api/modules/ask", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../shared/api/modules/ask")>();
   return {
     ...original,
-    askByKb: vi.fn()
+    askStreamByKb: vi.fn(),
+    regenerateMessage: vi.fn(),
+    editAndResendMessage: vi.fn(),
+    cancelChatRun: vi.fn(),
+    getChatRun: vi.fn()
   };
 });
 
 vi.mock("../../shared/api/modules/conversations", () => ({
-  submitFeedback: vi.fn()
+  fetchConversationList: vi.fn(),
+  fetchConversationMessagesPage: vi.fn(),
+  submitFeedback: vi.fn(),
+  createConversation: vi.fn(),
+  renameConversation: vi.fn(),
+  deleteConversation: vi.fn()
+}));
+
+vi.mock("../../shared/auth/auth", () => ({
+  useAuth: () => ({
+    status: "anonymous",
+    user: null,
+    role: "user",
+    isAuthenticated: false,
+    signIn: vi.fn(),
+    signOut: vi.fn(),
+    refreshUser: vi.fn()
+  })
 }));
 
 function renderWithProviders(node: ReactNode) {
@@ -37,15 +61,58 @@ function renderWithProviders(node: ReactNode) {
       mutations: { retry: false }
     }
   });
-
   return render(
     <QueryClientProvider client={queryClient}>
-      <AntdApp>{node}</AntdApp>
+      <MemoryRouter>
+        <AntdApp>{node}</AntdApp>
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
 
-describe("AskPage 引用交互", () => {
+function mockBasicStream() {
+  vi.mocked(askStreamByKb).mockImplementation(async (_kbId, _payload, options) => {
+    options?.onEvent?.({
+      event: "start",
+      data: { run_id: "run_1", conversation_id: "conv_1", request_id: "req_1" }
+    });
+    options?.onEvent?.({
+      event: "token",
+      data: { run_id: "run_1", delta: "根据规定[1]可以办理。", request_id: "req_1" }
+    });
+    options?.onEvent?.({
+      event: "citation",
+      data: {
+        run_id: "run_1",
+        citation: {
+          citation_id: 1,
+          doc_id: "doc_1",
+          doc_name: "教务手册",
+          chunk_id: "chunk_1",
+          snippet: "补考申请需要满足课程修读条件。",
+          section_path: "考试管理/补考"
+        },
+        request_id: "req_1"
+      }
+    });
+    options?.onEvent?.({
+      event: "done",
+      data: {
+        run_id: "run_1",
+        status: "succeeded",
+        conversation_id: "conv_1",
+        user_message_id: "msg_user_1",
+        message_id: "msg_assistant_1",
+        assistant_created_at: "2026-02-21T10:00:00Z",
+        refusal: false,
+        timing: { total_ms: 120 },
+        request_id: "req_1"
+      }
+    });
+  });
+}
+
+describe("AskPage 聊天交互", () => {
   const scrollIntoViewMock = vi.fn();
 
   beforeEach(() => {
@@ -54,81 +121,102 @@ describe("AskPage 引用交互", () => {
       configurable: true,
       value: scrollIntoViewMock
     });
-    vi.mocked(fetchKbList).mockResolvedValue({ items: [] });
-    vi.mocked(fetchDocuments).mockResolvedValue({ items: [] });
-    vi.mocked(askByKb).mockResolvedValue({
-      answer: "",
-      refusal: false,
-      suggestions: [],
-      citations: []
+    vi.mocked(fetchKbList).mockResolvedValue({
+      items: [{ kb_id: "kb_1", name: "教务知识库", visibility: "public", updated_at: "2026-02-21" }]
+    });
+    vi.mocked(fetchConversationList).mockResolvedValue({
+      items: [],
+      total: 0,
+      next_cursor: null
+    });
+    vi.mocked(fetchConversationMessagesPage).mockResolvedValue({
+      items: [],
+      has_more: false,
+      next_before: null
     });
     vi.mocked(submitFeedback).mockResolvedValue({
-      feedback_id: "fb-1",
-      message_id: "msg-1",
+      feedback_id: "fb_1",
+      message_id: "msg_assistant_1",
       status: "ok"
     });
+    vi.mocked(createConversation).mockResolvedValue({
+      conversation_id: "conv_new",
+      kb_id: "kb_1",
+      title: "新会话",
+      created_at: "2026-02-21T10:00:00Z",
+      updated_at: "2026-02-21T10:00:00Z"
+    });
+    vi.mocked(renameConversation).mockResolvedValue({
+      conversation_id: "conv_new",
+      kb_id: "kb_1",
+      title: "新标题",
+      created_at: "2026-02-21T10:00:00Z",
+      updated_at: "2026-02-21T10:10:00Z"
+    });
+    vi.mocked(deleteConversation).mockResolvedValue({
+      conversation_id: "conv_new",
+      status: "deleted"
+    });
+    mockBasicStream();
   });
 
-  it("点击回答中的引用编号后应高亮对应卡片并滚动", async () => {
-    const initialResult: AskResponse = {
-      answer: "根据规则[1]可以办理",
-      refusal: false,
-      suggestions: [],
-      citations: [
-        {
-          citation_id: 1,
-          doc_id: "doc-1",
-          doc_name: "教务手册",
-          chunk_id: "chunk-1",
-          snippet: "证据片段A",
-          section_path: "补考/申请"
-        }
-      ],
-      conversation_id: "conv-1",
-      message_id: "msg-1",
-      request_id: "req-1"
-    };
+  it("问答主界面不暴露内部 ID 与高级调参控件", async () => {
+    renderWithProviders(<AskPage />);
 
-    renderWithProviders(<AskPage initialResult={initialResult} />);
+    expect(await screen.findByRole("combobox")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("选择或输入 kb_id")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("TopK")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("阈值")).not.toBeInTheDocument();
+    expect(screen.queryByText("run_id")).not.toBeInTheDocument();
+  });
+
+  it("点击答案引用编号后应打开证据弹窗并高亮对应卡片", async () => {
+    renderWithProviders(<AskPage />);
+
+    await userEvent.type(await screen.findByPlaceholderText("请输入问题，回车发送（Shift+回车换行）"), "补考申请条件");
+    await userEvent.click(screen.getByRole("button", { name: /发\s*送/ }));
 
     const marker = await screen.findByRole("button", { name: "[1]" });
     await userEvent.click(marker);
 
-    const snippet = screen.getByText("证据片段A");
+    expect(await screen.findByText("证据面板")).toBeInTheDocument();
+    const snippet = await screen.findByText("补考申请需要满足课程修读条件。");
     const card = snippet.closest(".citation-card");
     expect(card).toHaveClass("citation-card--active");
-    expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 
-  it("提交反馈成功后应显示已提交状态", async () => {
-    const initialResult: AskResponse = {
-      answer: "可按流程办理",
-      refusal: false,
-      suggestions: [],
-      citations: [],
-      conversation_id: "conv-2",
-      message_id: "msg-2",
-      request_id: "req-2"
-    };
+  it("证据弹窗打开后按任意键应关闭", async () => {
+    renderWithProviders(<AskPage />);
 
-    renderWithProviders(<AskPage initialResult={initialResult} />);
+    await userEvent.type(await screen.findByPlaceholderText("请输入问题，回车发送（Shift+回车换行）"), "补考申请条件");
+    await userEvent.click(screen.getByRole("button", { name: /发\s*送/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "[1]" }));
+    expect(await screen.findByText("按任意键或点击右上角关闭")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /赞\s*同/ }));
-    await userEvent.type(
-      await screen.findByPlaceholderText("可填写对答案质量的说明"),
-      "回答有帮助"
-    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("按任意键或点击右上角关闭")).not.toBeInTheDocument();
+    });
+  });
+
+  it("助手消息反馈提交应携带结构化字段", async () => {
+    renderWithProviders(<AskPage />);
+
+    await userEvent.type(await screen.findByPlaceholderText("请输入问题，回车发送（Shift+回车换行）"), "补考申请条件");
+    await userEvent.click(screen.getByRole("button", { name: /发\s*送/ }));
+
+    await userEvent.click(await screen.findByRole("button", { name: /赞\s*同/ }));
+    await userEvent.type(await screen.findByPlaceholderText("可填写对答案质量的说明"), "内容准确");
     await userEvent.click(screen.getByRole("button", { name: /提\s*交\s*反\s*馈/ }));
 
     await waitFor(() => {
-      expect(submitFeedback).toHaveBeenCalledWith("msg-2", {
+      expect(submitFeedback).toHaveBeenCalledWith("msg_assistant_1", {
         rating: "up",
         reasons: [],
-        comment: "回答有帮助",
+        comment: "内容准确",
         expected_hint: undefined
       });
     });
-
-    expect(await screen.findByRole("button", { name: /已\s*提\s*交/ })).toBeDisabled();
   });
 });

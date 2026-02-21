@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+﻿import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Button,
@@ -21,7 +21,7 @@ import {
   submitFeedback
 } from "../../shared/api/modules/conversations";
 import { CitationItem } from "../../shared/api/modules/ask";
-import { normalizeApiError } from "../../shared/api/errors";
+import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { CopyableField } from "../../shared/components/CopyableField";
 import { FeedbackAction } from "../../shared/components/FeedbackAction";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
@@ -251,7 +251,7 @@ export function ConversationsPage() {
       message.success("反馈已提交");
     } catch (error) {
       const normalized = normalizeApiError(error);
-      message.error(`${normalized.message}（${normalized.code}）`);
+      message.error(formatApiErrorMessage(normalized));
       throw error;
     } finally {
       setSubmittingFeedbackMessageId((current) => (current === messageId ? null : current));
@@ -431,3 +431,4 @@ export function ConversationsPage() {
     </div>
   );
 }
+

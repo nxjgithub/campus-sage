@@ -24,10 +24,14 @@
 - 刷新失败会清理本地凭证并回到匿名态
 
 ## 常用命令
-- `npm run typecheck`
-- `npm run lint`
-- `npm run test`
-- `npm run build`
+# 开发阶段
+npm run dev          # 启动开发服务器
+npm run typecheck    # 定期检查类型
+npm run lint         # 保持代码规范
+
+# 提交前
+npm run test         # 确保所有测试通过
+npm run build        # 验证生产构建成功
 
 ## 类型生成
 - `npm run gen:types`
