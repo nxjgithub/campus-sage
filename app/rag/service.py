@@ -4,6 +4,7 @@ import re
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+import math
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
@@ -365,15 +366,24 @@ class RagService:
             threshold=threshold,
             rerank_enabled=rerank_enabled,
         )
-        min_chunks = kb.config.get("min_evidence_chunks")
-        if min_chunks is None:
-            min_chunks = self._settings.rag_min_evidence_chunks
-        min_context_chars = kb.config.get("min_context_chars")
-        if min_context_chars is None:
-            min_context_chars = self._settings.rag_min_context_chars
-        min_coverage = kb.config.get("min_keyword_coverage")
-        if min_coverage is None:
-            min_coverage = self._settings.rag_min_keyword_coverage
+        min_chunks = self._normalize_int(
+            value=kb.config.get("min_evidence_chunks"),
+            default=self._settings.rag_min_evidence_chunks,
+            min_value=1,
+            max_value=resolved_topk,
+        )
+        min_context_chars = self._normalize_int(
+            value=kb.config.get("min_context_chars"),
+            default=self._settings.rag_min_context_chars,
+            min_value=1,
+            max_value=1000000,
+        )
+        min_coverage = self._normalize_float(
+            value=kb.config.get("min_keyword_coverage"),
+            default=self._settings.rag_min_keyword_coverage,
+            min_value=0,
+            max_value=1,
+        )
 
         total_start = time.perf_counter()
         query_vector = self._embedder.embed_query(question)
@@ -482,16 +492,23 @@ class RagService:
     ) -> tuple[int, float, bool]:
         """解析问答配置。"""
 
-        resolved_topk = topk or kb.config.get("topk", self._settings.rag_topk)
-        resolved_threshold = threshold if threshold is not None else kb.config.get(
-            "threshold", self._settings.rag_threshold
+        resolved_topk = self._normalize_int(
+            value=topk if topk is not None else kb.config.get("topk"),
+            default=self._settings.rag_topk,
+            min_value=1,
+            max_value=50,
         )
-        resolved_rerank_enabled = (
-            rerank_enabled
-            if rerank_enabled is not None
-            else kb.config.get("rerank_enabled", self._settings.rerank_enabled)
+        resolved_threshold = self._normalize_float(
+            value=threshold if threshold is not None else kb.config.get("threshold"),
+            default=self._settings.rag_threshold,
+            min_value=0,
+            max_value=1,
         )
-        return int(resolved_topk), float(resolved_threshold), bool(resolved_rerank_enabled)
+        resolved_rerank_enabled = self._normalize_bool(
+            value=rerank_enabled if rerank_enabled is not None else kb.config.get("rerank_enabled"),
+            default=self._settings.rerank_enabled,
+        )
+        return resolved_topk, resolved_threshold, resolved_rerank_enabled
 
     def _get_kb(self, kb_id: str):
         """获取知识库记录。"""
@@ -690,6 +707,48 @@ class RagService:
         if tokens and len(tokens[0]) <= 2:
             return [tokens[0].lower()]
         return [char.lower() for char in stripped if char.strip()]
+
+    def _normalize_int(
+        self, value: object, default: int, min_value: int, max_value: int
+    ) -> int:
+        """规范化整型配置并在非法时回退默认值。"""
+
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, int):
+            candidate = value
+        elif isinstance(value, float):
+            if not math.isfinite(value):
+                return default
+            candidate = int(value)
+        else:
+            return default
+        if candidate < min_value or candidate > max_value:
+            return default
+        return candidate
+
+    def _normalize_float(
+        self, value: object, default: float, min_value: float, max_value: float
+    ) -> float:
+        """规范化浮点配置并在非法时回退默认值。"""
+
+        if isinstance(value, bool):
+            return default
+        if not isinstance(value, (int, float)):
+            return default
+        candidate = float(value)
+        if not math.isfinite(candidate):
+            return default
+        if candidate < min_value or candidate > max_value:
+            return default
+        return candidate
+
+    def _normalize_bool(self, value: object, default: bool) -> bool:
+        """规范化布尔配置并在非法时回退默认值。"""
+
+        if isinstance(value, bool):
+            return value
+        return default
 
     def _log_ask(
         self,

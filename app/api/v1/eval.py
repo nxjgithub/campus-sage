@@ -71,15 +71,15 @@ def run_eval(
         required_level="read",
         allow_public=False,
     )
-    threshold = (
-        payload.threshold
-        if payload.threshold is not None
-        else kb_record.config.get("threshold", settings.rag_threshold)
+    threshold = _resolve_eval_threshold(
+        request_value=payload.threshold,
+        kb_value=kb_record.config.get("threshold"),
+        default_value=settings.rag_threshold,
     )
-    rerank_enabled = (
-        payload.rerank_enabled
-        if payload.rerank_enabled is not None
-        else kb_record.config.get("rerank_enabled", settings.rerank_enabled)
+    rerank_enabled = _resolve_eval_rerank_enabled(
+        request_value=payload.rerank_enabled,
+        kb_value=kb_record.config.get("rerank_enabled"),
+        default_value=settings.rerank_enabled,
     )
     run_record, metrics = service.run_eval(
         eval_set_id=payload.eval_set_id,
@@ -138,3 +138,29 @@ def _to_metrics(metrics: object) -> EvalMetrics | None:
         p95_ms=metrics.p95_ms,
         samples=metrics.samples,
     )
+
+
+def _resolve_eval_threshold(
+    request_value: float | None, kb_value: object, default_value: float
+) -> float:
+    """解析评测阈值，兼容历史脏配置并回退到默认值。"""
+
+    if request_value is not None:
+        return request_value
+    if isinstance(kb_value, (int, float)):
+        threshold = float(kb_value)
+        if 0 <= threshold <= 1:
+            return threshold
+    return default_value
+
+
+def _resolve_eval_rerank_enabled(
+    request_value: bool | None, kb_value: object, default_value: bool
+) -> bool:
+    """解析评测重排开关，兼容历史脏配置并回退到默认值。"""
+
+    if request_value is not None:
+        return request_value
+    if isinstance(kb_value, bool):
+        return kb_value
+    return default_value

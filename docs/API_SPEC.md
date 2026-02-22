@@ -192,6 +192,18 @@
 }
 ```
 
+说明：
+- `config` 支持局部更新；未传入的配置字段保持原值不变。
+- 示例：仅更新阈值可传 `{"config": {"threshold": 0.22}}`。
+- `config` 字段约束：
+  - `topk`：`1~50`
+  - `threshold`：`0~1`
+  - `max_context_tokens`：`>=1`
+  - `min_evidence_chunks`：`>=1` 且不能大于 `topk`
+  - `min_context_chars`：`>=1`
+  - `min_keyword_coverage`：`0~1`
+- 参数不合法时返回 `400 + VALIDATION_FAILED`。
+
 ### 2.5 删除知识库
 `DELETE /api/v1/kb/{kb_id}`
 
@@ -411,6 +423,11 @@ Content-Type：`multipart/form-data`
 ```
 说明：`debug=true` 时返回 `citations.score`，否则可为 `null`。  
 约束：`citations` 与 `refusal` 规则必须符合 `docs/RAG_CONTRACT.md`。
+- 运行时参数约束：
+  - `topk`（可选）：`1~50`
+  - `threshold`（可选）：`0~1`
+- 参数不合法时返回 `400 + VALIDATION_FAILED`。
+- 兼容性：若知识库中存在历史非法配置值（如超范围或错误类型），服务端会自动回退到系统默认值继续执行。
 
 ### 4.2 发起问答（流式 SSE）
 `POST /api/v1/kb/{kb_id}/ask/stream`  
@@ -858,6 +875,11 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 ```json
 {"eval_set_id": "es_001", "kb_id": "kb_123", "topk": 5}
 ```
+
+参数约束：
+- `topk`：`1~50`
+- `threshold`（可选）：`0~1`
+- 参数不合法时返回 `400 + VALIDATION_FAILED`。
 
 ### 7.3 获取评测结果
 `GET /api/v1/eval/runs/{run_id}`

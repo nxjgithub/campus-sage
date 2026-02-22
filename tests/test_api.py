@@ -39,6 +39,81 @@ def test_create_and_list_kb() -> None:
     assert duplicate.json()["error"]["code"] == "KB_ALREADY_EXISTS"
 
 
+def test_patch_kb_config_partial_merge() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    create_response = client.post(
+        "/api/v1/kb", json={"name": "配置更新知识库"}, headers=headers
+    )
+    assert create_response.status_code == 200
+    kb_payload = create_response.json()
+    kb_id = kb_payload["kb_id"]
+    original_config = kb_payload["config"]
+
+    patch_response = client.patch(
+        f"/api/v1/kb/{kb_id}",
+        json={"config": {"threshold": 0.22}},
+        headers=headers,
+    )
+    assert patch_response.status_code == 200
+    updated_config = patch_response.json()["config"]
+
+    assert updated_config["threshold"] == 0.22
+    assert updated_config["topk"] == original_config["topk"]
+    assert updated_config["rerank_enabled"] == original_config["rerank_enabled"]
+    assert (
+        updated_config["max_context_tokens"] == original_config["max_context_tokens"]
+    )
+    assert (
+        updated_config["min_evidence_chunks"] == original_config["min_evidence_chunks"]
+    )
+    assert updated_config["min_context_chars"] == original_config["min_context_chars"]
+    assert (
+        updated_config["min_keyword_coverage"]
+        == original_config["min_keyword_coverage"]
+    )
+
+
+def test_patch_kb_config_rejects_invalid_merged_values() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    create_response = client.post("/api/v1/kb", json={"name": "参数校验知识库"}, headers=headers)
+    assert create_response.status_code == 200
+    kb_id = create_response.json()["kb_id"]
+
+    patch_response = client.patch(
+        f"/api/v1/kb/{kb_id}",
+        json={"config": {"min_evidence_chunks": 999}},
+        headers=headers,
+    )
+    assert patch_response.status_code == 400
+    payload = patch_response.json()
+    assert payload["error"]["code"] == "VALIDATION_FAILED"
+    assert payload["error"]["detail"]["field"] == "min_evidence_chunks"
+    assert payload["error"]["detail"]["reason"] == "must_not_exceed_topk"
+
+
+def test_create_kb_config_rejects_out_of_range_threshold() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    response = client.post(
+        "/api/v1/kb",
+        json={
+            "name": "阈值非法知识库",
+            "config": {
+                "topk": 5,
+                "threshold": 1.1,
+                "rerank_enabled": False,
+                "max_context_tokens": 3000,
+            },
+        },
+        headers=headers,
+    )
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "VALIDATION_FAILED"
+
+
 def test_ask_refusal_when_no_evidence() -> None:
     client = TestClient(app)
     headers = _auth_headers(client)
@@ -64,6 +139,79 @@ def test_ask_refusal_when_no_evidence() -> None:
         "LOW_COVERAGE",
     }
     assert payload["citations"] == []
+
+
+def test_ask_with_legacy_invalid_kb_config_fallback() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post("/api/v1/kb", json={"name": "旧配置知识库"}, headers=headers).json()[
+        "kb_id"
+    ]
+    provider = RepositoryProvider(get_database(get_settings()))
+    kb_repo = provider.knowledge_base()
+    record = kb_repo.get(kb_id)
+    assert record is not None
+    record.config = {
+        "topk": "abc",
+        "threshold": "bad",
+        "rerank_enabled": "not_bool",
+        "max_context_tokens": -1,
+        "min_evidence_chunks": 9999,
+        "min_context_chars": "x",
+        "min_keyword_coverage": 9,
+    }
+    kb_repo.update(record)
+
+    response = client.post(
+        f"/api/v1/kb/{kb_id}/ask",
+        json={"question": "补考申请需要什么条件？"},
+        headers=headers,
+    )
+    if is_qdrant_backend() and not is_qdrant_available():
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "VECTOR_SEARCH_FAILED"
+        return
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refusal"] is True
+    assert payload["refusal_reason"] in {
+        "NO_EVIDENCE",
+        "LOW_SCORE",
+        "LOW_EVIDENCE",
+        "LOW_COVERAGE",
+    }
+
+
+def test_ask_rejects_invalid_runtime_topk() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post("/api/v1/kb", json={"name": "问答参数知识库"}, headers=headers).json()[
+        "kb_id"
+    ]
+    response = client.post(
+        f"/api/v1/kb/{kb_id}/ask",
+        json={"question": "测试问题", "topk": 0},
+        headers=headers,
+    )
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "VALIDATION_FAILED"
+
+
+def test_ask_rejects_invalid_runtime_threshold() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post("/api/v1/kb", json={"name": "问答参数知识库2"}, headers=headers).json()[
+        "kb_id"
+    ]
+    response = client.post(
+        f"/api/v1/kb/{kb_id}/ask",
+        json={"question": "测试问题", "threshold": 1.2},
+        headers=headers,
+    )
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "VALIDATION_FAILED"
 
 
 def test_ask_kb_not_found() -> None:

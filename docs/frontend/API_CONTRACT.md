@@ -36,6 +36,13 @@
     - `max_context_tokens`
     - `min_context_chars`
     - `min_keyword_coverage`
+  - `config` 取值约束：
+    - `topk`: `1~50`
+    - `threshold`: `0~1`
+    - `max_context_tokens`: `>=1`
+    - `min_evidence_chunks`: `>=1` 且不能大于 `topk`
+    - `min_context_chars`: `>=1`
+    - `min_keyword_coverage`: `0~1`
   - 成功：返回 `KnowledgeBaseResponse`
 - `GET /kb`
   - 用途：获取知识库列表
@@ -44,6 +51,8 @@
   - 用途：获取知识库详情
 - `PATCH /kb/{kb_id}`
   - 用途：更新知识库说明和配置
+  - 说明：`config` 支持局部更新，未传字段保持原值不变
+  - 失败：参数非法时返回 `400 + VALIDATION_FAILED`
 - `DELETE /kb/{kb_id}`
   - 用途：删除知识库
   - 成功：`{"status":"deleted","request_id":"..."}`
@@ -77,6 +86,7 @@
   - 请求字段：
     - 必填：`question`
     - 选填：`conversation_id`（`topk/threshold/rerank_enabled/debug` 等运行参数由后端或知识库配置托管）
+    - 参数约束：`topk` 为 `1~50`，`threshold` 为 `0~1`
   - 成功字段：
     - `answer`
     - `refusal`
@@ -93,6 +103,7 @@
   - 匿名约束：
     - 当 `kb.visibility=public` 时允许匿名访问
     - 前端通过知识库列表选择目标知识库，不向用户暴露 `kb_id` 手动输入
+  - 失败：参数非法时返回 `400 + VALIDATION_FAILED`
 
 前端强约束：
 - `refusal=false`：显示答案正文与引用卡片。
@@ -215,6 +226,8 @@
   - 用途：创建评测集
 - `POST /eval/runs`
   - 用途：运行评测
+  - 参数约束：`topk` 为 `1~50`，`threshold`（可选）为 `0~1`
+  - 失败：参数非法时返回 `400 + VALIDATION_FAILED`
 - `GET /eval/runs/{run_id}`
   - 用途：查询评测结果
 

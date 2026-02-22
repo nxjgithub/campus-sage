@@ -40,6 +40,7 @@ class KnowledgeBaseService:
     ) -> KnowledgeBaseRecord:
         """创建知识库。"""
 
+        self._validate_config_consistency(config)
         kb_id = new_id("kb")
         now = utc_now_iso()
         record = KnowledgeBaseRecord(
@@ -87,7 +88,11 @@ class KnowledgeBaseService:
         if visibility is not None:
             record.visibility = visibility
         if config is not None:
-            record.config = config
+            # 局部更新配置，避免 PATCH 时覆盖未传入字段。
+            merged_config = dict(record.config or {})
+            merged_config.update(config)
+            self._validate_config_consistency(merged_config)
+            record.config = merged_config
         record.updated_at = utc_now_iso()
         return self._kb_repo.update(record)
 
@@ -114,6 +119,28 @@ class KnowledgeBaseService:
             "min_context_chars": self._settings.rag_min_context_chars,
             "min_keyword_coverage": self._settings.rag_min_keyword_coverage,
         }
+
+    def _validate_config_consistency(self, config: dict) -> None:
+        """校验配置跨字段关系，避免保存不可执行的参数组合。"""
+
+        topk = config.get("topk")
+        min_evidence_chunks = config.get("min_evidence_chunks")
+        if (
+            isinstance(topk, int)
+            and isinstance(min_evidence_chunks, int)
+            and min_evidence_chunks > topk
+        ):
+            raise AppError(
+                code=ErrorCode.VALIDATION_FAILED,
+                message="知识库配置校验失败",
+                detail={
+                    "field": "min_evidence_chunks",
+                    "reason": "must_not_exceed_topk",
+                    "topk": topk,
+                    "min_evidence_chunks": min_evidence_chunks,
+                },
+                status_code=400,
+            )
 
 
 class DocumentService:

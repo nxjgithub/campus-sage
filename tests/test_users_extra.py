@@ -195,6 +195,32 @@ def test_eval_api_flow() -> None:
     assert fetched_payload["run_id"] == run_id
 
 
+def test_eval_run_rejects_invalid_topk() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    response = client.post(
+        "/api/v1/eval/runs",
+        json={"eval_set_id": "es_x", "kb_id": "kb_x", "topk": 0},
+        headers=headers,
+    )
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "VALIDATION_FAILED"
+
+
+def test_eval_run_rejects_invalid_threshold() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    response = client.post(
+        "/api/v1/eval/runs",
+        json={"eval_set_id": "es_x", "kb_id": "kb_x", "topk": 5, "threshold": 1.2},
+        headers=headers,
+    )
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "VALIDATION_FAILED"
+
+
 def _auth_headers(client: TestClient) -> dict[str, str]:
     _create_admin_user()
     response = client.post(

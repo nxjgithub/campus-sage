@@ -19,8 +19,8 @@ class AskRequest(BaseModel):
 
     question: str = Field(description="问题")
     conversation_id: str | None = Field(default=None, description="会话ID")
-    topk: int | None = Field(default=None, description="TopK")
-    threshold: float | None = Field(default=None, description="拒答阈值")
+    topk: int | None = Field(default=None, ge=1, le=50, description="TopK")
+    threshold: float | None = Field(default=None, ge=0, le=1, description="拒答阈值")
     rerank_enabled: bool | None = Field(default=None, description="是否启用重排")
     filters: AskFilters | None = Field(default=None, description="检索过滤条件")
     debug: bool = Field(default=False, description="是否开启调试")
@@ -33,8 +33,8 @@ class AskStreamRequest(AskRequest):
 class RegenerateRequest(BaseModel):
     """重新生成请求。"""
 
-    topk: int | None = Field(default=None, description="TopK")
-    threshold: float | None = Field(default=None, description="拒答阈值")
+    topk: int | None = Field(default=None, ge=1, le=50, description="TopK")
+    threshold: float | None = Field(default=None, ge=0, le=1, description="拒答阈值")
     rerank_enabled: bool | None = Field(default=None, description="是否启用重排")
     filters: AskFilters | None = Field(default=None, description="检索过滤条件")
     debug: bool = Field(default=False, description="是否开启调试")

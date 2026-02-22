@@ -70,6 +70,14 @@
 - `CHUNK_SIZE`：默认 500（分块大小，字符数）
 - `CHUNK_OVERLAP`：默认 100（分块重叠，字符数）
 
+取值约束（同样适用于 KB config 覆盖值）：
+- `topk`：`1~50`
+- `threshold`：`0~1`
+- `max_context_tokens`：`>=1`
+- `min_evidence_chunks`：`>=1` 且不能大于 `topk`
+- `min_context_chars`：`>=1`
+- `min_keyword_coverage`：`0~1`
+
 
 ## 6. 上传与存储
 - `STORAGE_DIR`：默认 `./data/storage`

@@ -40,8 +40,8 @@ class EvalRunRequest(BaseModel):
 
     eval_set_id: str = Field(description="评测集ID")
     kb_id: str = Field(description="知识库ID")
-    topk: int = Field(default=5, description="检索TopK")
-    threshold: float | None = Field(default=None, description="命中阈值")
+    topk: int = Field(default=5, ge=1, le=50, description="检索TopK")
+    threshold: float | None = Field(default=None, ge=0, le=1, description="命中阈值")
     rerank_enabled: bool | None = Field(default=None, description="是否启用重排")
 
 
