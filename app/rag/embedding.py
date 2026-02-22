@@ -99,6 +99,7 @@ class HttpEmbeddingClient:
                 json=payload,
                 headers=headers,
                 timeout=self._timeout,
+                trust_env=False,
             )
         except Exception as exc:
             raise AppError(

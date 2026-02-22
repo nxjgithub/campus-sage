@@ -162,6 +162,17 @@ class IngestPipeline:
         upsert_start = time.perf_counter()
         try:
             self._vector_store.upsert(kb_id=kb_id, entries=entries)
+        except AppError as exc:
+            raise AppError(
+                code=ErrorCode.VECTOR_UPSERT_FAILED,
+                message="向量写入失败",
+                detail={
+                    "source_code": exc.code.value,
+                    "source_message": exc.message,
+                    "source_detail": exc.detail,
+                },
+                status_code=exc.status_code,
+            ) from exc
         except Exception as exc:
             raise AppError(
                 code=ErrorCode.VECTOR_UPSERT_FAILED,

@@ -66,6 +66,20 @@ python -c "import fastapi, uvicorn; print(fastapi.__file__); print(uvicorn.__fil
 期望输出路径类似：
 `D:\Anaconda3\envs\campus-sage\Lib\site-packages\...`
 
+**强制隔离 user-site（推荐立即执行）**：
+```powershell
+conda activate campus-sage
+conda env config vars set PYTHONNOUSERSITE=1
+conda deactivate
+conda activate campus-sage
+```
+可用下面命令确认 `rq/redis` 已从 conda 环境加载：
+```powershell
+python -c "import rq, redis; print(rq.__file__); print(redis.__file__)"
+```
+期望输出路径均位于：
+`D:\Anaconda3\envs\campus-sage\Lib\site-packages\...`
+
 如果发现依赖装到了用户目录，先卸载再重装：
 ```powershell
 python -m pip uninstall -y fastapi uvicorn
@@ -237,5 +251,6 @@ QDRANT_URL=http://127.0.0.1:6333
 
 ## 11. 常见问题
 - Qdrant 端口冲突：检查 6333/6334 是否被占用
+- Windows 系统代理导致本地依赖 502：后端已默认对本地 Qdrant/Embedding 请求关闭 `trust_env`，若你刚修改过环境仍失败，请重启 API 与 ingest worker 进程
 - Windows 换行符：仓库要求 LF，提交前避免把配置文件转为 CRLF
 - `.env` 不要提交：必须被 `.gitignore` 忽略

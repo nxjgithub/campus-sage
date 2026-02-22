@@ -40,11 +40,13 @@ def test_http_embedding_client_calls_openai_compatible_endpoint(
         json: dict[str, object],
         headers: dict[str, str],
         timeout: int,
+        trust_env: bool,
     ) -> _FakeResponse:
         captured["url"] = url
         captured["json"] = json
         captured["headers"] = headers
         captured["timeout"] = timeout
+        captured["trust_env"] = trust_env
         return _FakeResponse(
             200,
             {
@@ -65,6 +67,7 @@ def test_http_embedding_client_calls_openai_compatible_endpoint(
         "input": ["first", "second"],
         "dimensions": 3,
     }
+    assert captured["trust_env"] is False
     assert vectors == [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
 
 

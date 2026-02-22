@@ -4,10 +4,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Callable, TypeVar, Protocol
+from uuid import UUID, uuid5
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
 from app.core.settings import Settings
+
+_QDRANT_POINT_ID_NAMESPACE = UUID("57f77fb8-1ab8-41bb-b4f7-438f68f71f89")
 
 
 @dataclass(slots=True)
@@ -262,6 +265,7 @@ class QdrantVectorStore:
             api_key=self._qdrant_api_key,
             check_compatibility=False,
             timeout=10,
+            trust_env=False,
         )
 
     def _reset_client(self) -> None:
@@ -284,7 +288,7 @@ class QdrantVectorStore:
         self._ensure_collection(kb_id)
         points = [
             self._rest.PointStruct(
-                id=entry.payload["chunk_id"],
+                id=_to_qdrant_point_id(str(entry.payload["chunk_id"])),
                 vector=entry.vector,
                 payload=entry.payload,
             )
@@ -553,6 +557,12 @@ def _is_published_after_matched(payload: dict[str, Any], published_after: object
     if published_at is None:
         return False
     return str(published_at) >= published_after
+
+
+def _to_qdrant_point_id(chunk_id: str) -> str:
+    """将业务 chunk_id 映射为 Qdrant 支持的稳定 UUID。"""
+
+    return str(uuid5(_QDRANT_POINT_ID_NAMESPACE, chunk_id))
 
 
 def _is_disconnect_error(exc: Exception) -> bool:

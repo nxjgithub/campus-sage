@@ -45,6 +45,7 @@
     - 章节路径（如 "教务管理/考试/补考规定"），无法识别则 null
 - `chunk_id: str`
     - chunk 唯一 ID（建议 UUID）
+    - 实现约定：Qdrant `PointStruct.id` 可使用由 `chunk_id` 映射得到的稳定 UUID（如 `uuid5(namespace, chunk_id)`），`chunk_id` 本身必须保留在 payload 中用于业务引用与溯源
 - `chunk_index: int`
     - chunk 在该文档中的序号（从 0 或 1 统一即可，建议从 0）
 - `text: str`

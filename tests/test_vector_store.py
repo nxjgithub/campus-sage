@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 
 from app.core.error_codes import ErrorCode
@@ -8,6 +10,7 @@ from app.rag.vector_store import (
     InMemoryVectorStore,
     QdrantVectorStore,
     VectorEntry,
+    _to_qdrant_point_id,
     _is_published_after_matched,
 )
 
@@ -118,3 +121,33 @@ def test_qdrant_search_fallback_for_legacy_payload_without_timestamp() -> None:
         for condition in getattr(first_filter, "must", [])
     )
     assert store._client.query_filters[1] is None
+
+
+def test_qdrant_point_id_is_stable_uuid() -> None:
+    first = _to_qdrant_point_id("chunk_abc123")
+    second = _to_qdrant_point_id("chunk_abc123")
+    third = _to_qdrant_point_id("chunk_other")
+
+    assert first == second
+    assert first != third
+    assert str(UUID(first)) == first
+
+
+def test_qdrant_client_disables_system_proxy() -> None:
+    captured: dict[str, object] = {}
+    sentinel = object()
+
+    def fake_client_cls(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return sentinel
+
+    store = object.__new__(QdrantVectorStore)
+    store._client_cls = fake_client_cls
+    store._qdrant_url = "http://127.0.0.1:6333"
+    store._qdrant_api_key = None
+
+    client = QdrantVectorStore._create_client(store)
+
+    assert client is sentinel
+    assert captured["url"] == "http://127.0.0.1:6333"
+    assert captured["trust_env"] is False
