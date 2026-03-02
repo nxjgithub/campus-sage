@@ -23,6 +23,57 @@ def test_payload_validation_missing_fields() -> None:
     assert exc_info.value.code == ErrorCode.RAG_PAYLOAD_INVALID
 
 
+def test_payload_validation_reports_field_type() -> None:
+    store = InMemoryVectorStore()
+    entry = VectorEntry(
+        vector=[0.1],
+        payload={
+            "contract_version": "0.1",
+            "kb_id": "kb_1",
+            "doc_id": "doc_1",
+            "doc_name": "demo.pdf",
+            "doc_version": None,
+            "published_at": "2025-01-01",
+            "published_at_ts": 1735689600,
+            "page_start": "1",
+            "page_end": 1,
+            "section_path": None,
+            "chunk_id": "chunk_1",
+            "chunk_index": 0,
+            "text": "test",
+        },
+    )
+
+    with pytest.raises(AppError) as exc_info:
+        store.upsert(kb_id="kb_1", entries=[entry])
+
+    assert exc_info.value.code == ErrorCode.RAG_PAYLOAD_INVALID
+    assert exc_info.value.detail is not None
+    assert exc_info.value.detail["field"] == "page_start"
+    assert exc_info.value.detail["actual_type"] == "str"
+
+
+def test_qdrant_upsert_passes_through_app_error() -> None:
+    store = object.__new__(QdrantVectorStore)
+    inner = AppError(
+        code=ErrorCode.RAG_PAYLOAD_INVALID,
+        message="向量 payload 字段类型不合法",
+        detail={"field": "page_start"},
+        status_code=500,
+    )
+
+    def _raise_app_error(operation: object) -> object:
+        del operation
+        raise inner
+
+    store._run_with_retry = _raise_app_error  # type: ignore[attr-defined]
+
+    with pytest.raises(AppError) as exc_info:
+        store.upsert(kb_id="kb_1", entries=[])
+
+    assert exc_info.value is inner
+
+
 def test_published_after_match_prefers_timestamp_field() -> None:
     payload = {
         "published_at": "2025-01-01",
@@ -145,6 +196,7 @@ def test_qdrant_client_disables_system_proxy() -> None:
     store._client_cls = fake_client_cls
     store._qdrant_url = "http://127.0.0.1:6333"
     store._qdrant_api_key = None
+    store._qdrant_timeout_s = 30
 
     client = QdrantVectorStore._create_client(store)
 

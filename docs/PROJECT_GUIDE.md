@@ -84,6 +84,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 ### 5.1 后端
 - 安装依赖：`conda run -n campus-sage pip install -r requirements.txt`
 - 启动依赖：`docker compose up -d`
+- 容器化启动后端 + Worker：`docker compose up -d api worker qdrant redis`
 - 启动 API：`conda run -n campus-sage uvicorn app.main:app --reload`
 - 代码检查：`conda run -n campus-sage ruff check .`
 - 单元测试：`conda run -n campus-sage pytest -q`

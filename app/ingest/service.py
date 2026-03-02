@@ -612,6 +612,22 @@ class DocumentService:
             source_message = None
             if exc.detail and isinstance(exc.detail.get("source_message"), str):
                 source_message = exc.detail["source_message"]
+            source_detail_error = None
+            if exc.detail and isinstance(exc.detail.get("source_detail"), dict):
+                source_detail = exc.detail["source_detail"]
+                if isinstance(source_detail.get("error"), str):
+                    source_detail_error = source_detail["error"]
+            source_detail_field = None
+            source_detail_actual_type = None
+            source_detail_value_preview = None
+            if exc.detail and isinstance(exc.detail.get("source_detail"), dict):
+                source_detail = exc.detail["source_detail"]
+                if isinstance(source_detail.get("field"), str):
+                    source_detail_field = source_detail["field"]
+                if isinstance(source_detail.get("actual_type"), str):
+                    source_detail_actual_type = source_detail["actual_type"]
+                if isinstance(source_detail.get("value_preview"), str):
+                    source_detail_value_preview = source_detail["value_preview"]
             source_detail_message = None
             if exc.detail and isinstance(exc.detail.get("source_detail"), dict):
                 source_detail = exc.detail["source_detail"]
@@ -622,6 +638,15 @@ class DocumentService:
             error_text = exc.message if detail_error is None else f"{exc.message}: {detail_error}"
             if source_message:
                 error_text = f"{exc.message}: {source_message}"
+            if source_detail_error:
+                error_text = f"{error_text} ({source_detail_error})"
+            if source_detail_field:
+                field_text = f"field={source_detail_field}"
+                if source_detail_actual_type:
+                    field_text = f"{field_text}, type={source_detail_actual_type}"
+                if source_detail_value_preview:
+                    field_text = f"{field_text}, value={source_detail_value_preview}"
+                error_text = f"{error_text} ({field_text})"
             if source_detail_message:
                 error_text = f"{error_text} ({source_detail_message})"
             document.status = "failed"

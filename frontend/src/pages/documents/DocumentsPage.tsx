@@ -607,6 +607,7 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                   {
                     title: "文档名",
                     dataIndex: "doc_id",
+                    width: 240,
                     render: (value: string) => docNameMap.get(value) ?? "未知文档"
                   },
                   {

@@ -1,4 +1,50 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379/0
+      INGEST_QUEUE_ENABLED: "true"
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-simple}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL_INTERNAL:-http://tei:80/v1}
+      EMBEDDING_API_PATH: ${EMBEDDING_API_PATH_INTERNAL:-/embeddings}
+      NO_PROXY: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
+      no_proxy: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - qdrant
+      - redis
+      - tei
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379/0
+      INGEST_QUEUE_ENABLED: "true"
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-simple}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL_INTERNAL:-http://tei:80/v1}
+      EMBEDDING_API_PATH: ${EMBEDDING_API_PATH_INTERNAL:-/embeddings}
+      NO_PROXY: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
+      no_proxy: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
+    command: ["python", "-m", "app.ingest.worker_runner", "--queue", "ingest"]
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - qdrant
+      - redis
+      - tei
   qdrant:
     image: qdrant/qdrant:v1.9.5
     ports:

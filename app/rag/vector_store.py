@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from numbers import Integral
 from threading import Lock
 from typing import Any, Callable, TypeVar, Protocol
 from uuid import UUID, uuid5
@@ -134,6 +135,8 @@ class QdrantVectorStore:
         self._client_cls = QdrantClient
         self._qdrant_url = settings.qdrant_url
         self._qdrant_api_key = settings.qdrant_api_key
+        self._qdrant_timeout_s = max(1, settings.qdrant_timeout_s)
+        self._upsert_batch_size = max(1, settings.qdrant_upsert_batch_size)
         self._client_lock = Lock()
         self._operation_lock = Lock()
         self._client = self._create_client()
@@ -144,6 +147,8 @@ class QdrantVectorStore:
     def upsert(self, kb_id: str, entries: list[VectorEntry]) -> None:
         try:
             self._run_with_retry(lambda: self._upsert_impl(kb_id, entries))
+        except AppError:
+            raise
         except Exception as exc:
             raise AppError(
                 code=ErrorCode.VECTOR_UPSERT_FAILED,
@@ -264,7 +269,8 @@ class QdrantVectorStore:
             url=self._qdrant_url,
             api_key=self._qdrant_api_key,
             check_compatibility=False,
-            timeout=10,
+            prefer_grpc=False,
+            timeout=self._qdrant_timeout_s,
             trust_env=False,
         )
 
@@ -285,16 +291,24 @@ class QdrantVectorStore:
         """写入向量数据。"""
 
         _validate_entries(entries)
+        if not entries:
+            return
         self._ensure_collection(kb_id)
-        points = [
-            self._rest.PointStruct(
-                id=_to_qdrant_point_id(str(entry.payload["chunk_id"])),
-                vector=entry.vector,
-                payload=entry.payload,
+        collection_name = self._collection_name(kb_id)
+        for batch in _chunk_list(entries, self._upsert_batch_size):
+            points = [
+                self._rest.PointStruct(
+                    id=_to_qdrant_point_id(str(entry.payload["chunk_id"])),
+                    vector=entry.vector,
+                    payload=entry.payload,
+                )
+                for entry in batch
+            ]
+            self._client.upsert(
+                collection_name=collection_name,
+                points=points,
+                wait=True,
             )
-            for entry in entries
-        ]
-        self._client.upsert(collection_name=self._collection_name(kb_id), points=points)
 
     def _delete_by_doc_id_impl(self, kb_id: str, doc_id: str) -> None:
         """按 doc_id 删除向量数据。"""
@@ -475,39 +489,46 @@ def _validate_payload(payload: dict[str, Any]) -> None:
             status_code=500,
         )
     if not _is_non_empty_str(payload.get("kb_id")):
-        _raise_payload_type_error("kb_id")
+        _raise_payload_type_error("kb_id", payload.get("kb_id"))
     if not _is_non_empty_str(payload.get("doc_id")):
-        _raise_payload_type_error("doc_id")
+        _raise_payload_type_error("doc_id", payload.get("doc_id"))
     if not _is_non_empty_str(payload.get("doc_name")):
-        _raise_payload_type_error("doc_name")
+        _raise_payload_type_error("doc_name", payload.get("doc_name"))
     if not _is_optional_str(payload.get("doc_version")):
-        _raise_payload_type_error("doc_version")
+        _raise_payload_type_error("doc_version", payload.get("doc_version"))
     if not _is_optional_str(payload.get("published_at")):
-        _raise_payload_type_error("published_at")
+        _raise_payload_type_error("published_at", payload.get("published_at"))
     if "published_at_ts" in payload and not _is_optional_int(payload.get("published_at_ts")):
-        _raise_payload_type_error("published_at_ts")
+        _raise_payload_type_error("published_at_ts", payload.get("published_at_ts"))
     if not _is_optional_int(payload.get("page_start")):
-        _raise_payload_type_error("page_start")
+        _raise_payload_type_error("page_start", payload.get("page_start"))
     if not _is_optional_int(payload.get("page_end")):
-        _raise_payload_type_error("page_end")
+        _raise_payload_type_error("page_end", payload.get("page_end"))
     if not _is_optional_str(payload.get("section_path")):
-        _raise_payload_type_error("section_path")
+        _raise_payload_type_error("section_path", payload.get("section_path"))
     if not _is_non_empty_str(payload.get("chunk_id")):
-        _raise_payload_type_error("chunk_id")
-    if not isinstance(payload.get("chunk_index"), int):
-        _raise_payload_type_error("chunk_index")
+        _raise_payload_type_error("chunk_id", payload.get("chunk_id"))
+    if not _is_int(payload.get("chunk_index")):
+        _raise_payload_type_error("chunk_index", payload.get("chunk_index"))
     text = payload.get("text")
     if not isinstance(text, str) or not text.strip():
-        _raise_payload_type_error("text")
+        _raise_payload_type_error("text", text)
 
 
-def _raise_payload_type_error(field: str) -> None:
+def _raise_payload_type_error(field: str, value: object) -> None:
     """抛出 payload 字段类型错误。"""
 
+    value_preview = repr(value)
+    if len(value_preview) > 120:
+        value_preview = f"{value_preview[:117]}..."
     raise AppError(
         code=ErrorCode.RAG_PAYLOAD_INVALID,
         message="向量 payload 字段类型不合法",
-        detail={"field": field},
+        detail={
+            "field": field,
+            "actual_type": type(value).__name__,
+            "value_preview": value_preview,
+        },
         status_code=500,
     )
 
@@ -520,8 +541,12 @@ def _is_optional_str(value: object) -> bool:
     return value is None or isinstance(value, str)
 
 
+def _is_int(value: object) -> bool:
+    return isinstance(value, Integral) and not isinstance(value, bool)
+
+
 def _is_optional_int(value: object) -> bool:
-    return value is None or isinstance(value, int)
+    return value is None or _is_int(value)
 
 
 def _parse_timestamp(value: object) -> int | None:
@@ -578,3 +603,11 @@ def _is_disconnect_error(exc: Exception) -> bool:
         "timed out",
     ]
     return any(pattern in message for pattern in disconnect_patterns)
+
+
+def _chunk_list(items: list[VectorEntry], batch_size: int) -> list[list[VectorEntry]]:
+    """按批次切分列表。"""
+
+    if batch_size <= 0:
+        return [items]
+    return [items[index : index + batch_size] for index in range(0, len(items), batch_size)]

@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     qdrant_collection_prefix: str = Field(
         default="csage_", description="向量库集合前缀"
     )
+    qdrant_timeout_s: int = Field(default=30, description="Qdrant 请求超时秒数")
+    qdrant_upsert_batch_size: int = Field(
+        default=128, description="Qdrant 单次 upsert 批大小"
+    )
     vector_backend: str = Field(default="qdrant", description="向量库后端（memory/qdrant）")
     vector_dim: int = Field(default=1024, description="向量维度")
 

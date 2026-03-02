@@ -22,6 +22,8 @@
 - `QDRANT_URL`：如 `http://127.0.0.1:6333`
 - `QDRANT_API_KEY`：可选
 - `QDRANT_COLLECTION_PREFIX`：默认 `csage_`（用于区分环境）
+- `QDRANT_TIMEOUT_S`：Qdrant 请求超时秒数，默认 `30`
+- `QDRANT_UPSERT_BATCH_SIZE`：Qdrant 单次 upsert 批大小，默认 `128`
 - `VECTOR_BACKEND`：向量库后端（memory/qdrant），默认 qdrant
 - `VECTOR_DIM`：embedding 维度（与 embedding 模型一致）
 

@@ -252,5 +252,39 @@ QDRANT_URL=http://127.0.0.1:6333
 ## 11. 常见问题
 - Qdrant 端口冲突：检查 6333/6334 是否被占用
 - Windows 系统代理导致本地依赖 502：后端已默认对本地 Qdrant/Embedding 请求关闭 `trust_env`，若你刚修改过环境仍失败，请重启 API 与 ingest worker 进程
+- 入库报错 `VECTOR_UPSERT_FAILED` 且提示 `field=text`：通常是切分结果里出现纯空白文本块。当前流水线会在 embedding 前自动过滤空白块；若仍复现，请附上 `field/type/value` 详情继续排查。
 - Windows 换行符：仓库要求 LF，提交前避免把配置文件转为 CRLF
 - `.env` 不要提交：必须被 `.gitignore` 忽略
+
+## 12. 使用 Docker Compose 启动后端与 Worker（推荐）
+如果你希望统一用容器启动后端 API 与入库 Worker，可直接使用仓库根目录的 `docker-compose.yml`。
+
+1) 先准备环境变量文件（首次执行）：
+```powershell
+Copy-Item .env.example .env
+```
+
+2) 启动 API + Worker + 依赖服务：
+```powershell
+docker compose up -d api worker qdrant redis
+```
+
+3) 查看服务状态与日志：
+```powershell
+docker compose ps
+docker compose logs -f api
+docker compose logs -f worker
+```
+
+4) 停止并清理容器（保留卷）：
+```powershell
+docker compose down
+```
+
+说明：
+- Compose 中 `api/worker` 已强制使用容器内地址：`QDRANT_URL=http://qdrant:6333`、`REDIS_URL=redis://redis:6379/0`。
+- Compose 中 `api/worker` 默认使用容器内 Embedding 地址：`EMBEDDING_BASE_URL=http://tei:80/v1`、`EMBEDDING_API_PATH=/embeddings`，避免容器内误连 `127.0.0.1`。
+- 如需自定义容器内 Embedding 地址，可设置 `EMBEDDING_BASE_URL_INTERNAL` 与 `EMBEDDING_API_PATH_INTERNAL`。
+- Compose 中 `api/worker` 默认注入 `NO_PROXY=qdrant,tei,redis,localhost,127.0.0.1`，避免本地服务请求被代理劫持。
+- 若未配置 Embedding 服务，Compose 默认回退 `EMBEDDING_BACKEND=simple`，便于本地快速跑通。
+- 若你需要 HTTP Embedding，请在 `.env` 中显式设置 `EMBEDDING_BACKEND=http` 与可达的 `EMBEDDING_BASE_URL`。

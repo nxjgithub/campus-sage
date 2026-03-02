@@ -3,13 +3,14 @@ from __future__ import annotations
 import hashlib
 import time
 from datetime import datetime, timezone
+from numbers import Integral
 from typing import Callable
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
 from app.core.settings import Settings
 from app.core.utils import new_id, utc_now_iso
-from app.ingest.chunker import Chunker
+from app.ingest.chunker import Chunk, Chunker
 from app.ingest.dto import IngestResult
 from app.ingest.parser import DocumentParser
 from app.rag.embedding import Embedder, get_embedder
@@ -75,6 +76,14 @@ class IngestPipeline:
                 detail={"error": str(exc)},
                 status_code=400,
             ) from exc
+        chunks = _sanitize_chunks(chunks)
+        if not chunks:
+            raise AppError(
+                code=ErrorCode.INGEST_CHUNK_FAILED,
+                message="切分后无有效文本",
+                detail={"chunk_count": 0},
+                status_code=400,
+            )
         chunk_ms = int((time.perf_counter() - chunk_start) * 1000)
         self._report_progress(
             progress_callback,
@@ -136,22 +145,25 @@ class IngestPipeline:
         entries = []
         created_at = utc_now_iso()
         published_at_ts = _parse_timestamp(published_at)
-        for chunk, vector in zip(chunks, vectors, strict=True):
+        for fallback_chunk_index, (chunk, vector) in enumerate(
+            zip(chunks, vectors, strict=True)
+        ):
+            chunk_text = _normalize_required_str(chunk.text).strip()
             payload = {
                 "contract_version": "0.1",
-                "kb_id": kb_id,
-                "doc_id": doc_id,
-                "doc_name": doc_name,
-                "doc_version": doc_version,
-                "published_at": published_at,
+                "kb_id": _normalize_required_str(kb_id),
+                "doc_id": _normalize_required_str(doc_id),
+                "doc_name": _normalize_required_str(doc_name, default="document"),
+                "doc_version": _normalize_optional_str(doc_version),
+                "published_at": _normalize_optional_str(published_at),
                 "published_at_ts": published_at_ts,
-                "page_start": chunk.page_start,
-                "page_end": chunk.page_end,
-                "section_path": chunk.section_path,
+                "page_start": _normalize_optional_int(chunk.page_start),
+                "page_end": _normalize_optional_int(chunk.page_end),
+                "section_path": _normalize_optional_str(chunk.section_path),
                 "chunk_id": new_id("chunk"),
-                "chunk_index": chunk.chunk_index,
-                "text": chunk.text,
-                "hash": hashlib.sha256(chunk.text.encode("utf-8")).hexdigest(),
+                "chunk_index": _normalize_int(chunk.chunk_index, fallback_chunk_index),
+                "text": chunk_text,
+                "hash": hashlib.sha256(chunk_text.encode("utf-8")).hexdigest(),
                 "source_type": "pdf",
                 "source_uri": None,
                 "tokens": None,
@@ -253,11 +265,13 @@ class IngestCanceled(Exception):
     """入库取消异常（用于主动中断流程）。"""
 
 
-def _parse_timestamp(value: str | None) -> int | None:
+def _parse_timestamp(value: object) -> int | None:
     """解析日期时间为 UTC 秒级时间戳。"""
 
     if value is None:
         return None
+    if not isinstance(value, str):
+        value = str(value)
     text = value.strip()
     if not text:
         return None
@@ -271,3 +285,64 @@ def _parse_timestamp(value: str | None) -> int | None:
     else:
         dt = dt.astimezone(timezone.utc)
     return int(dt.timestamp())
+
+
+def _normalize_required_str(value: object, default: str = "") -> str:
+    """归一化必填字符串，避免 payload 出现非字符串类型。"""
+
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _normalize_optional_str(value: object) -> str | None:
+    """归一化可选字符串，None 保持为空。"""
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _normalize_optional_int(value: object) -> int | None:
+    """归一化可选整数，兼容 numpy/int-like 输入。"""
+
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, Integral):
+        return int(value)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_int(value: object, fallback: int) -> int:
+    """归一化必填整数，失败时回退到调用方提供的索引。"""
+
+    normalized = _normalize_optional_int(value)
+    if normalized is None:
+        return fallback
+    return normalized
+
+
+def _sanitize_chunks(chunks: list[Chunk]) -> list[Chunk]:
+    """过滤空白 chunk，并统一裁剪两端空白。"""
+
+    sanitized: list[Chunk] = []
+    for chunk in chunks:
+        text = _normalize_required_str(chunk.text).strip()
+        if not text:
+            continue
+        chunk.text = text
+        sanitized.append(chunk)
+    return sanitized
