@@ -14,6 +14,7 @@ class VllmClient:
         self._base_url = settings.vllm_base_url.rstrip("/")
         self._model = settings.vllm_model_name
         self._timeout = settings.vllm_timeout_s
+        self._api_key = settings.vllm_api_key
 
     def generate(self, question: str, context: str) -> str:
         """调用 vLLM 生成答案。"""
@@ -37,12 +38,17 @@ class VllmClient:
                 },
             ],
         }
+        headers: dict[str, str] = {}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
 
         try:
             response = httpx.post(
                 f"{self._base_url}/chat/completions",
                 json=payload,
+                headers=headers,
                 timeout=self._timeout,
+                trust_env=False,
             )
         except Exception as exc:
             raise AppError(
@@ -56,7 +62,10 @@ class VllmClient:
             raise AppError(
                 code=ErrorCode.RAG_MODEL_FAILED,
                 message="模型服务返回异常状态",
-                detail={"status_code": response.status_code, "body": response.text},
+                detail={
+                    "status_code": response.status_code,
+                    "body": _extract_response_body(response),
+                },
                 status_code=502,
             )
 
@@ -72,3 +81,12 @@ class VllmClient:
         message = choices[0].get("message") or {}
         content = message.get("content") or ""
         return content.strip()
+
+
+def _extract_response_body(response: httpx.Response) -> object:
+    """提取错误响应体，优先返回 JSON 结构。"""
+
+    try:
+        return response.json()
+    except Exception:
+        return response.text

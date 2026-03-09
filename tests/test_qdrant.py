@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
+from app.core.error_codes import ErrorCode
+from app.core.errors import AppError
 from app.core.settings import Settings
 from app.rag.vector_store import QdrantVectorStore, VectorEntry
 from tests.conftest import is_qdrant_available
@@ -51,3 +54,60 @@ def test_qdrant_upsert_search_delete(monkeypatch: pytest.MonkeyPatch) -> None:
         assert not hits_after_delete
     finally:
         store.delete_by_kb_id(kb_id)
+
+
+def test_qdrant_search_uses_query_points_when_search_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VECTOR_BACKEND", "qdrant")
+    monkeypatch.setenv("VECTOR_DIM", "4")
+
+    settings = Settings()
+    store = QdrantVectorStore(settings)
+    store._collection_exists = lambda kb_id: True  # type: ignore[method-assign]
+    store._search_points_rest_compat = lambda **kwargs: (_ for _ in ()).throw(  # type: ignore[method-assign]
+        AppError(
+            code=ErrorCode.VECTOR_SEARCH_FAILED,
+            message="旧版 REST 接口不可用",
+            detail={"status_code": 404},
+            status_code=503,
+        )
+    )
+
+    captured: dict[str, object] = {}
+
+    class _FakeClient:
+        def query_points(
+            self,
+            *,
+            collection_name: str,
+            query: list[float],
+            limit: int,
+            with_payload: bool,
+            query_filter: object,
+        ) -> SimpleNamespace:
+            captured["collection_name"] = collection_name
+            captured["query"] = query
+            captured["limit"] = limit
+            captured["with_payload"] = with_payload
+            captured["query_filter"] = query_filter
+            return SimpleNamespace(
+                points=[
+                    SimpleNamespace(
+                        score=0.91,
+                        payload={"chunk_id": "chunk_demo", "doc_id": "doc_demo"},
+                    )
+                ]
+            )
+
+    store._client = _FakeClient()  # type: ignore[assignment]
+
+    hits = store.search(kb_id="kb_demo", query_vector=[0.1, 0.2, 0.3, 0.4], topk=1)
+
+    assert len(hits) == 1
+    assert hits[0].score == 0.91
+    assert hits[0].payload["chunk_id"] == "chunk_demo"
+    assert captured["collection_name"] == f"{settings.qdrant_collection_prefix}kb_demo"
+    assert captured["query"] == [0.1, 0.2, 0.3, 0.4]
+    assert captured["limit"] == 1
+    assert captured["with_payload"] is True

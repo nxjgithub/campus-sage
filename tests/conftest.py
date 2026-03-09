@@ -6,7 +6,11 @@ from typing import Final
 import os
 
 import httpx
+import pytest
 import redis
+
+from app.core.settings import reset_settings
+from app.rag.embedding import reset_embedder
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +20,7 @@ if str(ROOT) not in sys.path:
 
 os.environ.setdefault("EMBEDDING_BACKEND", "simple")
 os.environ.setdefault("VECTOR_BACKEND", "memory")
+os.environ.setdefault("INGEST_QUEUE_ENABLED", "false")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret")
 
 
@@ -44,3 +49,14 @@ def is_redis_available() -> bool:
         return bool(client.ping())
     except Exception:
         return False
+
+
+@pytest.fixture(autouse=True)
+def reset_runtime_singletons() -> None:
+    """每个测试前重置运行时单例，避免环境变量与客户端缓存串扰。"""
+
+    reset_settings()
+    reset_embedder()
+    import app.rag.vector_store as vector_store_module
+
+    vector_store_module._vector_store = None

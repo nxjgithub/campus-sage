@@ -202,6 +202,17 @@ python scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --top
 VLLM_ENABLED=true
 ```
 
+若你使用 DeepSeek 作为真实生成模型，可直接按 OpenAI 兼容方式配置：
+```
+VLLM_ENABLED=true
+VLLM_BASE_URL=https://api.deepseek.com/v1
+VLLM_MODEL_NAME=deepseek-chat
+VLLM_API_KEY=your_deepseek_api_key
+```
+说明：
+- DeepSeek 走 `Authorization: Bearer <API_KEY>` 鉴权。
+- 当前后端沿用 OpenAI 兼容的 `POST /chat/completions`，无需额外适配层。
+
 ## 9.1 方案 1：接入 OpenAI 兼容 Embedding（推荐）
 本项目默认已支持 OpenAI 兼容 Embedding 接口，最小配置如下：
 ```
@@ -288,3 +299,99 @@ docker compose down
 - Compose 中 `api/worker` 默认注入 `NO_PROXY=qdrant,tei,redis,localhost,127.0.0.1`，避免本地服务请求被代理劫持。
 - 若未配置 Embedding 服务，Compose 默认回退 `EMBEDDING_BACKEND=simple`，便于本地快速跑通。
 - 若你需要 HTTP Embedding，请在 `.env` 中显式设置 `EMBEDDING_BACKEND=http` 与可达的 `EMBEDDING_BASE_URL`。
+
+## 13. 本地演示 SOP（DeepSeek + 本地 TEI）
+以下步骤用于演示“真实生成模型 + 本地 Embedding + 引用问答”的完整闭环。
+
+### 13.1 前置配置
+1. 复制 `.env.example` 为 `.env`
+2. 在 `.env` 中确认以下配置：
+```env
+VLLM_ENABLED=true
+VLLM_BASE_URL=https://api.deepseek.com/v1
+VLLM_MODEL_NAME=deepseek-chat
+VLLM_API_KEY=your_deepseek_api_key
+
+EMBEDDING_BACKEND=http
+EMBEDDING_BASE_URL=http://127.0.0.1:8080/v1
+EMBEDDING_API_PATH=/embeddings
+EMBEDDING_MODEL_NAME=BAAI/bge-small-zh-v1.5
+VECTOR_DIM=512
+
+INGEST_QUEUE_ENABLED=true
+REDIS_URL=redis://127.0.0.1:6379/0
+QDRANT_URL=http://127.0.0.1:6333
+```
+说明：
+- 本机直连 TEI 使用 `http://127.0.0.1:8080/v1`
+- 容器内 `api/worker` 会自动改用 `http://tei:80/v1`
+- `VLLM_API_KEY` 仅写入本地 `.env`，不得提交
+
+### 13.2 启动服务
+1. 启动容器：
+```powershell
+docker compose up -d qdrant redis tei api worker
+```
+2. 确认服务状态：
+```powershell
+docker ps
+```
+期望看到：
+- `campus-sage-api-1`
+- `campus-sage-worker-1`
+- `campus-sage-tei-1`
+- `campus-sage-qdrant-1`
+- `campus-sage-redis-1`
+
+3. 启动前端开发服务：
+```powershell
+cd frontend
+npm run dev -- --host 127.0.0.1 --port 4174
+```
+
+### 13.3 打开页面
+- 前端：`http://127.0.0.1:4174/login`
+- 后端 Swagger：`http://127.0.0.1:8000/docs`
+- Qdrant Dashboard：`http://127.0.0.1:6333/dashboard`
+
+### 13.4 登录
+默认管理员账号：
+```text
+邮箱：admin@example.com
+密码：Admin1234
+```
+若本地数据库为空，可执行：
+```powershell
+conda activate campus-sage
+python scripts/create_admin.py --email admin@example.com --password Admin1234
+```
+
+### 13.5 演示流程
+1. 登录前端
+2. 进入知识库管理页，新建一个知识库
+3. 进入文档页，上传真实 PDF 文件
+4. 等待入库任务从 `queued` 变为 `succeeded`
+5. 进入问答页，选择刚创建的知识库
+6. 提交与文档内容一致的问题
+7. 检查回答是否满足以下条件：
+- 返回 `refusal=false`
+- 答案正文包含引用标记，如 `[1]`、`[1][2]`
+- 引用区能看到 `doc_name + page/section + snippet`
+8. 再提一个知识库中不存在的问题，验证系统拒答：
+- 返回 `refusal=true`
+- 给出 `refusal_reason`
+- 给出下一步建议
+
+### 13.6 常见排查
+- 入库任务长期停在 `queued`
+- 检查 `worker` 容器是否在运行
+- 查看 `docker compose logs -f worker`
+- 问答返回 `EMBEDDING_FAILED`
+- 检查 `tei` 是否正常启动
+- 检查 `.env` 中 `EMBEDDING_BASE_URL` 是否为 `http://127.0.0.1:8080/v1`
+- 问答返回 `RAG_MODEL_FAILED`
+- 检查 `VLLM_API_KEY` 是否有效
+- 检查 `VLLM_BASE_URL` 与 `VLLM_MODEL_NAME` 是否正确
+- 前端无法登录
+- 检查前端是否从 `http://127.0.0.1:4174` 启动
+- 检查 Vite 代理目标是否仍是 `http://127.0.0.1:8000`

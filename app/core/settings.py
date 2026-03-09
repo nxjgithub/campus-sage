@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     vllm_base_url: str = Field(default="http://127.0.0.1:8001/v1", description="vLLM 地址")
     vllm_model_name: str = Field(default="Qwen2.5-7B-Instruct", description="vLLM 模型名")
     vllm_timeout_s: int = Field(default=60, description="vLLM 超时秒数")
+    vllm_api_key: str | None = Field(default=None, description="vLLM API Key")
     vllm_enabled: bool = Field(default=False, description="是否启用 vLLM 生成")
 
     jwt_secret_key: str = Field(default="CHANGE_ME", description="JWT 密钥")
@@ -139,6 +140,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "qdrant_api_key",
+        "vllm_api_key",
         "embedding_api_key",
         "hf_token",
         mode="before",

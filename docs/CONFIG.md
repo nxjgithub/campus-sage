@@ -33,6 +33,7 @@
 - `VLLM_BASE_URL`：如 `http://127.0.0.1:8001/v1`
 - `VLLM_MODEL_NAME`：如 `Qwen2.5-7B-Instruct`（示例）
 - `VLLM_TIMEOUT_S`：默认 60
+- `VLLM_API_KEY`：OpenAI 兼容生成服务的 API Key，可为空
 - `VLLM_ENABLED`：true/false，是否启用 vLLM 生成
 ### 4.2 Embedding（向量模型）
 - `EMBEDDING_BACKEND`：Embedding 后端（http/simple/local），默认 http

@@ -4,8 +4,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from numbers import Integral
 from threading import Lock
+from types import SimpleNamespace
 from typing import Any, Callable, TypeVar, Protocol
 from uuid import UUID, uuid5
+
+import httpx
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
@@ -207,11 +210,10 @@ class QdrantVectorStore:
 
         try:
             results = self._run_with_retry(
-                lambda: self._client.search(
-                    collection_name=self._collection_name(kb_id),
+                lambda: self._search_points(
+                    kb_id=kb_id,
                     query_vector=query_vector,
                     limit=search_limit,
-                    with_payload=True,
                     query_filter=query_filter,
                 )
             )
@@ -240,11 +242,10 @@ class QdrantVectorStore:
         fallback_limit = max(search_limit, min(max(1, topk) * 10, 500))
         try:
             fallback_results = self._run_with_retry(
-                lambda: self._client.search(
-                    collection_name=self._collection_name(kb_id),
+                lambda: self._search_points(
+                    kb_id=kb_id,
                     query_vector=query_vector,
                     limit=fallback_limit,
-                    with_payload=True,
                     query_filter=fallback_filter,
                 )
             )
@@ -418,6 +419,126 @@ class QdrantVectorStore:
             merged.append(hit)
         merged.sort(key=lambda item: item.score, reverse=True)
         return merged
+
+    def _search_points(
+        self,
+        kb_id: str,
+        query_vector: list[float],
+        limit: int,
+        query_filter: Any | None,
+    ) -> list[Any]:
+        """兼容不同 qdrant-client 版本的检索接口。"""
+
+        collection_name = self._collection_name(kb_id)
+        search = getattr(self._client, "search", None)
+        if callable(search):
+            return search(
+                collection_name=collection_name,
+                query_vector=query_vector,
+                limit=limit,
+                with_payload=True,
+                query_filter=query_filter,
+            )
+        try:
+            return self._search_points_rest_compat(
+                collection_name=collection_name,
+                query_vector=query_vector,
+                limit=limit,
+                query_filter=query_filter,
+            )
+        except AppError as exc:
+            status_code = exc.detail.get("status_code") if isinstance(exc.detail, dict) else None
+            if status_code not in {404, 405}:
+                raise
+        query_points = getattr(self._client, "query_points", None)
+        if callable(query_points):
+            response = query_points(
+                collection_name=collection_name,
+                query=query_vector,
+                limit=limit,
+                with_payload=True,
+                query_filter=query_filter,
+            )
+            points = getattr(response, "points", None)
+            if isinstance(points, list):
+                return points
+            raise AppError(
+                code=ErrorCode.VECTOR_SEARCH_FAILED,
+                message="Qdrant 检索响应格式异常",
+                detail={"response_type": type(response).__name__},
+                status_code=503,
+            )
+        raise AppError(
+            code=ErrorCode.VECTOR_SEARCH_FAILED,
+            message="当前 qdrant-client 不支持检索接口",
+            detail={"client_type": type(self._client).__name__},
+            status_code=503,
+        )
+
+    def _search_points_rest_compat(
+        self,
+        collection_name: str,
+        query_vector: list[float],
+        limit: int,
+        query_filter: Any | None,
+    ) -> list[Any]:
+        """使用兼容旧版 Qdrant 服务端的 REST 搜索接口。"""
+
+        payload: dict[str, Any] = {
+            "vector": query_vector,
+            "limit": limit,
+            "with_payload": True,
+        }
+        if query_filter is not None:
+            payload["filter"] = self._dump_rest_model(query_filter)
+        headers: dict[str, str] = {}
+        if self._qdrant_api_key:
+            headers["api-key"] = self._qdrant_api_key
+        response = httpx.post(
+            f"{self._qdrant_url.rstrip('/')}/collections/{collection_name}/points/search",
+            json=payload,
+            headers=headers,
+            timeout=self._qdrant_timeout_s,
+            trust_env=False,
+        )
+        if response.status_code != 200:
+            raise AppError(
+                code=ErrorCode.VECTOR_SEARCH_FAILED,
+                message="Qdrant REST 检索失败",
+                detail={
+                    "status_code": response.status_code,
+                    "body": _extract_http_response_body(response),
+                },
+                status_code=503,
+            )
+        data = response.json()
+        results = data.get("result")
+        if not isinstance(results, list):
+            raise AppError(
+                code=ErrorCode.VECTOR_SEARCH_FAILED,
+                message="Qdrant REST 检索响应格式异常",
+                detail={"response": data},
+                status_code=503,
+            )
+        return [
+            SimpleNamespace(
+                score=float(item.get("score", 0.0)),
+                payload=item.get("payload") or {},
+            )
+            for item in results
+        ]
+
+    @staticmethod
+    def _dump_rest_model(value: Any) -> Any:
+        """将 Qdrant Pydantic 模型转换为可序列化字典。"""
+
+        model_dump = getattr(value, "model_dump", None)
+        if callable(model_dump):
+            return model_dump(by_alias=True, exclude_none=True)
+        dict_method = getattr(value, "dict", None)
+        if callable(dict_method):
+            return dict_method(by_alias=True, exclude_none=True)
+        return value
 
     _T = TypeVar("_T")
 
@@ -611,3 +732,12 @@ def _chunk_list(items: list[VectorEntry], batch_size: int) -> list[list[VectorEn
     if batch_size <= 0:
         return [items]
     return [items[index : index + batch_size] for index in range(0, len(items), batch_size)]
+
+
+def _extract_http_response_body(response: httpx.Response) -> object:
+    """提取 HTTP 错误响应体，优先返回 JSON。"""
+
+    try:
+        return response.json()
+    except Exception:
+        return response.text
