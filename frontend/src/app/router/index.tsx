@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+﻿import { lazy, Suspense } from "react";
 import { Spin } from "antd";
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
 import { useAuth } from "../../shared/auth/auth";
@@ -32,6 +32,12 @@ const ConversationsPage = lazy(async () =>
 const MonitorPage = lazy(async () =>
   import("../../pages/monitor/MonitorPage").then((mod) => ({ default: mod.MonitorPage }))
 );
+
+const ASK_LAYOUT_HANDLE = {
+  layout: {
+    hideGlobalSider: true
+  }
+} as const;
 
 function withSuspense(element: JSX.Element) {
   return (
@@ -92,7 +98,7 @@ const router = createBrowserRouter([
     element: <UserLayout />,
     children: [
       { index: true, element: <Navigate to="/app/ask" replace /> },
-      { path: "ask", element: withSuspense(<AskPage />) },
+      { path: "ask", element: withSuspense(<AskPage />), handle: ASK_LAYOUT_HANDLE },
       {
         path: "conversations",
         element: (

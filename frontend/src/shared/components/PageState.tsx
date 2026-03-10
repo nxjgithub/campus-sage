@@ -1,4 +1,4 @@
-import { Empty, Result, Skeleton } from "antd";
+﻿import { Empty, Result, Skeleton } from "antd";
 import { ReactNode } from "react";
 
 export type PageStatus = "loading" | "success" | "empty" | "error";

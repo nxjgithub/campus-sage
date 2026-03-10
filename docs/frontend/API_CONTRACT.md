@@ -253,3 +253,8 @@
 ## 管理端展示约束补充
 - 前端在管理端调用涉及 ID 的接口时，ID 必须由已选择对象隐式携带，不要求用户感知或手动输入。
 - 可见文案优先展示业务可读字段（`name/email/doc_name/status/created_at`），内部 ID 仅用于接口路径与缓存键。
+
+## 文档上传补充（2026-03 第四轮）
+- `POST /kb/{kb_id}/documents` 首批支持 `pdf/docx/html/htm/md/txt`。
+- 前端上传控件应根据支持集展示明确提示，不再写死“仅 PDF”。
+- 不支持的后缀继续按 `FILE_TYPE_NOT_ALLOWED` 处理。

@@ -1,4 +1,18 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  KeyOutlined,
+  LockOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  SaveOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  TeamOutlined,
+  UserAddOutlined
+} from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -29,6 +43,7 @@ import {
 } from "../../shared/api/modules/users";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { ConfirmAction } from "../../shared/components/ConfirmAction";
+import { OpsPane, OpsWorkbench } from "../../shared/components/OpsWorkbench";
 import { PageState } from "../../shared/components/PageState";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 
@@ -68,6 +83,16 @@ const ACCESS_LEVEL_OPTIONS = [
 const USER_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 type TableDensity = "middle" | "small";
 type RoleFilter = "all" | "admin" | "user";
+
+function resolveStatusColor(status: EditUserValues["status"]) {
+  if (status === "active") {
+    return "success";
+  }
+  if (status === "disabled") {
+    return "warning";
+  }
+  return "default";
+}
 
 export function UsersPage() {
   const queryClient = useQueryClient();
@@ -309,13 +334,21 @@ export function UsersPage() {
       {firstError ? <RequestErrorAlert error={firstError} /> : null}
 
       <Card className="hero-card">
-        <Space direction="vertical" size={10} style={{ width: "100%" }}>
-          <Typography.Title level={4} className="hero-title">
-            用户与权限中心
-          </Typography.Title>
-          <Typography.Text className="hero-desc">
-            统一管理账号状态、角色分配与知识库访问授权，支撑权限治理流程。
-          </Typography.Text>
+        <div className="hero-layout">
+          <div>
+            <div className="hero-kicker">管理端 / 账号与授权</div>
+            <Typography.Title level={4} className="hero-title">
+              用户与权限中心
+            </Typography.Title>
+            <Typography.Text className="hero-desc">
+              统一处理用户生命周期、角色分配和知识库授权，减少账号管理和资源授权分散操作。
+            </Typography.Text>
+            <div className="hero-note" style={{ marginTop: 14 }}>
+              <span className="hero-note__item">左侧创建账号，右侧维护状态与角色</span>
+              <span className="hero-note__item">权限弹窗集中处理单条与批量授权</span>
+              <span className="hero-note__item">列表筛选优先按状态和角色切分</span>
+            </div>
+          </div>
           <div className="summary-grid">
             <div className="summary-item">
               <div className="summary-item-label">当前页用户数</div>
@@ -334,13 +367,21 @@ export function UsersPage() {
               <div className="summary-item-value">{adminCount}</div>
             </div>
           </div>
-        </Space>
+        </div>
       </Card>
 
-      <div className="ops-workbench">
-        <Card title="创建用户" className="card-soft ops-pane-card">
-          <div className="ops-pane-body">
-            <div className="ops-scroll-pane">
+      <OpsWorkbench
+        left={
+          <OpsPane
+            title={
+              <Space size={8}>
+                <UserAddOutlined />
+                <span>创建用户</span>
+              </Space>
+            }
+            introTitle="新账号默认从最小权限开始"
+            introDescription="建议先创建基础角色账号，再通过右侧列表或权限弹窗追加管理权限与知识库访问范围。"
+          >
               <Form<CreateUserValues>
                 form={createForm}
                 layout="vertical"
@@ -374,53 +415,68 @@ export function UsersPage() {
                   <Select mode="multiple" options={roleOptions} />
                 </Form.Item>
                 <Form.Item>
-                  <Button type="primary" htmlType="submit" loading={createMutation.isPending} block>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    icon={<PlusOutlined />}
+                    loading={createMutation.isPending}
+                    block
+                  >
                     创建用户
                   </Button>
                 </Form.Item>
               </Form>
-            </div>
-          </div>
-        </Card>
-
-        <Card
-          title="用户列表"
-          className={`card-soft ops-pane-card ${tableDensity === "small" ? "ops-pane-card--dense" : ""}`}
-          extra={
-            <Space>
-              <Input
-                allowClear
-                placeholder="按邮箱搜索"
-                value={filterKeywordInput}
-                onChange={(event) => setFilterKeywordInput(event.target.value)}
-                style={{ width: 220 }}
-              />
-              <Select
-                allowClear
-                placeholder="状态筛选"
-                value={filterStatus}
-                options={STATUS_OPTIONS}
-                style={{ width: 140 }}
-                onChange={(value) => {
-                  setFilterStatus(value);
-                  setPage(1);
-                }}
-              />
-              <Button
-                onClick={() => {
-                  setFilterKeyword(filterKeywordInput.trim());
-                  setPage(1);
-                }}
-              >
-                查询
-              </Button>
-              <Button onClick={() => void usersQuery.refetch()} loading={usersQuery.isFetching}>
-                刷新
-              </Button>
-            </Space>
-          }
-        >
-          <div className="ops-pane-body">
+          </OpsPane>
+        }
+        right={
+          <OpsPane
+            title={
+              <Space size={8}>
+                <TeamOutlined />
+                <span>用户列表</span>
+              </Space>
+            }
+            dense={tableDensity === "small"}
+            extra={
+              <Space>
+                <Input
+                  allowClear
+                  prefix={<SearchOutlined />}
+                  placeholder="按邮箱搜索"
+                  value={filterKeywordInput}
+                  onChange={(event) => setFilterKeywordInput(event.target.value)}
+                  style={{ width: 220 }}
+                />
+                <Select
+                  allowClear
+                  placeholder="状态筛选"
+                  value={filterStatus}
+                  options={STATUS_OPTIONS}
+                  style={{ width: 140 }}
+                  onChange={(value) => {
+                    setFilterStatus(value);
+                    setPage(1);
+                  }}
+                />
+                <Button
+                  icon={<SearchOutlined />}
+                  onClick={() => {
+                    setFilterKeyword(filterKeywordInput.trim());
+                    setPage(1);
+                  }}
+                >
+                  查询
+                </Button>
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={() => void usersQuery.refetch()}
+                  loading={usersQuery.isFetching}
+                >
+                  刷新
+                </Button>
+              </Space>
+            }
+          >
             <div className="density-toolbar">
               <Segmented<RoleFilter>
                 value={roleFilter}
@@ -470,12 +526,26 @@ export function UsersPage() {
                     }
                   }}
                   columns={[
-                    { title: "邮箱", dataIndex: "email", width: 260 },
+                    {
+                      title: "用户",
+                      dataIndex: "email",
+                      width: 280,
+                      render: (value: string, record: UserListItem) => (
+                        <Space direction="vertical" size={2}>
+                          <Typography.Text strong>{value}</Typography.Text>
+                          <Typography.Text type="secondary">
+                            创建于 {record.created_at}
+                          </Typography.Text>
+                        </Space>
+                      )
+                    },
                     {
                       title: "状态",
                       dataIndex: "status",
                       width: 120,
-                      render: (value: string) => <Tag>{value}</Tag>
+                      render: (value: EditUserValues["status"]) => (
+                        <Tag color={resolveStatusColor(value)}>{value}</Tag>
+                      )
                     },
                     {
                       title: "角色",
@@ -483,20 +553,22 @@ export function UsersPage() {
                       render: (roles: string[]) => (
                         <Space wrap>
                           {roles.map((role) => (
-                            <Tag key={role}>{role}</Tag>
+                            <Tag key={role} color={role === "admin" ? "processing" : "default"}>
+                              {role}
+                            </Tag>
                           ))}
                         </Space>
                       )
                     },
-                    { title: "创建时间", dataIndex: "created_at", width: 220 },
                     {
                       title: "操作",
                       key: "actions",
-                      width: 240,
+                      width: 220,
                       render: (_, record: UserListItem) => (
                         <Space>
                           <Button
                             size="small"
+                            icon={<EditOutlined />}
                             onClick={() => {
                               setEditingUser(record);
                             }}
@@ -505,11 +577,12 @@ export function UsersPage() {
                           </Button>
                           <Button
                             size="small"
+                            icon={<SafetyCertificateOutlined />}
                             onClick={() => {
                               setAccessUser(record);
                             }}
                           >
-                            KB权限
+                            KB 权限
                           </Button>
                         </Space>
                       )
@@ -518,12 +591,17 @@ export function UsersPage() {
                 />
               </div>
             </PageState>
-          </div>
-        </Card>
-      </div>
+          </OpsPane>
+        }
+      />
 
       <Modal
-        title="编辑用户"
+        title={
+          <Space size={8}>
+            <SettingOutlined />
+            <span>编辑用户</span>
+          </Space>
+        }
         open={Boolean(editingUser)}
         onCancel={() => setEditingUser(null)}
         confirmLoading={updateUserMutation.isPending}
@@ -551,7 +629,12 @@ export function UsersPage() {
       </Modal>
 
       <Modal
-        title="知识库访问权限"
+        title={
+          <Space size={8}>
+            <SafetyCertificateOutlined />
+            <span>知识库访问权限</span>
+          </Space>
+        }
         open={Boolean(accessUser)}
         footer={null}
         width={860}
@@ -596,8 +679,8 @@ export function UsersPage() {
               <Select options={ACCESS_LEVEL_OPTIONS} />
             </Form.Item>
             <Form.Item label=" " style={{ marginTop: 22 }}>
-              <Button type="primary" htmlType="submit" loading={accessMutation.isPending}>
-                新增/更新单条
+              <Button type="primary" htmlType="submit" icon={<KeyOutlined />} loading={accessMutation.isPending}>
+                新增 / 更新
               </Button>
             </Form.Item>
           </Space>
@@ -615,7 +698,12 @@ export function UsersPage() {
               dataIndex: "kb_id",
               render: (value: string) => kbNameMap.get(value) ?? "未知知识库"
             },
-            { title: "访问级别", dataIndex: "access_level", width: 140 },
+            {
+              title: "访问级别",
+              dataIndex: "access_level",
+              width: 140,
+              render: (value: KbAccessValues["access_level"]) => <Tag>{value}</Tag>
+            },
             {
               title: "操作",
               key: "actions",
@@ -629,6 +717,7 @@ export function UsersPage() {
                     deleteAccessMutation.mutate(record.kb_id);
                   }}
                   buttonText="撤销"
+                  icon={<DeleteOutlined />}
                   danger
                   size="small"
                   loading={deleteAccessMutation.isPending}
@@ -639,7 +728,17 @@ export function UsersPage() {
           locale={{ emptyText: "暂无权限记录" }}
         />
 
-        <Card title="批量覆盖权限列表" size="small" style={{ marginTop: 12 }} className="card-inset">
+        <Card
+          title={
+            <Space size={8}>
+              <LockOutlined />
+              <span>批量覆盖权限列表</span>
+            </Space>
+          }
+          size="small"
+          style={{ marginTop: 12 }}
+          className="card-inset"
+        >
           <Typography.Paragraph type="secondary">
             提交后会替换该用户当前全部 KB 权限，请谨慎操作。
           </Typography.Paragraph>
@@ -679,6 +778,7 @@ export function UsersPage() {
                       </Form.Item>
                       <Form.Item label=" " style={{ marginTop: 22 }}>
                         <Button
+                          icon={<DeleteOutlined />}
                           onClick={() => {
                             remove(field.name);
                           }}
@@ -690,13 +790,19 @@ export function UsersPage() {
                   ))}
                   <Space>
                     <Button
+                      icon={<PlusOutlined />}
                       onClick={() => {
                         add({ kb_id: "", access_level: "read" });
                       }}
                     >
                       添加一条
                     </Button>
-                    <Button type="primary" htmlType="submit" loading={replaceAccessMutation.isPending}>
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      icon={<SaveOutlined />}
+                      loading={replaceAccessMutation.isPending}
+                    >
                       批量覆盖保存
                     </Button>
                   </Space>
@@ -709,4 +815,3 @@ export function UsersPage() {
     </div>
   );
 }
-

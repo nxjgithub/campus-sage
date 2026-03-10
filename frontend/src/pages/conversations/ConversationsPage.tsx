@@ -1,12 +1,23 @@
-﻿import { useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  FilterOutlined,
+  MessageOutlined,
+  ReloadOutlined,
+  RobotOutlined,
+  SearchOutlined,
+  UserOutlined
+} from "@ant-design/icons";
 import {
   Button,
   Card,
-  Descriptions,
+  Empty,
   Input,
   List,
   Segmented,
+  Select,
   Space,
   Tag,
   Typography,
@@ -21,8 +32,8 @@ import {
   submitFeedback
 } from "../../shared/api/modules/conversations";
 import { CitationItem } from "../../shared/api/modules/ask";
+import { fetchKbList } from "../../shared/api/modules/kb";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
-import { CopyableField } from "../../shared/components/CopyableField";
 import { FeedbackAction } from "../../shared/components/FeedbackAction";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import { splitCitationMarkers } from "../../shared/utils/citation";
@@ -51,6 +62,26 @@ function timingEntries(value: unknown): Array<readonly [string, number]> {
   return Object.entries(value)
     .map(([key, raw]) => [key, Number(raw)] as const)
     .filter(([, num]) => Number.isFinite(num));
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function summarizeConversation(item: ConversationListItem) {
+  return item.last_message_preview || "暂无摘要，进入详情可查看完整消息。";
 }
 
 function renderContentWithMarkers(content: string, onMarkerClick: (citationId: number) => void) {
@@ -93,13 +124,20 @@ export function MessageCard(props: {
 
   return (
     <List.Item>
-      <Space direction="vertical" style={{ width: "100%" }} size={8}>
-        <Space>
-          <Tag color={item.role === "user" ? "blue" : "green"}>{item.role}</Tag>
-          {item.refusal ? <Tag color="warning">refusal</Tag> : null}
-          <Typography.Text type="secondary">{item.created_at}</Typography.Text>
-        </Space>
-        <Typography.Paragraph style={{ marginBottom: 0 }}>
+      <article
+        className={item.role === "assistant" ? "conversation-message conversation-message--assistant" : "conversation-message conversation-message--user"}
+      >
+        <header className="conversation-message__head">
+          <Space size={8} wrap>
+            <Tag color={item.role === "assistant" ? "green" : "blue"}>
+              {item.role === "assistant" ? "助手" : "用户"}
+            </Tag>
+            {item.refusal ? <Tag color="warning">拒答</Tag> : null}
+            <Typography.Text type="secondary">{formatDateTime(item.created_at)}</Typography.Text>
+          </Space>
+        </header>
+
+        <Typography.Paragraph className="conversation-message__content">
           {item.role === "assistant" && citations.length
             ? renderContentWithMarkers(item.content, (citationId) => {
                 setActiveCitationId(citationId);
@@ -112,20 +150,40 @@ export function MessageCard(props: {
         </Typography.Paragraph>
 
         {item.role === "assistant" ? (
-          <>
+          <Space direction="vertical" style={{ width: "100%" }} size={10}>
+            {item.refusal && item.refusal_reason ? (
+              <Card size="small" className="card-inset" title="拒答说明">
+                <Typography.Text type="secondary">{item.refusal_reason}</Typography.Text>
+              </Card>
+            ) : null}
             {timing.length > 0 ? (
-              <Card size="small" title="耗时信息" className="card-inset">
-                <Descriptions size="small" column={2} bordered>
+              <Card
+                size="small"
+                title={
+                  <Space size={8}>
+                    <ClockCircleOutlined />
+                    <span>耗时信息</span>
+                  </Space>
+                }
+                className="card-inset"
+              >
+                <div className="ops-progress-strip">
                   {timing.map(([key, ms]) => (
-                    <Descriptions.Item key={key} label={key}>
-                      {ms} ms
-                    </Descriptions.Item>
+                    <Tag key={key}>{key}: {ms}ms</Tag>
                   ))}
-                </Descriptions>
+                </div>
               </Card>
             ) : null}
             {citations.length > 0 ? (
-              <Card size="small" title={`引用 (${citations.length})`}>
+              <Card
+                size="small"
+                title={
+                  <Space size={8}>
+                    <CheckCircleOutlined />
+                    <span>引用证据 ({citations.length})</span>
+                  </Space>
+                }
+              >
                 <Space direction="vertical" style={{ width: "100%" }}>
                   {citations.map((citation) => (
                     <Card
@@ -168,9 +226,9 @@ export function MessageCard(props: {
               submitted={submitted}
               onSubmit={onFeedbackSubmit}
             />
-          </>
+          </Space>
         ) : null}
-      </Space>
+      </article>
     </List.Item>
   );
 }
@@ -179,7 +237,7 @@ function matchKeyword(item: ConversationListItem, keyword: string) {
   if (!keyword) {
     return true;
   }
-  const target = `${item.title ?? ""} ${item.conversation_id} ${item.kb_id}`.toLowerCase();
+  const target = `${item.title ?? ""} ${item.last_message_preview ?? ""}`.toLowerCase();
   return target.includes(keyword.toLowerCase());
 }
 
@@ -201,21 +259,53 @@ export function ConversationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messageFilter, setMessageFilter] = useState<MessageFilter>("all");
   const [listDensity, setListDensity] = useState<ListDensity>("small");
-  const [submittingFeedbackMessageId, setSubmittingFeedbackMessageId] = useState<string | null>(
-    null
-  );
+  const [submittingFeedbackMessageId, setSubmittingFeedbackMessageId] = useState<string | null>(null);
   const [submittedFeedbackMap, setSubmittedFeedbackMap] = useState<Record<string, true>>({});
 
+  const kbQuery = useQuery({
+    queryKey: ["kb", "list"],
+    queryFn: fetchKbList,
+    retry: false
+  });
+
   const listQuery = useQuery({
-    queryKey: ["conversation", "list", kbId],
-    queryFn: async () => fetchConversationList({ kb_id: kbId || undefined, limit: 80, offset: 0 })
+    queryKey: ["conversation", "list", kbId, keyword],
+    queryFn: async () =>
+      fetchConversationList({ kb_id: kbId || undefined, limit: 80, offset: 0, keyword: keyword.trim() || undefined }),
+    retry: false
   });
 
   const detailQuery = useQuery({
     queryKey: ["conversation", "detail", selectedId],
     queryFn: async () => fetchConversationDetail(selectedId as string),
-    enabled: Boolean(selectedId)
+    enabled: Boolean(selectedId),
+    retry: false
   });
+
+  useEffect(() => {
+    if (selectedId) {
+      return;
+    }
+    const first = listQuery.data?.items?.[0];
+    if (first) {
+      setSelectedId(first.conversation_id);
+    }
+  }, [listQuery.data?.items, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      return;
+    }
+    const exists = (listQuery.data?.items ?? []).some((item) => item.conversation_id === selectedId);
+    if (!exists) {
+      setSelectedId(listQuery.data?.items?.[0]?.conversation_id ?? null);
+    }
+  }, [listQuery.data?.items, selectedId]);
+
+  const kbNameMap = useMemo(
+    () => new Map((kbQuery.data?.items ?? []).map((item) => [item.kb_id, item.name])),
+    [kbQuery.data?.items]
+  );
 
   const filteredItems = useMemo(() => {
     const list = listQuery.data?.items ?? [];
@@ -223,9 +313,14 @@ export function ConversationsPage() {
     return sortConversations(matched, sortOrder);
   }, [keyword, listQuery.data?.items, sortOrder]);
 
+  const selectedConversation = useMemo(
+    () => filteredItems.find((item) => item.conversation_id === selectedId) ?? null,
+    [filteredItems, selectedId]
+  );
+
   const selectedMessageCount = detailQuery.data?.messages.length ?? 0;
-  const assistantMessageCount =
-    detailQuery.data?.messages.filter((item) => item.role === "assistant").length ?? 0;
+  const assistantMessageCount = detailQuery.data?.messages.filter((item) => item.role === "assistant").length ?? 0;
+  const refusalCount = detailQuery.data?.messages.filter((item) => item.refusal).length ?? 0;
   const filteredMessages = useMemo(() => {
     const items = detailQuery.data?.messages ?? [];
     if (messageFilter === "all") {
@@ -261,13 +356,21 @@ export function ConversationsPage() {
   return (
     <div className="page-stack">
       <Card className="hero-card">
-        <Space direction="vertical" size={10} style={{ width: "100%" }}>
-          <Typography.Title level={4} className="hero-title">
-            会话运营台
-          </Typography.Title>
-          <Typography.Text className="hero-desc">
-            用于回看用户提问路径、复核证据引用、分析拒答与反馈质量。
-          </Typography.Text>
+        <div className="hero-layout">
+          <Space direction="vertical" size={10} style={{ width: "100%" }}>
+            <span className="hero-kicker">Conversation Ops</span>
+            <Typography.Title level={4} className="hero-title">
+              会话运营台
+            </Typography.Title>
+            <Typography.Text className="hero-desc">
+              回看用户提问路径、复核证据引用与反馈质量。默认界面只保留业务信息，不把内部 ID 暴露成主视图内容。
+            </Typography.Text>
+            <div className="hero-note">
+              <span className="hero-note__item">按知识库名称筛选</span>
+              <span className="hero-note__item">会话摘要直接预览</span>
+              <span className="hero-note__item">证据与反馈在消息内完成复核</span>
+            </div>
+          </Space>
           <div className="summary-grid">
             <div className="summary-item">
               <div className="summary-item-label">会话总数</div>
@@ -282,49 +385,62 @@ export function ConversationsPage() {
               <div className="summary-item-value">{selectedMessageCount}</div>
             </div>
             <div className="summary-item">
-              <div className="summary-item-label">助手消息数</div>
-              <div className="summary-item-value">{assistantMessageCount}</div>
+              <div className="summary-item-label">拒答消息</div>
+              <div className="summary-item-value">{refusalCount}</div>
             </div>
           </div>
-        </Space>
+        </div>
       </Card>
 
       <div className="ops-workbench">
         <Card
-          title="会话列表"
+          title={
+            <Space size={8}>
+              <MessageOutlined />
+              <span>会话列表</span>
+            </Space>
+          }
           className="card-soft ops-pane-card"
           extra={
-            <Space>
-              <Input
-                placeholder="按 kb_id 过滤"
-                value={kbId}
-                onChange={(event) => {
-                  setKbId(event.target.value.trim());
-                }}
-                style={{ width: 180 }}
-              />
-              <Button onClick={() => void listQuery.refetch()} loading={listQuery.isFetching}>
-                刷新
-              </Button>
-            </Space>
+            <Button icon={<ReloadOutlined />} onClick={() => void listQuery.refetch()} loading={listQuery.isFetching}>
+              刷新
+            </Button>
           }
         >
           <div className="ops-pane-body">
-            <div className="toolbar-row">
-              <Input
-                allowClear
-                placeholder="搜索标题 / 会话ID / kb_id"
-                value={keyword}
-                onChange={(event) => {
-                  setKeyword(event.target.value);
-                }}
-                style={{ width: 260 }}
-              />
+            <div className="density-toolbar">
+              <Space wrap>
+                <Select
+                  allowClear
+                  showSearch
+                  value={kbId || undefined}
+                  placeholder="按知识库筛选"
+                  optionFilterProp="label"
+                  style={{ width: 220 }}
+                  options={(kbQuery.data?.items ?? []).map((item) => ({
+                    value: item.kb_id,
+                    label: item.name
+                  }))}
+                  onChange={(value) => {
+                    setKbId(typeof value === "string" ? value : "");
+                  }}
+                />
+                <Input
+                  allowClear
+                  prefix={<SearchOutlined />}
+                  placeholder="搜索标题或摘要"
+                  value={keyword}
+                  onChange={(event) => {
+                    setKeyword(event.target.value);
+                  }}
+                  style={{ width: 240 }}
+                />
+              </Space>
               <Segmented<SortOrder>
                 value={sortOrder}
                 options={[
-                  { value: "desc", label: "更新时间 ↓" },
-                  { value: "asc", label: "更新时间 ↑" }
+                  { value: "desc", label: "最近更新" },
+                  { value: "asc", label: "最早更新" }
                 ]}
                 onChange={(value) => {
                   setSortOrder(value);
@@ -332,60 +448,95 @@ export function ConversationsPage() {
               />
             </div>
 
-            {listQuery.isError ? (
-              <RequestErrorAlert error={normalizeApiError(listQuery.error)} />
-            ) : null}
+            {listQuery.isError ? <RequestErrorAlert error={normalizeApiError(listQuery.error)} /> : null}
 
             <div className="ops-scroll-pane">
-              <List
-                size={listDensity}
-                bordered
-                loading={listQuery.isLoading}
-                dataSource={filteredItems}
-                locale={{ emptyText: "暂无会话" }}
-                renderItem={(item) => (
-                  <List.Item
-                    style={{
-                      cursor: "pointer",
-                      background:
-                        selectedId === item.conversation_id ? "var(--bg-emphasis)" : "transparent"
-                    }}
-                    onClick={() => {
-                      setSelectedId(item.conversation_id);
-                    }}
-                  >
-                    <Space direction="vertical" size={0}>
-                      <Typography.Text strong>{item.title || "未命名会话"}</Typography.Text>
-                      <Typography.Text type="secondary">{item.conversation_id}</Typography.Text>
-                      <Typography.Text type="secondary">{item.updated_at}</Typography.Text>
-                    </Space>
-                  </List.Item>
-                )}
-              />
+              {listQuery.isLoading ? (
+                <Card className="card-inset">
+                  <Typography.Text type="secondary">会话列表加载中...</Typography.Text>
+                </Card>
+              ) : filteredItems.length === 0 ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选下暂无会话" />
+              ) : (
+                <List
+                  size={listDensity}
+                  dataSource={filteredItems}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <button
+                        type="button"
+                        className={selectedId === item.conversation_id ? "conversation-list-item conversation-list-item--active" : "conversation-list-item"}
+                        onClick={() => {
+                          setSelectedId(item.conversation_id);
+                        }}
+                      >
+                        <div className="conversation-list-item__head">
+                          <Typography.Text strong>{item.title || "未命名会话"}</Typography.Text>
+                          <Tag>{formatDateTime(item.updated_at)}</Tag>
+                        </div>
+                        <Typography.Paragraph className="conversation-list-item__preview">
+                          {summarizeConversation(item)}
+                        </Typography.Paragraph>
+                        <div className="conversation-list-item__meta">
+                          <Tag color="geekblue">{kbNameMap.get(item.kb_id) ?? "未命名知识库"}</Tag>
+                          {item.last_message_at ? <span>最近消息 {formatDateTime(item.last_message_at)}</span> : null}
+                        </div>
+                      </button>
+                    </List.Item>
+                  )}
+                />
+              )}
             </div>
           </div>
         </Card>
 
-        <Card title="会话详情" className="card-soft ops-pane-card">
+        <Card
+          title={
+            <Space size={8}>
+              <FilterOutlined />
+              <span>会话详情</span>
+            </Space>
+          }
+          className="card-soft ops-pane-card"
+          extra={
+            selectedId ? (
+              <Button icon={<ReloadOutlined />} onClick={() => void detailQuery.refetch()} loading={detailQuery.isFetching}>
+                刷新详情
+              </Button>
+            ) : null
+          }
+        >
           <div className="ops-pane-body">
             {!selectedId ? (
-              <Typography.Text type="secondary">请先选择左侧会话。</Typography.Text>
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请先选择左侧会话。" />
             ) : detailQuery.isError ? (
               <RequestErrorAlert error={normalizeApiError(detailQuery.error)} />
             ) : (
               <div className="ops-scroll-pane">
-                <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <div className="ops-pane-intro">
+                    <Typography.Text className="ops-pane-intro__title">
+                      {selectedConversation?.title || "未命名会话"}
+                    </Typography.Text>
+                    <Typography.Text className="ops-pane-intro__desc">
+                      {selectedConversation
+                        ? `所属知识库：${kbNameMap.get(selectedConversation.kb_id) ?? "未命名知识库"}`
+                        : "查看用户消息、助手回答、引用证据与反馈情况。"}
+                    </Typography.Text>
+                  </div>
+
                   <div className="density-toolbar">
                     <Space wrap>
-                      <Tag>消息数：{selectedMessageCount}</Tag>
-                      <Tag color="processing">助手消息：{assistantMessageCount}</Tag>
+                      <Tag icon={<MessageOutlined />}>消息 {selectedMessageCount}</Tag>
+                      <Tag color="processing" icon={<RobotOutlined />}>助手 {assistantMessageCount}</Tag>
+                      <Tag color="warning" icon={<UserOutlined />}>拒答 {refusalCount}</Tag>
                     </Space>
                     <Space>
                       <Segmented<MessageFilter>
                         size="small"
                         value={messageFilter}
                         options={[
-                          { label: "全部消息", value: "all" },
+                          { label: "全部", value: "all" },
                           { label: "仅助手", value: "assistant" },
                           { label: "仅用户", value: "user" }
                         ]}
@@ -406,22 +557,27 @@ export function ConversationsPage() {
                       />
                     </Space>
                   </div>
-                  <CopyableField label="conversation_id" value={detailQuery.data?.conversation_id} />
-                  <CopyableField label="request_id" value={detailQuery.data?.request_id} />
-                  <List
-                    size={listDensity}
-                    loading={detailQuery.isLoading}
-                    dataSource={filteredMessages}
-                    locale={{ emptyText: "暂无消息" }}
-                    renderItem={(item) => (
-                      <MessageCard
-                        item={item}
-                        submitting={submittingFeedbackMessageId === item.message_id}
-                        submitted={Boolean(submittedFeedbackMap[item.message_id])}
-                        onFeedbackSubmit={handleFeedbackSubmit}
-                      />
-                    )}
-                  />
+
+                  {detailQuery.isLoading ? (
+                    <Card className="card-inset">
+                      <Typography.Text type="secondary">会话详情加载中...</Typography.Text>
+                    </Card>
+                  ) : filteredMessages.length === 0 ? (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选下暂无消息" />
+                  ) : (
+                    <List
+                      size={listDensity}
+                      dataSource={filteredMessages}
+                      renderItem={(item) => (
+                        <MessageCard
+                          item={item}
+                          submitting={submittingFeedbackMessageId === item.message_id}
+                          submitted={Boolean(submittedFeedbackMap[item.message_id])}
+                          onFeedbackSubmit={handleFeedbackSubmit}
+                        />
+                      )}
+                    />
+                  )}
                 </Space>
               </div>
             )}
@@ -431,4 +587,3 @@ export function ConversationsPage() {
     </div>
   );
 }
-

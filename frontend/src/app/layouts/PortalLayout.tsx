@@ -1,14 +1,46 @@
+﻿import {
+  DatabaseOutlined,
+  DotChartOutlined,
+  FileTextOutlined,
+  HistoryOutlined,
+  LoginOutlined,
+  LogoutOutlined,
+  MessageOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  TeamOutlined
+} from "@ant-design/icons";
 import { Button, Layout, Menu, Space, Tag, Typography } from "antd";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { ReactNode } from "react";
+import { Outlet, useLocation, useMatches, useNavigate } from "react-router-dom";
 import { useAuth } from "../../shared/auth/auth";
-import { NavEntry, ROUTE_PRELOADERS } from "../../shared/constants/nav";
+import { AppRole } from "../../shared/auth/role";
+import { PortalSwitch } from "../../shared/components/PortalSwitch";
+import {
+  NavEntry,
+  NavIconKey,
+  ROUTE_PRELOADERS,
+  resolveNavEntry
+} from "../../shared/constants/nav";
 
 const { Header, Content, Sider } = Layout;
 
 interface PortalLayoutProps {
   navItems: NavEntry[];
   panelLabel: string;
+  panelDescription: string;
+  panelRole: AppRole;
 }
+
+const NAV_ICONS: Record<NavIconKey, ReactNode> = {
+  kb: <DatabaseOutlined />,
+  users: <TeamOutlined />,
+  documents: <FileTextOutlined />,
+  eval: <DotChartOutlined />,
+  monitor: <ReloadOutlined />,
+  ask: <MessageOutlined />,
+  conversations: <HistoryOutlined />
+};
 
 function preloadRoute(path: string) {
   const loader = ROUTE_PRELOADERS[path];
@@ -19,47 +51,82 @@ function preloadRoute(path: string) {
 }
 
 function resolveSelectedKey(pathname: string, navItems: NavEntry[]) {
-  const matched = navItems.find((item) => pathname.startsWith(item.key));
+  const matched = resolveNavEntry(pathname, navItems);
   return matched?.key ?? navItems[0]?.key ?? pathname;
 }
 
-function nowText() {
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date());
+function resolveLayoutPreference(matches: ReturnType<typeof useMatches>) {
+  const matched = [...matches].reverse().find((item) => {
+    const handle = item.handle as { layout?: { hideGlobalSider?: boolean } } | undefined;
+    return Boolean(handle?.layout);
+  });
+  const handle = matched?.handle as { layout?: { hideGlobalSider?: boolean } } | undefined;
+  return handle?.layout ?? {};
 }
 
-function currentModule(pathname: string) {
-  if (pathname.includes("/admin")) {
-    return "管理端";
-  }
-  return "用户端";
+function resolvePortalTone(role: AppRole) {
+  return role === "admin" ? "治理视角" : "问答视角";
 }
 
-export function PortalLayout({ navItems, panelLabel }: PortalLayoutProps) {
+function resolveRoleText(role: AppRole) {
+  return role === "admin" ? "管理员" : "用户";
+}
+
+export function PortalLayout({
+  navItems,
+  panelLabel,
+  panelDescription,
+  panelRole
+}: PortalLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const matches = useMatches();
   const { isAuthenticated, role, user, signOut } = useAuth();
-  const hideGlobalSider = location.pathname.startsWith("/app/ask");
+  const layoutPreference = resolveLayoutPreference(matches);
+  const hideGlobalSider = Boolean(layoutPreference.hideGlobalSider);
   const isAdminRoute = location.pathname.startsWith("/admin");
   const canSwitchPortal = isAuthenticated && role === "admin";
-  const roleText = role === "admin" ? "管理员" : "用户";
   const nextPath = encodeURIComponent(`${location.pathname}${location.search}`);
   const contentClassName = hideGlobalSider ? "app-content app-content--ask" : "app-content";
+  const activeRoute = resolveNavEntry(location.pathname, navItems);
+  const activePortal: AppRole = isAdminRoute ? "admin" : "user";
+  const routeTitle = activeRoute?.label ?? panelLabel;
+  const routeDescription = activeRoute?.description ?? panelDescription;
+
+  const handlePortalChange = (targetRole: AppRole) => {
+    navigate(targetRole === "admin" ? "/admin/kb" : "/app/ask");
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/app/ask", { replace: true });
+  };
 
   return (
     <Layout className={hideGlobalSider ? "app-shell app-shell--no-sider" : "app-shell"}>
       {!hideGlobalSider ? (
-        <Sider width={228} className="app-sider">
+        <Sider width={264} className="app-sider">
           <div className="brand-block">
+            <Space size={8} wrap>
+              <Typography.Text className="brand-kicker">{panelLabel}</Typography.Text>
+              <Tag bordered={false} color={panelRole === "admin" ? "processing" : "cyan"}>
+                {resolvePortalTone(activePortal)}
+              </Tag>
+            </Space>
             <Typography.Title level={4} className="brand-title">
               CampusSage
             </Typography.Title>
-            <Typography.Text className="brand-subtitle">{panelLabel}</Typography.Text>
+            <Typography.Text className="brand-subtitle">{panelDescription}</Typography.Text>
           </div>
+
+          {canSwitchPortal ? (
+            <div className="portal-switch-card">
+              <Typography.Text className="portal-switch-card__label">端口切换</Typography.Text>
+              <PortalSwitch activeRole={activePortal} onChange={handlePortalChange} compact />
+            </div>
+          ) : null}
+
+          <div className="nav-section-label">功能导航</div>
           <Menu
             mode="inline"
             selectedKeys={[resolveSelectedKey(location.pathname, navItems)]}
@@ -67,10 +134,15 @@ export function PortalLayout({ navItems, panelLabel }: PortalLayoutProps) {
               key: item.key,
               label: (
                 <span
+                  className="nav-menu-link"
                   onMouseEnter={() => preloadRoute(item.key)}
                   onFocus={() => preloadRoute(item.key)}
                 >
-                  {item.label}
+                  <span className="nav-menu-icon">{NAV_ICONS[item.iconKey]}</span>
+                  <span className="nav-menu-copy">
+                    <span className="nav-menu-label__title">{item.label}</span>
+                    <span className="nav-menu-label__desc">{item.description}</span>
+                  </span>
                 </span>
               )
             }))}
@@ -78,13 +150,18 @@ export function PortalLayout({ navItems, panelLabel }: PortalLayoutProps) {
               navigate(item.key);
             }}
           />
-          <div className="menu-footer">
-            <Typography.Text className="menu-footer-key">当前模块</Typography.Text>
+
+          <div className="menu-footer menu-footer--user">
+            <Typography.Text className="menu-footer-key">当前账号</Typography.Text>
             <Typography.Text className="menu-footer-value">
-              {currentModule(location.pathname)}
+              {isAuthenticated ? user?.email ?? "已登录用户" : "匿名访问"}
             </Typography.Text>
-            <Typography.Text className="menu-footer-key">更新时间</Typography.Text>
-            <Typography.Text className="menu-footer-value">{nowText()}</Typography.Text>
+            <Typography.Text className="menu-footer-key">访问角色</Typography.Text>
+            <Typography.Text className="menu-footer-value">
+              {isAuthenticated ? resolveRoleText(role) : "游客"}
+            </Typography.Text>
+            <Typography.Text className="menu-footer-key">当前界面</Typography.Text>
+            <Typography.Text className="menu-footer-value">{routeTitle}</Typography.Text>
           </div>
         </Sider>
       ) : null}
@@ -92,52 +169,46 @@ export function PortalLayout({ navItems, panelLabel }: PortalLayoutProps) {
         {!hideGlobalSider ? (
           <Header className="app-header app-header--with-tools">
             <div className="header-meta">
-              <Typography.Text className="header-title">
-                Evidence-grounded University Knowledge Assistant
-              </Typography.Text>
-              <Typography.Text className="header-text">
-                RAG 检索增强问答平台 · 会话、引用、评测、监控一体化
-              </Typography.Text>
+              <Typography.Text className="header-eyebrow">{panelLabel}</Typography.Text>
+              <Typography.Title level={4} className="header-route-title">
+                {routeTitle}
+              </Typography.Title>
+              <Typography.Text className="header-route-desc">{routeDescription}</Typography.Text>
             </div>
-            {isAuthenticated ? (
-              <Space size={8}>
-                <Typography.Text>{user?.email}</Typography.Text>
-                <Tag color={role === "admin" ? "processing" : "default"}>{roleText}</Tag>
-                {canSwitchPortal ? (
+            <div className="app-header-actions">
+              <div className="header-user-chip">
+                <Typography.Text className="header-user-chip__email">
+                  {isAuthenticated ? user?.email ?? "已登录用户" : "匿名访问"}
+                </Typography.Text>
+                <Tag color={isAuthenticated && role === "admin" ? "processing" : "default"}>
+                  {isAuthenticated ? resolveRoleText(role) : "游客"}
+                </Tag>
+              </div>
+              {canSwitchPortal ? (
+                <PortalSwitch activeRole={activePortal} onChange={handlePortalChange} />
+              ) : null}
+              {isAuthenticated ? (
+                <Button size="small" icon={<LogoutOutlined />} onClick={() => void handleSignOut()}>
+                  退出
+                </Button>
+              ) : (
+                <Space size={8}>
+                  <Tag icon={<SafetyCertificateOutlined />} color="default" bordered={false}>
+                    匿名模式
+                  </Tag>
                   <Button
                     size="small"
+                    type="primary"
+                    icon={<LoginOutlined />}
                     onClick={() => {
-                      navigate(isAdminRoute ? "/app/ask" : "/admin/kb");
+                      navigate(`/login?next=${nextPath}`);
                     }}
                   >
-                    {isAdminRoute ? "用户端" : "管理端"}
+                    登录
                   </Button>
-                ) : null}
-                <Button
-                  size="small"
-                  onClick={() => {
-                    void signOut().then(() => {
-                      navigate("/app/ask", { replace: true });
-                    });
-                  }}
-                >
-                  退出登录
-                </Button>
-              </Space>
-            ) : (
-              <Space size={8}>
-                <Typography.Text type="secondary">当前为匿名访问</Typography.Text>
-                <Button
-                  size="small"
-                  type="primary"
-                  onClick={() => {
-                    navigate(`/login?next=${nextPath}`);
-                  }}
-                >
-                  登录
-                </Button>
-              </Space>
-            )}
+                </Space>
+              )}
+            </div>
           </Header>
         ) : null}
         <Content className={contentClassName}>

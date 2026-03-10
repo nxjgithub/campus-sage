@@ -1,4 +1,4 @@
-import { Alert, Typography } from "antd";
+import { Alert, Space, Typography } from "antd";
 import { ApiErrorShape } from "../api/errors";
 
 interface RequestErrorAlertProps {
@@ -8,11 +8,16 @@ interface RequestErrorAlertProps {
 export function RequestErrorAlert({ error }: RequestErrorAlertProps) {
   const detail = typeof error.detail === "string" ? error.detail : undefined;
   const description = (
-    <div>
-      <div>错误码：{error.code}</div>
-      {error.request_id ? <div>请求ID：{error.request_id}</div> : null}
+    <Space direction="vertical" size={4}>
+      <Typography.Text>错误码：{error.code}</Typography.Text>
+      {error.request_id ? (
+        <Typography.Text copyable={{ text: error.request_id }}>
+          请求 ID：{error.request_id}
+        </Typography.Text>
+      ) : null}
       {detail ? <Typography.Paragraph>{detail}</Typography.Paragraph> : null}
-    </div>
+    </Space>
   );
+
   return <Alert type="error" message={error.message} description={description} showIcon />;
 }

@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+﻿import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -36,10 +36,19 @@ function renderWithProviders(node: ReactNode) {
 describe("EvalPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(fetchKbList).mockResolvedValue({ items: [] });
+    vi.mocked(fetchKbList).mockResolvedValue({
+      items: [
+        {
+          kb_id: "kb-1",
+          name: "教务知识库",
+          visibility: "internal",
+          updated_at: "2026-02-12T10:00:00Z"
+        }
+      ]
+    });
     vi.mocked(createEvalSet).mockResolvedValue({
       eval_set_id: "es-1",
-      name: "set-1",
+      name: "教务评测集_v1",
       description: null,
       item_count: 1,
       created_at: "2026-02-12T10:00:00Z"
@@ -72,13 +81,13 @@ describe("EvalPage", () => {
     });
   });
 
-  it("创建评测集时应提交结构化样本", async () => {
+  it("创建评测集时提交结构化样本", async () => {
     renderWithProviders(<EvalPage />);
 
     await userEvent.type(screen.getByLabelText("评测集名称"), " 教务评测集_v1 ");
     await userEvent.type(screen.getByLabelText("问题"), " 补考申请流程是什么？ ");
     await userEvent.type(screen.getByLabelText("标签（逗号分隔）"), "policy, exam ");
-    await userEvent.click(screen.getByRole("button", { name: "创建评测集" }));
+    await userEvent.click(screen.getByRole("button", { name: /创建评测集/ }));
 
     await waitFor(() => {
       expect(createEvalSet).toHaveBeenCalledWith({

@@ -1,5 +1,6 @@
+import { CheckOutlined, DislikeOutlined, LikeOutlined, MessageOutlined } from "@ant-design/icons";
 import { useMemo, useState } from "react";
-import { Button, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
+import { Button, Form, Input, Modal, Select, Space, Tag, Tooltip } from "antd";
 import { FeedbackPayload } from "../api/modules/conversations";
 
 type FeedbackRating = FeedbackPayload["rating"];
@@ -68,42 +69,51 @@ export function FeedbackAction({
       form.resetFields();
       setOpen(false);
     } catch {
-      // 失败时保留已填写内容，便于用户修改后重试
+      // 失败时保留已填写内容，便于用户修正后重试。
     }
   };
 
   if (submitted) {
     return (
-      <Button size="small" disabled>
-        已提交
-      </Button>
+      <Tooltip title="反馈已提交">
+        <Button size="small" icon={<CheckOutlined />} disabled aria-label="反馈已提交" />
+      </Tooltip>
     );
   }
 
   return (
     <>
-      <Space>
-        <Button
-          size="small"
-          onClick={() => {
-            openModal("up");
-          }}
-          loading={submitting && rating === "up"}
-        >
-          赞同
-        </Button>
-        <Button
-          size="small"
-          onClick={() => {
-            openModal("down");
-          }}
-          loading={submitting && rating === "down"}
-        >
-          反对
-        </Button>
+      <Space size={6}>
+        <Tooltip title="赞同回答">
+          <Button
+            size="small"
+            icon={<LikeOutlined />}
+            aria-label="赞同"
+            onClick={() => {
+              openModal("up");
+            }}
+            loading={submitting && rating === "up"}
+          />
+        </Tooltip>
+        <Tooltip title="反对回答">
+          <Button
+            size="small"
+            icon={<DislikeOutlined />}
+            aria-label="反对"
+            onClick={() => {
+              openModal("down");
+            }}
+            loading={submitting && rating === "down"}
+          />
+        </Tooltip>
       </Space>
       <Modal
-        title="提交反馈"
+        title={
+          <Space size={8}>
+            <MessageOutlined />
+            <span>提交反馈</span>
+          </Space>
+        }
         open={open}
         onCancel={handleClose}
         onOk={() => {
@@ -114,10 +124,7 @@ export function FeedbackAction({
         confirmLoading={submitting}
         destroyOnHidden={false}
       >
-        <Space direction="vertical" size={8} style={{ width: "100%" }}>
-          <Typography.Text type="secondary">
-            消息 ID：<Typography.Text copyable={{ text: messageId }}>{messageId}</Typography.Text>
-          </Typography.Text>
+        <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <Tag color={rating === "up" ? "success" : "warning"}>
             {rating === "up" ? "赞同反馈" : "反对反馈"}
           </Tag>
@@ -136,7 +143,7 @@ export function FeedbackAction({
               rows={3}
               maxLength={400}
               showCount
-              placeholder="可填写对答案质量的说明"
+              placeholder="可补充说明答案质量或证据情况"
             />
           </Form.Item>
           {rating === "down" ? (
@@ -145,7 +152,7 @@ export function FeedbackAction({
                 rows={3}
                 maxLength={400}
                 showCount
-                placeholder="例如：请给出具体政策条款或办理步骤"
+                placeholder="例如：请补充具体政策条款或办理步骤"
               />
             </Form.Item>
           ) : null}

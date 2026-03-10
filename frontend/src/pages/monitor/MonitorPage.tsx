@@ -1,22 +1,27 @@
-﻿import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Progress,
-  Row,
-  Space,
-  Statistic,
-  Tag,
-  Typography,
-  message
-} from "antd";
+  AlertOutlined,
+  DashboardOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  WarningOutlined
+} from "@ant-design/icons";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Alert, Button, Card, Col, Progress, Row, Space, Statistic, Tag, Typography, message } from "antd";
 import { fetchQueueStats, moveDeadJobs } from "../../shared/api/modules/monitor";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { ConfirmAction } from "../../shared/components/ConfirmAction";
 import { PageState } from "../../shared/components/PageState";
+
+const METRIC_ITEMS = [
+  { key: "queued", label: "排队中" },
+  { key: "started", label: "执行中" },
+  { key: "deferred", label: "延迟中" },
+  { key: "finished", label: "已完成" },
+  { key: "failed_registry", label: "失败注册" },
+  { key: "dead", label: "死信队列" },
+  { key: "scheduled", label: "已调度" }
+] as const;
 
 export function MonitorPage() {
   const [lastMoveRequestId, setLastMoveRequestId] = useState<string | null>(null);
@@ -61,16 +66,25 @@ export function MonitorPage() {
         : "empty";
 
   const riskPercent = totalInQueue
-    ? Math.min(100, Math.round((((stats?.failed_registry ?? 0) + (stats?.dead ?? 0)) / totalInQueue) * 100))
+    ? Math.min(
+        100,
+        Math.round((((stats?.failed_registry ?? 0) + (stats?.dead ?? 0)) / totalInQueue) * 100)
+      )
     : 0;
 
   const healthTag =
     riskPercent > 35 ? (
-      <Tag color="error">高风险</Tag>
+      <Tag color="error" icon={<WarningOutlined />}>
+        高风险
+      </Tag>
     ) : riskPercent > 15 ? (
-      <Tag color="warning">中风险</Tag>
+      <Tag color="warning" icon={<AlertOutlined />}>
+        中风险
+      </Tag>
     ) : (
-      <Tag color="success">低风险</Tag>
+      <Tag color="success" icon={<SafetyCertificateOutlined />}>
+        低风险
+      </Tag>
     );
 
   return (
@@ -87,13 +101,21 @@ export function MonitorPage() {
     >
       <div className="page-stack">
         <Card className="hero-card">
-          <Space direction="vertical" size={10} style={{ width: "100%" }}>
-            <Typography.Title level={4} className="hero-title">
-              队列监控中心
-            </Typography.Title>
-            <Typography.Text className="hero-desc">
-              实时追踪入库任务压力、失败堆积和死信风险，支撑运维处置。
-            </Typography.Text>
+          <div className="hero-layout">
+            <div>
+              <div className="hero-kicker">管理端 / 队列与任务健康</div>
+              <Typography.Title level={4} className="hero-title">
+                队列监控中心
+              </Typography.Title>
+              <Typography.Text className="hero-desc">
+                实时追踪入库任务压力、失败堆积和死信风险，帮助管理端快速判断是否需要人工干预。
+              </Typography.Text>
+              <div className="hero-note" style={{ marginTop: 14 }}>
+                <span className="hero-note__item">默认每 10 秒自动刷新</span>
+                <span className="hero-note__item">风险占比越高，越需要优先处理失败任务</span>
+                <span className="hero-note__item">死信迁移前需要二次确认</span>
+              </div>
+            </div>
             <div className="summary-grid">
               <div className="summary-item">
                 <div className="summary-item-label">队列总量</div>
@@ -104,7 +126,7 @@ export function MonitorPage() {
                 <div className="summary-item-value">{stats?.dead ?? 0}</div>
               </div>
               <div className="summary-item">
-                <div className="summary-item-label">失败注册数</div>
+                <div className="summary-item-label">失败注册</div>
                 <div className="summary-item-value">{stats?.failed_registry ?? 0}</div>
               </div>
               <div className="summary-item">
@@ -112,24 +134,27 @@ export function MonitorPage() {
                 <div className="summary-item-value">{riskPercent}%</div>
               </div>
             </div>
-            <Space>
-              <Typography.Text type="secondary">当前健康度：</Typography.Text>
-              {healthTag}
-            </Space>
-            <Progress
-              percent={riskPercent}
-              strokeColor={riskPercent > 35 ? "#cf3f3f" : riskPercent > 15 ? "#e5a100" : "#0ea5a0"}
-              format={(percent) => `风险任务占比 ${percent}%`}
-            />
-          </Space>
+          </div>
         </Card>
 
         <Card
-          title="队列监控"
+          title={
+            <Space size={8}>
+              <DashboardOutlined />
+              <span>队列监控</span>
+            </Space>
+          }
           className="card-soft"
           extra={
             <Space>
-              <Button onClick={() => void statsQuery.refetch()} loading={statsQuery.isFetching}>
+              <Tag bordered={false} color="blue">
+                自动刷新 10s
+              </Tag>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => void statsQuery.refetch()}
+                loading={statsQuery.isFetching}
+              >
                 刷新
               </Button>
               <ConfirmAction
@@ -142,48 +167,60 @@ export function MonitorPage() {
                 }}
                 buttonText="转移失败任务到死信"
                 danger
+                icon={<WarningOutlined />}
                 loading={moveMutation.isPending}
               />
             </Space>
           }
         >
-          <Row gutter={[16, 16]}>
-            <Col xs={12} md={8} lg={6}>
-              <Statistic title="queued" value={stats?.queued ?? 0} />
-            </Col>
-            <Col xs={12} md={8} lg={6}>
-              <Statistic title="started" value={stats?.started ?? 0} />
-            </Col>
-            <Col xs={12} md={8} lg={6}>
-              <Statistic title="deferred" value={stats?.deferred ?? 0} />
-            </Col>
-            <Col xs={12} md={8} lg={6}>
-              <Statistic title="finished" value={stats?.finished ?? 0} />
-            </Col>
-            <Col xs={12} md={8} lg={6}>
-              <Statistic title="failed_registry" value={stats?.failed_registry ?? 0} />
-            </Col>
-            <Col xs={12} md={8} lg={6}>
-              <Statistic title="dead" value={stats?.dead ?? 0} />
-            </Col>
-            <Col xs={12} md={8} lg={6}>
-              <Statistic title="scheduled" value={stats?.scheduled ?? 0} />
-            </Col>
-          </Row>
-          {lastMoveRequestId ? (
-            <Typography.Text type="secondary" style={{ marginTop: 12, display: "block" }}>
-              最近一次转移操作已完成。
-            </Typography.Text>
-          ) : null}
+          <Space direction="vertical" size={18} style={{ width: "100%" }}>
+            <div className="monitor-health-row">
+              <Space size={10} wrap>
+                <Typography.Text type="secondary">当前健康度</Typography.Text>
+                {healthTag}
+              </Space>
+              <Typography.Text type="secondary">
+                {lastMoveRequestId ? "最近一次死信迁移已完成" : "暂无死信迁移操作"}
+              </Typography.Text>
+            </div>
+            <Progress
+              percent={riskPercent}
+              strokeColor={
+                riskPercent > 35 ? "#cf3f3f" : riskPercent > 15 ? "#e5a100" : "#0ea5a0"
+              }
+              format={(percent) => `风险任务 ${percent}%`}
+            />
+            <Row gutter={[16, 16]}>
+              {METRIC_ITEMS.map((item) => (
+                <Col key={item.key} xs={12} md={8} lg={6}>
+                  <Card size="small" className="monitor-metric-card">
+                    <Statistic
+                      title={item.label}
+                      value={stats?.[item.key] ?? 0}
+                      valueStyle={{ color: item.key === "dead" ? "#cf3f3f" : undefined }}
+                    />
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          </Space>
         </Card>
 
-        <Card title="告警" className="card-soft">
+        <Card
+          title={
+            <Space size={8}>
+              <AlertOutlined />
+              <span>告警列表</span>
+            </Space>
+          }
+          className="card-soft"
+        >
           {statsQuery.data?.alerts.length ? (
-            <ul className="muted-list">
+            <div className="monitor-alert-list">
               {statsQuery.data.alerts.map((item) => (
-                <li key={item}>{item}</li>
+                <Alert key={item} type="warning" showIcon message={item} />
               ))}
-            </ul>
+            </div>
           ) : (
             <Alert type="success" showIcon message="暂无告警" />
           )}
@@ -192,4 +229,3 @@ export function MonitorPage() {
     </PageState>
   );
 }
-

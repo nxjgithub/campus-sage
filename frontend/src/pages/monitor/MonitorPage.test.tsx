@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+﻿import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -53,7 +53,7 @@ describe("MonitorPage 二次确认交互", () => {
     renderWithProviders(<MonitorPage />);
 
     const moveButton = await screen.findByRole("button", {
-      name: "转移失败任务到死信"
+      name: /转移失败任务到死信/
     });
     await userEvent.click(moveButton);
 

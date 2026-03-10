@@ -1,3 +1,4 @@
+import { ReactNode } from "react";
 import { Button, Popconfirm } from "antd";
 import type { ButtonProps } from "antd";
 
@@ -13,6 +14,8 @@ interface ConfirmActionProps {
   danger?: boolean;
   loading?: boolean;
   size?: ButtonProps["size"];
+  icon?: ReactNode;
+  ariaLabel?: string;
 }
 
 export function ConfirmAction({
@@ -26,7 +29,9 @@ export function ConfirmAction({
   buttonType = "default",
   danger = false,
   loading = false,
-  size = "middle"
+  size = "middle",
+  icon,
+  ariaLabel
 }: ConfirmActionProps) {
   return (
     <Popconfirm
@@ -37,7 +42,15 @@ export function ConfirmAction({
       onConfirm={onConfirm}
       disabled={disabled}
     >
-      <Button type={buttonType} danger={danger} loading={loading} disabled={disabled} size={size}>
+      <Button
+        type={buttonType}
+        danger={danger}
+        loading={loading}
+        disabled={disabled}
+        size={size}
+        icon={icon}
+        aria-label={ariaLabel}
+      >
         {buttonText}
       </Button>
     </Popconfirm>

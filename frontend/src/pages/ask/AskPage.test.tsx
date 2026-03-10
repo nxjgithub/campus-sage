@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+﻿import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -112,6 +112,10 @@ function mockBasicStream() {
   });
 }
 
+async function fillQuestionInput(question: string) {
+  await userEvent.type(await screen.findByPlaceholderText(/请输入你的问题|请输入问题/), question);
+}
+
 describe("AskPage 聊天交互", () => {
   const scrollIntoViewMock = vi.fn();
 
@@ -173,8 +177,8 @@ describe("AskPage 聊天交互", () => {
   it("点击答案引用编号后应打开证据弹窗并高亮对应卡片", async () => {
     renderWithProviders(<AskPage />);
 
-    await userEvent.type(await screen.findByPlaceholderText("请输入问题，回车发送（Shift+回车换行）"), "补考申请条件");
-    await userEvent.click(screen.getByRole("button", { name: /发\s*送/ }));
+    await fillQuestionInput("补考申请条件？");
+    await userEvent.click(screen.getByRole("button", { name: /发送/ }));
 
     const marker = await screen.findByRole("button", { name: "[1]" });
     await userEvent.click(marker);
@@ -188,8 +192,8 @@ describe("AskPage 聊天交互", () => {
   it("证据弹窗打开后按任意键应关闭", async () => {
     renderWithProviders(<AskPage />);
 
-    await userEvent.type(await screen.findByPlaceholderText("请输入问题，回车发送（Shift+回车换行）"), "补考申请条件");
-    await userEvent.click(screen.getByRole("button", { name: /发\s*送/ }));
+    await fillQuestionInput("补考申请条件？");
+    await userEvent.click(screen.getByRole("button", { name: /发送/ }));
     await userEvent.click(await screen.findByRole("button", { name: "[1]" }));
     expect(await screen.findByText("按任意键或点击右上角关闭")).toBeInTheDocument();
 
@@ -203,12 +207,15 @@ describe("AskPage 聊天交互", () => {
   it("助手消息反馈提交应携带结构化字段", async () => {
     renderWithProviders(<AskPage />);
 
-    await userEvent.type(await screen.findByPlaceholderText("请输入问题，回车发送（Shift+回车换行）"), "补考申请条件");
-    await userEvent.click(screen.getByRole("button", { name: /发\s*送/ }));
+    await fillQuestionInput("补考申请条件？");
+    await userEvent.click(screen.getByRole("button", { name: /发送/ }));
 
-    await userEvent.click(await screen.findByRole("button", { name: /赞\s*同/ }));
-    await userEvent.type(await screen.findByPlaceholderText("可填写对答案质量的说明"), "内容准确");
-    await userEvent.click(screen.getByRole("button", { name: /提\s*交\s*反\s*馈/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "赞同" }));
+    await userEvent.type(
+      await screen.findByPlaceholderText("可补充说明答案质量或证据情况"),
+      "内容准确"
+    );
+    await userEvent.click(screen.getByRole("button", { name: /提交反馈/ }));
 
     await waitFor(() => {
       expect(submitFeedback).toHaveBeenCalledWith("msg_assistant_1", {

@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+﻿import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -65,7 +65,7 @@ describe("DocumentsPage 二次确认交互", () => {
         {
           doc_id: "doc-1",
           kb_id: "kb-1",
-          doc_name: "手册A",
+          doc_name: "学生手册",
           status: "indexed",
           chunk_count: 12,
           created_at: "2026-02-12T12:00:00Z",
@@ -80,6 +80,18 @@ describe("DocumentsPage 二次确认交互", () => {
           kb_id: "kb-1",
           doc_id: "doc-1",
           status: "running",
+          progress: {
+            stage: "embedding",
+            pages_parsed: 12,
+            chunks_built: 30,
+            embeddings_done: 10,
+            vectors_upserted: 4,
+            stage_ms: 100,
+            parse_ms: 50,
+            chunk_ms: 50,
+            embed_ms: 50,
+            upsert_ms: 50
+          },
           created_at: "2026-02-12T12:00:00Z",
           updated_at: "2026-02-12T12:00:00Z"
         };
@@ -89,6 +101,18 @@ describe("DocumentsPage 二次确认交互", () => {
         kb_id: "kb-1",
         doc_id: "doc-1",
         status: "failed",
+        progress: {
+          stage: "finished",
+          pages_parsed: 12,
+          chunks_built: 30,
+          embeddings_done: 30,
+          vectors_upserted: 30,
+          stage_ms: 100,
+          parse_ms: 50,
+          chunk_ms: 50,
+          embed_ms: 50,
+          upsert_ms: 50
+        },
         created_at: "2026-02-12T12:00:00Z",
         updated_at: "2026-02-12T12:00:00Z"
       };
@@ -97,7 +121,7 @@ describe("DocumentsPage 二次确认交互", () => {
       doc: {
         doc_id: "doc-1",
         kb_id: "kb-1",
-        doc_name: "手册A",
+        doc_name: "学生手册",
         status: "indexed",
         chunk_count: 12,
         created_at: "2026-02-12T12:00:00Z",
@@ -143,64 +167,68 @@ describe("DocumentsPage 二次确认交互", () => {
     window.localStorage.clear();
   });
 
-  it("重建索引应先弹确认框，确认后再调用接口", async () => {
+  it("重建索引前先弹出确认框，确认后才调用接口", async () => {
     renderWithProviders(<DocumentsPage initialKbId="kb-1" />);
 
-    const reindexButton = await screen.findByRole("button", { name: /重\s*建\s*索\s*引/ });
-    await userEvent.click(reindexButton);
+    const docCell = await screen.findByText("学生手册");
+    const row = docCell.closest("tr");
+    if (!(row instanceof HTMLElement)) {
+      throw new Error("未找到文档列表行");
+    }
+
+    await userEvent.click(within(row).getByRole("button", { name: /重建/ }));
 
     expect(await screen.findByText("确认重建该文档索引？")).toBeInTheDocument();
     expect(reindexDocument).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole("button", { name: /确\s*认\s*重\s*建/ }));
+    await userEvent.click(screen.getByRole("button", { name: "确认重建" }));
+
     await waitFor(() => {
       expect(reindexDocument).toHaveBeenCalledWith("doc-1");
     });
   });
 
-  it("当前任务重试应先弹确认框，确认后再调用接口", async () => {
+  it("当前任务重试前先弹出确认框，确认后才调用接口", async () => {
     window.localStorage.setItem("csage_ingest_jobs_kb-1", JSON.stringify(["job-1"]));
 
     renderWithProviders(<DocumentsPage initialKbId="kb-1" />);
 
-    await screen.findByText("任务跟踪中");
-    const taskCardTitle = screen.getAllByText("入库任务状态")[0];
-    const taskCard = taskCardTitle.closest(".ant-card");
-    if (!(taskCard instanceof HTMLElement)) {
-      throw new Error("未找到入库任务状态卡片");
+    const currentJobTitle = await screen.findByText("当前任务");
+    const currentJobCard = currentJobTitle.closest(".ant-card");
+    if (!(currentJobCard instanceof HTMLElement)) {
+      throw new Error("未找到当前任务卡片");
     }
-    const retryButton = within(taskCard).getByRole("button", { name: /重\s*试\s*任\s*务/ });
-    await userEvent.click(retryButton);
+
+    await userEvent.click(within(currentJobCard).getByRole("button", { name: /重试/ }));
 
     expect(await screen.findByText("确认重试当前任务？")).toBeInTheDocument();
-    expect(reindexDocument).not.toHaveBeenCalled();
     expect(retryIngestJob).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole("button", { name: /确\s*认\s*重\s*试/ }));
+    await userEvent.click(screen.getByRole("button", { name: "确认重试" }));
+
     await waitFor(() => {
-      expect(retryIngestJob).toHaveBeenCalledTimes(1);
-      expect(reindexDocument).not.toHaveBeenCalled();
+      expect(retryIngestJob).toHaveBeenCalledWith("job-1");
     });
   });
 
-  it("历史任务取消应先确认，确认后再调用接口", async () => {
+  it("历史任务取消前先弹出确认框，确认后才调用接口", async () => {
     window.localStorage.setItem("csage_ingest_jobs_kb-1", JSON.stringify(["job-1", "job-2"]));
 
     renderWithProviders(<DocumentsPage initialKbId="kb-1" />);
 
-    const historyJobCell = await screen.findByText("running");
-    const historyRow = historyJobCell.closest("tr");
-    if (!(historyRow instanceof HTMLElement)) {
+    const statusCell = await screen.findByText("执行中");
+    const row = statusCell.closest("tr");
+    if (!(row instanceof HTMLElement)) {
       throw new Error("未找到历史任务行");
     }
 
-    const cancelButton = within(historyRow).getByRole("button", { name: /取\s*消/ });
-    await userEvent.click(cancelButton);
+    await userEvent.click(within(row).getByRole("button", { name: /取消历史任务/ }));
 
     expect(await screen.findByText("确认取消该任务？")).toBeInTheDocument();
     expect(cancelIngestJob).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole("button", { name: /确\s*认\s*取\s*消/ }));
+    await userEvent.click(screen.getByRole("button", { name: "确认取消" }));
+
     await waitFor(() => {
       expect(cancelIngestJob).toHaveBeenCalledWith("job-2");
     });

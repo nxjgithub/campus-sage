@@ -1,4 +1,4 @@
-import { App as AntdApp } from "antd";
+﻿import { App as AntdApp } from "antd";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -78,16 +78,16 @@ describe("ConversationsPage 引用交互", () => {
       </AntdApp>
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /反\s*对/ }));
+    await userEvent.click(screen.getByRole("button", { name: "反对" }));
     await userEvent.type(
-      await screen.findByPlaceholderText("可填写对答案质量的说明"),
+      await screen.findByPlaceholderText("可补充说明答案质量或证据情况"),
       "理由不够具体"
     );
     await userEvent.type(
-      screen.getByPlaceholderText("例如：请给出具体政策条款或办理步骤"),
+      screen.getByPlaceholderText("例如：请补充具体政策条款或办理步骤"),
       "请补充具体条款编号"
     );
-    await userEvent.click(screen.getByRole("button", { name: /提\s*交\s*反\s*馈/ }));
+    await userEvent.click(screen.getByRole("button", { name: "提交反馈" }));
 
     await waitFor(() => {
       expect(onFeedbackSubmit).toHaveBeenCalledWith("msg-3", {

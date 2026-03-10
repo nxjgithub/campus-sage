@@ -111,3 +111,9 @@ frontend/
 - 契约变更必须同步更新：
   - `docs/frontend/API_CONTRACT.md`
   - 对应功能测试用例
+
+## 工作台壳层补充（2026-03）
+- 管理页优先复用共享工作台组件，至少包含 `OpsWorkbench`（双栏壳层）与 `OpsPane`（统一列表/表单面板），避免每页重复拼装布局。
+- 当页面需要在面板头部之下插入筛选器、密度切换、统计提示时，优先通过 `OpsPane.toolbar` 承载，而不是在页面内重复拼接 `ops-pane-body` 结构。
+- 路由级布局差异通过 React Router `handle.layout` 元信息表达，例如 `hideGlobalSider`，不再在布局层硬编码路径判断。
+- `PortalLayout` 负责统一读取导航配置、登录态与路由元信息；页面层只关心业务内容与面板结构。

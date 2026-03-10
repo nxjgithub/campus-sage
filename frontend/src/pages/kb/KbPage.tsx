@@ -1,4 +1,15 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import {
+  DatabaseOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  ThunderboltOutlined
+} from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -25,6 +36,7 @@ import {
 } from "../../shared/api/modules/kb";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { ConfirmAction } from "../../shared/components/ConfirmAction";
+import { OpsPane, OpsWorkbench } from "../../shared/components/OpsWorkbench";
 import { PageState } from "../../shared/components/PageState";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 
@@ -53,6 +65,16 @@ interface KbEditValues {
 
 type VisibilityFilter = "all" | "public" | "internal" | "admin";
 type TableDensity = "middle" | "small";
+
+function resolveVisibilityColor(value: VisibilityFilter | KbFormValues["visibility"]) {
+  if (value === "public") {
+    return "success";
+  }
+  if (value === "admin") {
+    return "error";
+  }
+  return "processing";
+}
 
 export function KbPage() {
   const queryClient = useQueryClient();
@@ -178,21 +200,14 @@ export function KbPage() {
       if (visibilityFilter !== "all" && item.visibility !== visibilityFilter) {
         return false;
       }
+      if (onlyRerankEnabled && !item.config?.rerank_enabled) {
+        return false;
+      }
       if (!keyword.trim()) {
-        if (onlyRerankEnabled) {
-          return Boolean(item.config?.rerank_enabled);
-        }
         return true;
       }
       const target = `${item.name} ${item.description ?? ""}`.toLowerCase();
-      const matchesKeyword = target.includes(keyword.toLowerCase());
-      if (!matchesKeyword) {
-        return false;
-      }
-      if (onlyRerankEnabled) {
-        return Boolean(item.config?.rerank_enabled);
-      }
-      return true;
+      return target.includes(keyword.toLowerCase());
     });
   }, [kbQuery.data?.items, keyword, visibilityFilter, onlyRerankEnabled]);
 
@@ -207,13 +222,21 @@ export function KbPage() {
       )}
 
       <Card className="hero-card">
-        <Space direction="vertical" size={10} style={{ width: "100%" }}>
-          <Typography.Title level={4} className="hero-title">
-            知识库配置中心
-          </Typography.Title>
-          <Typography.Text className="hero-desc">
-            面向管理员的知识库运维台，可统一控制可见性与检索策略。
-          </Typography.Text>
+        <div className="hero-layout">
+          <div>
+            <div className="hero-kicker">管理端 / 知识库治理</div>
+            <Typography.Title level={4} className="hero-title">
+              知识库配置中心
+            </Typography.Title>
+            <Typography.Text className="hero-desc">
+              统一控制知识库可见性、检索阈值、重排开关与上下文预算，避免策略分散在多个页面。
+            </Typography.Text>
+            <div className="hero-note" style={{ marginTop: 14 }}>
+              <span className="hero-note__item">创建后可立即进入文档入库</span>
+              <span className="hero-note__item">列表支持按可见性与重排策略筛选</span>
+              <span className="hero-note__item">编辑窗口集中维护检索契约参数</span>
+            </div>
+          </div>
           <div className="summary-grid">
             <div className="summary-item">
               <div className="summary-item-label">知识库总数</div>
@@ -232,13 +255,21 @@ export function KbPage() {
               <div className="summary-item-value">{adminCount}</div>
             </div>
           </div>
-        </Space>
+        </div>
       </Card>
 
-      <div className="ops-workbench">
-        <Card title="创建知识库" className="card-soft ops-pane-card">
-          <div className="ops-pane-body">
-            <div className="ops-scroll-pane">
+      <OpsWorkbench
+        left={
+          <OpsPane
+            title={
+              <Space size={8}>
+                <PlusOutlined />
+                <span>创建知识库</span>
+              </Space>
+            }
+            introTitle="先定义访问边界，再定义检索策略"
+            introDescription="建议先确定知识库用途与可见性，再设置 TopK、阈值和最小上下文要求，避免后续问答表现漂移。"
+          >
               <Form<KbFormValues>
                 form={createForm}
                 layout="vertical"
@@ -300,28 +331,41 @@ export function KbPage() {
                   </Space>
                 </Card>
                 <Form.Item style={{ marginTop: 12 }}>
-                  <Button type="primary" htmlType="submit" loading={createMutation.isPending}>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    icon={<PlusOutlined />}
+                    loading={createMutation.isPending}
+                  >
                     创建
                   </Button>
                 </Form.Item>
               </Form>
-            </div>
-          </div>
-        </Card>
-
-        <Card
-          title="知识库列表"
-          className={`card-soft ops-pane-card ${tableDensity === "small" ? "ops-pane-card--dense" : ""}`}
-          extra={
-            <Button onClick={() => void kbQuery.refetch()} loading={kbQuery.isFetching}>
-              刷新
-            </Button>
-          }
-        >
-          <div className="ops-pane-body">
+          </OpsPane>
+        }
+        right={
+          <OpsPane
+            title={
+              <Space size={8}>
+                <DatabaseOutlined />
+                <span>知识库列表</span>
+              </Space>
+            }
+            dense={tableDensity === "small"}
+            extra={
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => void kbQuery.refetch()}
+                loading={kbQuery.isFetching}
+              >
+                刷新
+              </Button>
+            }
+          >
             <div className="density-toolbar">
               <Space wrap>
                 <Input
+                  prefix={<SearchOutlined />}
                   placeholder="搜索名称 / 描述"
                   allowClear
                   value={keyword}
@@ -343,6 +387,7 @@ export function KbPage() {
                   }}
                 />
                 <Button
+                  icon={<ThunderboltOutlined />}
                   onClick={() => {
                     setOnlyRerankEnabled((prev) => !prev);
                   }}
@@ -378,16 +423,22 @@ export function KbPage() {
                   dataSource={filteredItems}
                   pagination={false}
                   columns={[
-                    { title: "名称", dataIndex: "name" },
                     {
-                      title: "说明",
-                      dataIndex: "description",
-                      render: (value: string | null | undefined) => value || "-"
+                      title: "知识库",
+                      dataIndex: "name",
+                      render: (_value: string, record) => (
+                        <Space direction="vertical" size={2}>
+                          <Typography.Text strong>{record.name}</Typography.Text>
+                          <Typography.Text type="secondary">
+                            {record.description || "暂无说明"}
+                          </Typography.Text>
+                        </Space>
+                      )
                     },
                     {
-                      title: "检索参数",
+                      title: "策略",
                       key: "retrieval",
-                      width: 240,
+                      width: 260,
                       render: (_, record) => (
                         <Space size={4} wrap>
                           <Tag>TopK {record.config?.topk ?? "-"}</Tag>
@@ -402,9 +453,20 @@ export function KbPage() {
                       title: "可见性",
                       dataIndex: "visibility",
                       width: 120,
-                      render: (value: string) => <Tag>{value}</Tag>
+                      render: (value: KbEditValues["visibility"]) => (
+                        <Tag color={resolveVisibilityColor(value)} icon={<EyeOutlined />}>
+                          {value}
+                        </Tag>
+                      )
                     },
-                    { title: "更新时间", dataIndex: "updated_at", width: 220 },
+                    {
+                      title: "更新时间",
+                      dataIndex: "updated_at",
+                      width: 220,
+                      render: (value: string) => (
+                        <Typography.Text type="secondary">{value}</Typography.Text>
+                      )
+                    },
                     {
                       title: "操作",
                       key: "actions",
@@ -413,6 +475,7 @@ export function KbPage() {
                         <Space>
                           <Button
                             size="small"
+                            icon={<EditOutlined />}
                             onClick={() => {
                               setEditingKbId(record.kb_id);
                             }}
@@ -425,6 +488,7 @@ export function KbPage() {
                             cancelText="取消"
                             onConfirm={() => deleteMutation.mutate(record.kb_id)}
                             buttonText="删除"
+                            icon={<DeleteOutlined />}
                             danger
                             size="small"
                             loading={deleteMutation.isPending}
@@ -436,12 +500,17 @@ export function KbPage() {
                 />
               </div>
             </PageState>
-          </div>
-        </Card>
-      </div>
+          </OpsPane>
+        }
+      />
 
       <Modal
-        title="编辑知识库"
+        title={
+          <Space size={8}>
+            <SettingOutlined />
+            <span>编辑知识库</span>
+          </Space>
+        }
         open={Boolean(editingKbId)}
         onCancel={() => setEditingKbId(null)}
         confirmLoading={updateMutation.isPending}
@@ -492,4 +561,3 @@ export function KbPage() {
     </div>
   );
 }
-

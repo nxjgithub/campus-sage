@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+﻿import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -111,7 +111,7 @@ describe("UsersPage", () => {
 
     await userEvent.type(screen.getByLabelText("邮箱"), "new@example.com");
     await userEvent.type(screen.getByLabelText("初始密码"), "User1234");
-    await userEvent.click(screen.getByRole("button", { name: "创建用户" }));
+    await userEvent.click(screen.getByRole("button", { name: /创建用户/ }));
 
     await waitFor(() => {
       expect(createUser).toHaveBeenCalledWith({

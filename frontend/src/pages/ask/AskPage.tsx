@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { DeleteOutlined, EditOutlined, HistoryOutlined, LoginOutlined, LogoutOutlined, MessageOutlined, PlusOutlined, SearchOutlined, SendOutlined, StopOutlined } from "@ant-design/icons";
 import {
   Alert,
   Button,
@@ -49,6 +50,7 @@ import {
 import { useAuth } from "../../shared/auth/auth";
 import { getAccessToken } from "../../shared/auth/token";
 import { FeedbackAction } from "../../shared/components/FeedbackAction";
+import { PortalSwitch } from "../../shared/components/PortalSwitch";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import { splitCitationMarkers } from "../../shared/utils/citation";
 
@@ -70,6 +72,21 @@ interface ThreadMessage {
 }
 
 const MESSAGE_PAGE_SIZE = 30;
+const COMPOSER_STATUS_LABEL: Record<ComposerStatus, string> = {
+  idle: "就绪",
+  sending: "发送中",
+  streaming: "生成中",
+  stopping: "停止中",
+  failed: "发送失败"
+};
+
+const COMPOSER_STATUS_COLOR: Record<ComposerStatus, string> = {
+  idle: "default",
+  sending: "processing",
+  streaming: "blue",
+  stopping: "warning",
+  failed: "error"
+};
 
 function toThreadMessage(item: ConversationMessage): ThreadMessage {
   return {
@@ -953,6 +970,7 @@ export function AskPage() {
               }
             />
             <Input
+              prefix={<SearchOutlined />}
               value={keyword}
               placeholder="搜索会话"
               allowClear
@@ -960,17 +978,17 @@ export function AskPage() {
                 setKeyword(event.target.value);
               }}
             />
-            <Space wrap>
-              <Button type="primary" onClick={() => void startNewChat()} disabled={isBusy || !kbId}>
-                新对话
+            <div className="chat-sidebar-toolbar">
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => void startNewChat()} disabled={isBusy || !kbId}>
+                新建
               </Button>
-              <Button onClick={openRenameDialog} disabled={!activeConversationId || isBusy}>
+              <Button icon={<EditOutlined />} onClick={openRenameDialog} disabled={!activeConversationId || isBusy}>
                 重命名
               </Button>
-              <Button danger onClick={handleDeleteConversation} disabled={!activeConversationId || isBusy}>
+              <Button danger icon={<DeleteOutlined />} onClick={handleDeleteConversation} disabled={!activeConversationId || isBusy}>
                 删除
               </Button>
-            </Space>
+            </div>
           </div>
 
           <div className="chat-sidebar-list">
@@ -1020,30 +1038,28 @@ export function AskPage() {
               <Typography.Text strong>
                 {isAuthenticated ? user?.email ?? "当前用户" : "游客模式"}
               </Typography.Text>
-              <Typography.Text type="secondary">
-                {isAuthenticated ? `角色：${role}` : "登录后可保存会话与反馈记录"}
-              </Typography.Text>
+              <Typography.Text type="secondary">基于证据回答，点击助手消息可查看引用与耗时。</Typography.Text>
             </div>
             {isAuthenticated ? (
-              <Space size={6}>
+              <div className="chat-sidebar-user__actions">
                 {role === "admin" ? (
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      navigate("/admin/kb");
+                  <PortalSwitch
+                    activeRole="user"
+                    onChange={(targetRole) => {
+                      navigate(targetRole === "admin" ? "/admin/kb" : "/app/ask");
                     }}
-                  >
-                    管理端
-                  </Button>
+                    compact
+                  />
                 ) : null}
-                <Button size="small" onClick={() => void handleSignOut()} loading={signingOut}>
+                <Button size="small" icon={<LogoutOutlined />} onClick={() => void handleSignOut()} loading={signingOut}>
                   退出
                 </Button>
-              </Space>
+              </div>
             ) : (
               <Button
                 size="small"
                 type="primary"
+                icon={<LoginOutlined />}
                 onClick={() => {
                   navigate("/login?next=/app/ask");
                 }}
@@ -1055,11 +1071,11 @@ export function AskPage() {
         </div>
       </Card>
 
-      <Card className="chat-thread-card" title="聊天">
+      <Card className="chat-thread-card" title={<Space size={8}><MessageOutlined /><span>智能问答</span></Space>}>
         <div className="chat-thread-head">
           <Space wrap>
             {selectedKbName ? <Tag color="geekblue">知识库：{selectedKbName}</Tag> : null}
-            <Tag color="blue">状态：{composerStatus}</Tag>
+            <Tag color={COMPOSER_STATUS_COLOR[composerStatus]} className="chat-status-tag">状态：{COMPOSER_STATUS_LABEL[composerStatus]}</Tag>
           </Space>
         </div>
 
@@ -1070,6 +1086,7 @@ export function AskPage() {
           {messagesHasMore && threadStatus === "success" ? (
             <div className="chat-thread-loadmore">
               <Button
+                icon={<HistoryOutlined />}
                 loading={messagesLoading}
                 onClick={() => {
                   if (activeConversationId) {
@@ -1149,23 +1166,25 @@ export function AskPage() {
                       {item.message_id ? (
                         <Button
                           size="small"
+                          icon={<HistoryOutlined />}
                           loading={actioningMessageId === item.message_id && regenerateMutation.isPending}
                           onClick={() => {
                             void handleRegenerate(item.message_id as string);
                           }}
                         >
-                          重新生成
+                          重试
                         </Button>
                       ) : null}
                       {item.message_id ? (
                         <Button
                           size="small"
+                          icon={<EditOutlined />}
                           loading={actioningMessageId === item.message_id && editResendMutation.isPending}
                           onClick={() => {
                             openEditDialog(item.message_id as string);
                           }}
                         >
-                          编辑后重发
+                          改写
                         </Button>
                       ) : null}
                     </Space>
@@ -1180,7 +1199,7 @@ export function AskPage() {
             <Input.TextArea
               value={composerText}
               autoSize={{ minRows: 3, maxRows: 8 }}
-              placeholder="请输入问题，回车发送（Shift+回车换行）"
+              placeholder="请输入你的问题，Enter 发送，Shift + Enter 换行"
               onChange={(event) => {
                 setComposerText(event.target.value);
               }}
@@ -1196,10 +1215,11 @@ export function AskPage() {
               }}
             />
             <div className="chat-composer-actions">
-              <Typography.Text type="secondary">Enter 发送，Shift + Enter 换行</Typography.Text>
+              <Typography.Text type="secondary">回答会自动保留引用编号，可随时打开证据面板查看来源。</Typography.Text>
               <Space>
                 <Button
                   type="primary"
+                  icon={<SendOutlined />}
                   onClick={() => {
                     void handleSend();
                   }}
@@ -1208,7 +1228,7 @@ export function AskPage() {
                 >
                   发送
                 </Button>
-                <Button danger onClick={() => void handleStop()} disabled={!isBusy}>
+                <Button danger icon={<StopOutlined />} onClick={() => void handleStop()} disabled={!isBusy}>
                   停止
                 </Button>
               </Space>
