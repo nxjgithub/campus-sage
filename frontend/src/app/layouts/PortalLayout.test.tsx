@@ -106,7 +106,7 @@ describe("PortalLayout", () => {
 
     expect(await screen.findByText("用户演示页")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /登录/ })).toBeInTheDocument();
-    expect(screen.getAllByText("匿名访问")).toHaveLength(2);
+    expect(screen.getByText("匿名访问")).toBeInTheDocument();
     expect(screen.queryByLabelText("切换到管理端")).not.toBeInTheDocument();
   });
 
@@ -119,7 +119,7 @@ describe("PortalLayout", () => {
     renderWithRouter(["/admin/users"], createAdminAndUserRoutes());
 
     expect(await screen.findByText("用户页")).toBeInTheDocument();
-    expect(screen.getAllByText("admin@example.com")).toHaveLength(2);
+    expect(screen.getByText("admin@example.com")).toBeInTheDocument();
 
     await userEvent.click(screen.getAllByLabelText("切换到用户端")[0]);
 

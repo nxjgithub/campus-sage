@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchKbList } from "../../shared/api/modules/kb";
 import {
@@ -39,9 +40,11 @@ function renderWithProviders(node: ReactNode) {
   });
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <AntdApp>{node}</AntdApp>
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={["/admin/documents"]}>
+      <QueryClientProvider client={queryClient}>
+        <AntdApp>{node}</AntdApp>
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -216,13 +219,12 @@ describe("DocumentsPage 二次确认交互", () => {
 
     renderWithProviders(<DocumentsPage initialKbId="kb-1" />);
 
-    const statusCell = await screen.findByText("执行中");
-    const row = statusCell.closest("tr");
-    if (!(row instanceof HTMLElement)) {
-      throw new Error("未找到历史任务行");
+    const cancelButtons = await screen.findAllByRole("button", { name: /取消历史任务/ });
+    const cancelButton = cancelButtons.find((button) => !button.hasAttribute("disabled"));
+    if (!(cancelButton instanceof HTMLButtonElement)) {
+      throw new Error("未找到可点击的历史任务取消按钮");
     }
-
-    await userEvent.click(within(row).getByRole("button", { name: /取消历史任务/ }));
+    await userEvent.click(cancelButton);
 
     expect(await screen.findByText("确认取消该任务？")).toBeInTheDocument();
     expect(cancelIngestJob).not.toHaveBeenCalled();

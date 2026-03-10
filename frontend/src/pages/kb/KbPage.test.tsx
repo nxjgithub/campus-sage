@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createKb,
@@ -30,9 +31,11 @@ function renderWithProviders(node: ReactNode) {
   });
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <AntdApp>{node}</AntdApp>
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={["/admin/kb"]}>
+      <QueryClientProvider client={queryClient}>
+        <AntdApp>{node}</AntdApp>
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 

@@ -1,7 +1,9 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowRightOutlined,
   DeleteOutlined,
   EditOutlined,
+  InfoCircleOutlined,
   KeyOutlined,
   LockOutlined,
   PlusOutlined,
@@ -11,7 +13,6 @@ import {
   SearchOutlined,
   SettingOutlined,
   TeamOutlined,
-  UserAddOutlined
 } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -25,13 +26,14 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message
 } from "antd";
+import { useNavigate } from "react-router-dom";
 import { fetchKbList } from "../../shared/api/modules/kb";
 import { fetchRoleList } from "../../shared/api/modules/roles";
 import {
-  createUser,
   deleteUserKbAccess,
   fetchUserKbAccess,
   fetchUserList,
@@ -43,15 +45,11 @@ import {
 } from "../../shared/api/modules/users";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { ConfirmAction } from "../../shared/components/ConfirmAction";
-import { OpsPane, OpsWorkbench } from "../../shared/components/OpsWorkbench";
+import { CompactPageHero } from "../../shared/components/CompactPageHero";
+import { DonutMetricChart, MetricBarChart } from "../../shared/components/MetricCharts";
+import { OpsPane } from "../../shared/components/OpsWorkbench";
 import { PageState } from "../../shared/components/PageState";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
-
-interface CreateUserValues {
-  email: string;
-  password: string;
-  roles: string[];
-}
 
 interface EditUserValues {
   status: "active" | "disabled" | "deleted";
@@ -95,8 +93,8 @@ function resolveStatusColor(status: EditUserValues["status"]) {
 }
 
 export function UsersPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [createForm] = Form.useForm<CreateUserValues>();
   const [editForm] = Form.useForm<EditUserValues>();
   const [accessForm] = Form.useForm<KbAccessValues>();
   const [bulkAccessForm] = Form.useForm<KbAccessBulkValues>();
@@ -171,25 +169,6 @@ export function UsersPage() {
       { value: "admin", label: "admin" }
     ];
   }, [roleQuery.data?.items]);
-
-  const createMutation = useMutation({
-    mutationFn: async (values: CreateUserValues) =>
-      createUser({
-        email: values.email.trim(),
-        password: values.password,
-        roles: values.roles
-      }),
-    onSuccess: async () => {
-      message.success("用户创建成功");
-      createForm.resetFields();
-      createForm.setFieldValue("roles", ["user"]);
-      await queryClient.invalidateQueries({ queryKey: ["users", "list"] });
-    },
-    onError: (error) => {
-      const normalized = normalizeApiError(error);
-      message.error(formatApiErrorMessage(normalized));
-    }
-  });
 
   const updateUserMutation = useMutation({
     mutationFn: async (values: EditUserValues) => {
@@ -273,7 +252,6 @@ export function UsersPage() {
   });
 
   const firstError = useMemo(() => {
-    if (createMutation.isError) return normalizeApiError(createMutation.error);
     if (updateUserMutation.isError) return normalizeApiError(updateUserMutation.error);
     if (accessMutation.isError) return normalizeApiError(accessMutation.error);
     if (deleteAccessMutation.isError) return normalizeApiError(deleteAccessMutation.error);
@@ -288,8 +266,6 @@ export function UsersPage() {
     accessMutation.isError,
     accessQuery.error,
     accessQuery.isError,
-    createMutation.error,
-    createMutation.isError,
     deleteAccessMutation.error,
     deleteAccessMutation.isError,
     kbQuery.error,
@@ -328,272 +304,240 @@ export function UsersPage() {
   const kbNameMap = useMemo(() => {
     return new Map((kbQuery.data?.items ?? []).map((item) => [item.kb_id, item.name]));
   }, [kbQuery.data?.items]);
+  const statusChartItems = [
+    { key: "active", label: "活跃", value: activeCount, color: "#16a34a" },
+    { key: "disabled", label: "禁用", value: disabledCount, color: "#f59e0b" },
+    {
+      key: "deleted",
+      label: "已删除",
+      value: usersQuery.data?.items.filter((item) => item.status === "deleted").length ?? 0,
+      color: "#94a3b8"
+    }
+  ];
+  const roleChartItems = [
+    { key: "admin", label: "管理员", value: adminCount, color: "#2563eb" },
+    {
+      key: "user",
+      label: "普通用户",
+      value: usersQuery.data?.items.filter((item) => item.roles.includes("user")).length ?? 0,
+      color: "#0ea5a0"
+    }
+  ];
 
   return (
     <div className="page-stack">
       {firstError ? <RequestErrorAlert error={firstError} /> : null}
 
-      <Card className="hero-card">
-        <div className="hero-layout">
-          <div>
-            <div className="hero-kicker">管理端 / 账号与授权</div>
-            <Typography.Title level={4} className="hero-title">
-              用户与权限中心
-            </Typography.Title>
-            <Typography.Text className="hero-desc">
-              统一处理用户生命周期、角色分配和知识库授权，减少账号管理和资源授权分散操作。
-            </Typography.Text>
-            <div className="hero-note" style={{ marginTop: 14 }}>
-              <span className="hero-note__item">左侧创建账号，右侧维护状态与角色</span>
-              <span className="hero-note__item">权限弹窗集中处理单条与批量授权</span>
-              <span className="hero-note__item">列表筛选优先按状态和角色切分</span>
-            </div>
-          </div>
-          <div className="summary-grid">
-            <div className="summary-item">
-              <div className="summary-item-label">当前页用户数</div>
-              <div className="summary-item-value">{usersQuery.data?.items.length ?? 0}</div>
-            </div>
-            <div className="summary-item">
-              <div className="summary-item-label">活跃账号</div>
-              <div className="summary-item-value">{activeCount}</div>
-            </div>
-            <div className="summary-item">
-              <div className="summary-item-label">禁用账号</div>
-              <div className="summary-item-value">{disabledCount}</div>
-            </div>
-            <div className="summary-item">
-              <div className="summary-item-label">管理员账号</div>
-              <div className="summary-item-value">{adminCount}</div>
-            </div>
-          </div>
-        </div>
-      </Card>
+      <CompactPageHero
+        kicker="账号与授权"
+        title="用户与权限中心"
+        description="当前页面只负责列表维护、状态调整和知识库授权；创建动作已拆到独立页面，减少同屏表单堆叠。"
+        stats={[
+          { label: "用户", value: usersQuery.data?.items.length ?? 0 },
+          { label: "活跃", value: activeCount },
+          { label: "禁用", value: disabledCount },
+          { label: "管理员", value: adminCount }
+        ]}
+      />
 
-      <OpsWorkbench
-        left={
-          <OpsPane
-            title={
-              <Space size={8}>
-                <UserAddOutlined />
-                <span>创建用户</span>
-              </Space>
-            }
-            introTitle="新账号默认从最小权限开始"
-            introDescription="建议先创建基础角色账号，再通过右侧列表或权限弹窗追加管理权限与知识库访问范围。"
-          >
-              <Form<CreateUserValues>
-                form={createForm}
-                layout="vertical"
-                initialValues={{ roles: ["user"] }}
-                onFinish={(values) => {
-                  createMutation.mutate(values);
+      <div className="dashboard-grid">
+        <Card className="card-soft" size="small" title="用户状态分布">
+          <DonutMetricChart
+            items={statusChartItems}
+            centerLabel="用户"
+            centerValue={usersQuery.data?.items.length ?? 0}
+            emptyText="暂无用户状态数据"
+          />
+        </Card>
+        <Card className="card-soft" size="small" title="角色对比">
+          <MetricBarChart items={roleChartItems} emptyText="暂无角色分布数据" />
+        </Card>
+      </div>
+
+      <Card className="card-soft split-manage-card">
+        <OpsPane
+          title={
+            <Space size={8}>
+              <TeamOutlined />
+              <span>用户列表</span>
+            </Space>
+          }
+          dense={tableDensity === "small"}
+          extra={
+            <Space>
+              <Button
+                type="primary"
+                icon={<ArrowRightOutlined />}
+                onClick={() => {
+                  navigate("/admin/users/create");
                 }}
               >
-                <Form.Item
-                  name="email"
-                  label="邮箱"
-                  rules={[
-                    { required: true, message: "请输入邮箱" },
-                    { type: "email", message: "邮箱格式不正确" }
-                  ]}
-                >
-                  <Input placeholder="user@example.com" />
-                </Form.Item>
-                <Form.Item
-                  name="password"
-                  label="初始密码"
-                  rules={[{ required: true, message: "请输入初始密码" }]}
-                >
-                  <Input.Password placeholder="请包含字母与数字" />
-                </Form.Item>
-                <Form.Item
-                  name="roles"
-                  label="角色"
-                  rules={[{ required: true, message: "请选择角色" }]}
-                >
-                  <Select mode="multiple" options={roleOptions} />
-                </Form.Item>
-                <Form.Item>
-                  <Button
-                    type="primary"
-                    htmlType="submit"
-                    icon={<PlusOutlined />}
-                    loading={createMutation.isPending}
-                    block
-                  >
-                    创建用户
-                  </Button>
-                </Form.Item>
-              </Form>
-          </OpsPane>
-        }
-        right={
-          <OpsPane
-            title={
-              <Space size={8}>
-                <TeamOutlined />
-                <span>用户列表</span>
-              </Space>
-            }
-            dense={tableDensity === "small"}
-            extra={
-              <Space>
-                <Input
-                  allowClear
-                  prefix={<SearchOutlined />}
-                  placeholder="按邮箱搜索"
-                  value={filterKeywordInput}
-                  onChange={(event) => setFilterKeywordInput(event.target.value)}
-                  style={{ width: 220 }}
-                />
-                <Select
-                  allowClear
-                  placeholder="状态筛选"
-                  value={filterStatus}
-                  options={STATUS_OPTIONS}
-                  style={{ width: 140 }}
-                  onChange={(value) => {
-                    setFilterStatus(value);
-                    setPage(1);
-                  }}
-                />
-                <Button
-                  icon={<SearchOutlined />}
-                  onClick={() => {
-                    setFilterKeyword(filterKeywordInput.trim());
-                    setPage(1);
-                  }}
-                >
-                  查询
-                </Button>
-                <Button
-                  icon={<ReloadOutlined />}
-                  onClick={() => void usersQuery.refetch()}
-                  loading={usersQuery.isFetching}
-                >
-                  刷新
-                </Button>
-              </Space>
-            }
-          >
-            <div className="density-toolbar">
-              <Segmented<RoleFilter>
-                value={roleFilter}
-                options={[
-                  { label: "全部角色", value: "all" },
-                  { label: "仅管理员", value: "admin" },
-                  { label: "仅用户", value: "user" }
-                ]}
+                前往创建
+              </Button>
+              <Input
+                allowClear
+                prefix={<SearchOutlined />}
+                placeholder="按邮箱搜索"
+                value={filterKeywordInput}
+                onChange={(event) => setFilterKeywordInput(event.target.value)}
+                style={{ width: 220 }}
+              />
+              <Select
+                allowClear
+                placeholder="状态筛选"
+                value={filterStatus}
+                options={STATUS_OPTIONS}
+                style={{ width: 140 }}
                 onChange={(value) => {
-                  setRoleFilter(value);
+                  setFilterStatus(value);
                   setPage(1);
                 }}
               />
-              <Space>
-                <Typography.Text className="density-meta">
-                  当前 {filteredUsers.length} / {usersQuery.data?.items.length ?? 0}
-                </Typography.Text>
-                <Segmented<TableDensity>
-                  size="small"
-                  value={tableDensity}
-                  options={[
-                    { label: "舒适", value: "middle" },
-                    { label: "紧凑", value: "small" }
-                  ]}
-                  onChange={(value) => {
-                    setTableDensity(value);
-                  }}
-                />
-              </Space>
+              <Button
+                shape="circle"
+                icon={<SearchOutlined />}
+                onClick={() => {
+                  setFilterKeyword(filterKeywordInput.trim());
+                  setPage(1);
+                }}
+                aria-label="查询用户"
+              />
+              <Button
+                shape="circle"
+                icon={<ReloadOutlined />}
+                onClick={() => void usersQuery.refetch()}
+                loading={usersQuery.isFetching}
+                aria-label="刷新用户列表"
+              />
+            </Space>
+          }
+        >
+          <div className="split-pane-copy split-pane-copy--compact">
+            <Typography.Text className="split-pane-copy__title">
+              列表页只处理维护与授权
+            </Typography.Text>
+            <Typography.Text className="split-pane-copy__desc">
+              新账号创建已单独拆页，这里专注做筛选、状态编辑和知识库访问控制。
+            </Typography.Text>
+          </div>
+          <div className="density-toolbar density-toolbar--clean">
+            <Segmented<RoleFilter>
+              value={roleFilter}
+              options={[
+                { label: "全部角色", value: "all" },
+                { label: "仅管理员", value: "admin" },
+                { label: "仅用户", value: "user" }
+              ]}
+              onChange={(value) => {
+                setRoleFilter(value);
+                setPage(1);
+              }}
+            />
+            <div className="density-toolbar__group density-toolbar__group--meta">
+              <Typography.Text className="density-meta">
+                当前 {filteredUsers.length} / {usersQuery.data?.items.length ?? 0}
+              </Typography.Text>
+              <Segmented<TableDensity>
+                size="small"
+                value={tableDensity}
+                options={[
+                  { label: "舒适", value: "middle" },
+                  { label: "紧凑", value: "small" }
+                ]}
+                onChange={(value) => {
+                  setTableDensity(value);
+                }}
+              />
             </div>
-            <PageState status={userTableStatus}>
-              <div className="ops-scroll-pane">
-                <Table
-                  size={tableDensity}
-                  className={tableDensity === "small" ? "dense-table" : undefined}
-                  rowKey="user_id"
-                  dataSource={filteredUsers}
-                  pagination={{
-                    current: page,
-                    pageSize,
-                    total: roleFilter === "all" ? usersQuery.data?.total ?? 0 : filteredUsers.length,
-                    showSizeChanger: true,
-                    pageSizeOptions: USER_PAGE_SIZE_OPTIONS.map(String),
-                    onChange: (nextPage, nextPageSize) => {
-                      setPage(nextPage);
-                      setPageSize(nextPageSize);
-                    }
-                  }}
-                  columns={[
-                    {
-                      title: "用户",
-                      dataIndex: "email",
-                      width: 280,
-                      render: (value: string, record: UserListItem) => (
-                        <Space direction="vertical" size={2}>
-                          <Typography.Text strong>{value}</Typography.Text>
-                          <Typography.Text type="secondary">
-                            创建于 {record.created_at}
-                          </Typography.Text>
-                        </Space>
-                      )
-                    },
-                    {
-                      title: "状态",
-                      dataIndex: "status",
-                      width: 120,
-                      render: (value: EditUserValues["status"]) => (
-                        <Tag color={resolveStatusColor(value)}>{value}</Tag>
-                      )
-                    },
-                    {
-                      title: "角色",
-                      dataIndex: "roles",
-                      render: (roles: string[]) => (
-                        <Space wrap>
-                          {roles.map((role) => (
-                            <Tag key={role} color={role === "admin" ? "processing" : "default"}>
-                              {role}
-                            </Tag>
-                          ))}
-                        </Space>
-                      )
-                    },
-                    {
-                      title: "操作",
-                      key: "actions",
-                      width: 220,
-                      render: (_, record: UserListItem) => (
-                        <Space>
+          </div>
+          <PageState status={userTableStatus}>
+            <div className="ops-scroll-pane">
+              <Table
+                size={tableDensity}
+                className={tableDensity === "small" ? "dense-table" : undefined}
+                rowKey="user_id"
+                dataSource={filteredUsers}
+                pagination={{
+                  current: page,
+                  pageSize,
+                  total: roleFilter === "all" ? usersQuery.data?.total ?? 0 : filteredUsers.length,
+                  showSizeChanger: true,
+                  pageSizeOptions: USER_PAGE_SIZE_OPTIONS.map(String),
+                  onChange: (nextPage, nextPageSize) => {
+                    setPage(nextPage);
+                    setPageSize(nextPageSize);
+                  }
+                }}
+                columns={[
+                  {
+                    title: "用户",
+                    dataIndex: "email",
+                    width: 280,
+                    render: (value: string, record: UserListItem) => (
+                      <Space direction="vertical" size={2}>
+                        <Typography.Text strong>{value}</Typography.Text>
+                        <Typography.Text type="secondary">创建于 {record.created_at}</Typography.Text>
+                      </Space>
+                    )
+                  },
+                  {
+                    title: "状态",
+                    dataIndex: "status",
+                    width: 120,
+                    render: (value: EditUserValues["status"]) => (
+                      <Tag color={resolveStatusColor(value)}>{value}</Tag>
+                    )
+                  },
+                  {
+                    title: "角色",
+                    dataIndex: "roles",
+                    render: (roles: string[]) => (
+                      <Space wrap>
+                        {roles.map((role) => (
+                          <Tag key={role} color={role === "admin" ? "processing" : "default"}>
+                            {role}
+                          </Tag>
+                        ))}
+                      </Space>
+                    )
+                  },
+                  {
+                    title: "操作",
+                    key: "actions",
+                    width: 220,
+                    render: (_, record: UserListItem) => (
+                      <Space>
+                        <Tooltip title="编辑">
                           <Button
                             size="small"
+                            shape="circle"
                             icon={<EditOutlined />}
                             onClick={() => {
                               setEditingUser(record);
                             }}
-                          >
-                            编辑
-                          </Button>
+                            aria-label="编辑用户"
+                          />
+                        </Tooltip>
+                        <Tooltip title="知识库权限">
                           <Button
                             size="small"
+                            shape="circle"
                             icon={<SafetyCertificateOutlined />}
                             onClick={() => {
                               setAccessUser(record);
                             }}
-                          >
-                            KB 权限
-                          </Button>
-                        </Space>
-                      )
-                    }
-                  ]}
-                />
-              </div>
-            </PageState>
-          </OpsPane>
-        }
-      />
+                            aria-label="配置知识库权限"
+                          />
+                        </Tooltip>
+                      </Space>
+                    )
+                  }
+                ]}
+              />
+            </div>
+          </PageState>
+        </OpsPane>
+      </Card>
 
       <Modal
         title={
@@ -644,9 +588,11 @@ export function UsersPage() {
           bulkAccessForm.resetFields();
         }}
       >
-        <Typography.Paragraph type="secondary">
-          当前用户：{accessUser?.email ?? "-"}
-        </Typography.Paragraph>
+        <div className="compact-modal-meta">
+          <Tag icon={<SafetyCertificateOutlined />} color="processing">
+            {accessUser?.email ?? "-"}
+          </Tag>
+        </div>
         <Form<KbAccessValues>
           form={accessForm}
           layout="vertical"
@@ -679,9 +625,17 @@ export function UsersPage() {
               <Select options={ACCESS_LEVEL_OPTIONS} />
             </Form.Item>
             <Form.Item label=" " style={{ marginTop: 22 }}>
-              <Button type="primary" htmlType="submit" icon={<KeyOutlined />} loading={accessMutation.isPending}>
-                新增 / 更新
-              </Button>
+              <Tooltip title="新增或更新权限">
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  shape="circle"
+                  className="compact-primary-action"
+                  icon={<KeyOutlined />}
+                  loading={accessMutation.isPending}
+                  aria-label="新增或更新权限"
+                />
+              </Tooltip>
             </Form.Item>
           </Space>
         </Form>
@@ -709,19 +663,25 @@ export function UsersPage() {
               key: "actions",
               width: 120,
               render: (_, record) => (
-                <ConfirmAction
-                  title="确认撤销该权限？"
-                  okText="确认撤销"
-                  cancelText="返回"
-                  onConfirm={() => {
-                    deleteAccessMutation.mutate(record.kb_id);
-                  }}
-                  buttonText="撤销"
-                  icon={<DeleteOutlined />}
-                  danger
-                  size="small"
-                  loading={deleteAccessMutation.isPending}
-                />
+                <Tooltip title="撤销权限">
+                  <span>
+                    <ConfirmAction
+                      title="确认撤销该权限？"
+                      okText="确认撤销"
+                      cancelText="返回"
+                      onConfirm={() => {
+                        deleteAccessMutation.mutate(record.kb_id);
+                      }}
+                      buttonText=""
+                      icon={<DeleteOutlined />}
+                      danger
+                      size="small"
+                      shape="circle"
+                      loading={deleteAccessMutation.isPending}
+                      ariaLabel="撤销权限"
+                    />
+                  </span>
+                </Tooltip>
               )
             }
           ]}
@@ -733,15 +693,15 @@ export function UsersPage() {
             <Space size={8}>
               <LockOutlined />
               <span>批量覆盖权限列表</span>
+              <Tooltip title="提交后会替换该用户当前全部知识库权限。">
+                <InfoCircleOutlined />
+              </Tooltip>
             </Space>
           }
           size="small"
           style={{ marginTop: 12 }}
           className="card-inset"
         >
-          <Typography.Paragraph type="secondary">
-            提交后会替换该用户当前全部 KB 权限，请谨慎操作。
-          </Typography.Paragraph>
           <Form<KbAccessBulkValues>
             form={bulkAccessForm}
             layout="vertical"
@@ -777,34 +737,41 @@ export function UsersPage() {
                         <Select options={ACCESS_LEVEL_OPTIONS} />
                       </Form.Item>
                       <Form.Item label=" " style={{ marginTop: 22 }}>
-                        <Button
-                          icon={<DeleteOutlined />}
-                          onClick={() => {
-                            remove(field.name);
-                          }}
-                        >
-                          移除
-                        </Button>
+                        <Tooltip title="移除">
+                          <Button
+                            shape="circle"
+                            icon={<DeleteOutlined />}
+                            onClick={() => {
+                              remove(field.name);
+                            }}
+                            aria-label="移除权限项"
+                          />
+                        </Tooltip>
                       </Form.Item>
                     </Space>
                   ))}
                   <Space>
-                    <Button
-                      icon={<PlusOutlined />}
-                      onClick={() => {
-                        add({ kb_id: "", access_level: "read" });
-                      }}
-                    >
-                      添加一条
-                    </Button>
-                    <Button
-                      type="primary"
-                      htmlType="submit"
-                      icon={<SaveOutlined />}
-                      loading={replaceAccessMutation.isPending}
-                    >
-                      批量覆盖保存
-                    </Button>
+                    <Tooltip title="添加一条">
+                      <Button
+                        shape="circle"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          add({ kb_id: "", access_level: "read" });
+                        }}
+                        aria-label="添加权限项"
+                      />
+                    </Tooltip>
+                    <Tooltip title="批量覆盖保存">
+                      <Button
+                        type="primary"
+                        htmlType="submit"
+                        shape="circle"
+                        className="compact-primary-action"
+                        icon={<SaveOutlined />}
+                        loading={replaceAccessMutation.isPending}
+                        aria-label="批量覆盖保存"
+                      />
+                    </Tooltip>
                   </Space>
                 </Space>
               )}

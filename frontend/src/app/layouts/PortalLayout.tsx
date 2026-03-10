@@ -1,4 +1,4 @@
-﻿import {
+import {
   DatabaseOutlined,
   DotChartOutlined,
   FileTextOutlined,
@@ -8,9 +8,10 @@
   MessageOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
+  SettingOutlined,
   TeamOutlined
 } from "@ant-design/icons";
-import { Button, Layout, Menu, Space, Tag, Typography } from "antd";
+import { Button, Layout, Menu, Space, Tag, Tooltip, Typography } from "antd";
 import { ReactNode } from "react";
 import { Outlet, useLocation, useMatches, useNavigate } from "react-router-dom";
 import { useAuth } from "../../shared/auth/auth";
@@ -23,7 +24,7 @@ import {
   resolveNavEntry
 } from "../../shared/constants/nav";
 
-const { Header, Content, Sider } = Layout;
+const { Content, Sider } = Layout;
 
 interface PortalLayoutProps {
   navItems: NavEntry[];
@@ -91,7 +92,6 @@ export function PortalLayout({
   const activeRoute = resolveNavEntry(location.pathname, navItems);
   const activePortal: AppRole = isAdminRoute ? "admin" : "user";
   const routeTitle = activeRoute?.label ?? panelLabel;
-  const routeDescription = activeRoute?.description ?? panelDescription;
 
   const handlePortalChange = (targetRole: AppRole) => {
     navigate(targetRole === "admin" ? "/admin/kb" : "/app/ask");
@@ -105,45 +105,47 @@ export function PortalLayout({
   return (
     <Layout className={hideGlobalSider ? "app-shell app-shell--no-sider" : "app-shell"}>
       {!hideGlobalSider ? (
-        <Sider width={264} className="app-sider">
-          <div className="brand-block">
-            <Space size={8} wrap>
-              <Typography.Text className="brand-kicker">{panelLabel}</Typography.Text>
-              <Tag bordered={false} color={panelRole === "admin" ? "processing" : "cyan"}>
-                {resolvePortalTone(activePortal)}
-              </Tag>
-            </Space>
-            <Typography.Title level={4} className="brand-title">
-              CampusSage
-            </Typography.Title>
-            <Typography.Text className="brand-subtitle">{panelDescription}</Typography.Text>
-          </div>
-
-          {canSwitchPortal ? (
-            <div className="portal-switch-card">
-              <Typography.Text className="portal-switch-card__label">端口切换</Typography.Text>
-              <PortalSwitch activeRole={activePortal} onChange={handlePortalChange} compact />
+        <Sider width={280} className="app-sider">
+          <Tooltip
+            placement="rightTop"
+            title={
+              <Space direction="vertical" size={4}>
+                <Typography.Text strong>{panelLabel}</Typography.Text>
+                <Typography.Text>{panelDescription}</Typography.Text>
+              </Space>
+            }
+          >
+            <div className="brand-block">
+              <Space size={8} wrap>
+                <Typography.Text className="brand-kicker">{panelLabel}</Typography.Text>
+                <Tag bordered={false} color={panelRole === "admin" ? "processing" : "cyan"}>
+                  {resolvePortalTone(activePortal)}
+                </Tag>
+              </Space>
+              <Typography.Title level={4} className="brand-title">
+                CampusSage
+              </Typography.Title>
             </div>
-          ) : null}
+          </Tooltip>
 
-          <div className="nav-section-label">功能导航</div>
           <Menu
             mode="inline"
             selectedKeys={[resolveSelectedKey(location.pathname, navItems)]}
             items={navItems.map((item) => ({
               key: item.key,
               label: (
-                <span
-                  className="nav-menu-link"
-                  onMouseEnter={() => preloadRoute(item.key)}
-                  onFocus={() => preloadRoute(item.key)}
-                >
-                  <span className="nav-menu-icon">{NAV_ICONS[item.iconKey]}</span>
-                  <span className="nav-menu-copy">
-                    <span className="nav-menu-label__title">{item.label}</span>
-                    <span className="nav-menu-label__desc">{item.description}</span>
+                <Tooltip title={item.description} placement="right">
+                  <span
+                    className="nav-menu-link"
+                    onMouseEnter={() => preloadRoute(item.key)}
+                    onFocus={() => preloadRoute(item.key)}
+                  >
+                    <span className="nav-menu-icon">{NAV_ICONS[item.iconKey]}</span>
+                    <span className="nav-menu-copy">
+                      <span className="nav-menu-label__title">{item.label}</span>
+                    </span>
                   </span>
-                </span>
+                </Tooltip>
               )
             }))}
             onClick={(item) => {
@@ -152,65 +154,66 @@ export function PortalLayout({
           />
 
           <div className="menu-footer menu-footer--user">
-            <Typography.Text className="menu-footer-key">当前账号</Typography.Text>
             <Typography.Text className="menu-footer-value">
               {isAuthenticated ? user?.email ?? "已登录用户" : "匿名访问"}
             </Typography.Text>
-            <Typography.Text className="menu-footer-key">访问角色</Typography.Text>
-            <Typography.Text className="menu-footer-value">
-              {isAuthenticated ? resolveRoleText(role) : "游客"}
-            </Typography.Text>
-            <Typography.Text className="menu-footer-key">当前界面</Typography.Text>
-            <Typography.Text className="menu-footer-value">{routeTitle}</Typography.Text>
+            <div className="menu-footer-meta">
+              <Tag color={isAuthenticated ? "default" : "warning"} bordered={false}>
+                {isAuthenticated ? resolveRoleText(role) : "游客"}
+              </Tag>
+              <Tooltip title={routeTitle}>
+                <span className="menu-footer-icon" aria-hidden="true">
+                  <SettingOutlined />
+                </span>
+              </Tooltip>
+            </div>
+            <div className="menu-footer-actions">
+              {canSwitchPortal ? (
+                <PortalSwitch
+                  activeRole={activePortal}
+                  onChange={handlePortalChange}
+                  compact
+                  labelsHidden
+                />
+              ) : null}
+              <div className="menu-footer-action-row">
+                {!isAuthenticated ? (
+                  <Tooltip title="游客模式">
+                    <Tag icon={<SafetyCertificateOutlined />} color="default" bordered={false}>
+                      游客
+                    </Tag>
+                  </Tooltip>
+                ) : null}
+                {isAuthenticated ? (
+                  <Tooltip title="退出登录">
+                    <Button
+                      size="small"
+                      shape="circle"
+                      icon={<LogoutOutlined />}
+                      onClick={() => void handleSignOut()}
+                      aria-label="退出登录"
+                    />
+                  </Tooltip>
+                ) : (
+                  <Tooltip title="登录">
+                    <Button
+                      size="small"
+                      shape="circle"
+                      type="primary"
+                      icon={<LoginOutlined />}
+                      onClick={() => {
+                        navigate(`/login?next=${nextPath}`);
+                      }}
+                      aria-label="登录"
+                    />
+                  </Tooltip>
+                )}
+              </div>
+            </div>
           </div>
         </Sider>
       ) : null}
       <Layout>
-        {!hideGlobalSider ? (
-          <Header className="app-header app-header--with-tools">
-            <div className="header-meta">
-              <Typography.Text className="header-eyebrow">{panelLabel}</Typography.Text>
-              <Typography.Title level={4} className="header-route-title">
-                {routeTitle}
-              </Typography.Title>
-              <Typography.Text className="header-route-desc">{routeDescription}</Typography.Text>
-            </div>
-            <div className="app-header-actions">
-              <div className="header-user-chip">
-                <Typography.Text className="header-user-chip__email">
-                  {isAuthenticated ? user?.email ?? "已登录用户" : "匿名访问"}
-                </Typography.Text>
-                <Tag color={isAuthenticated && role === "admin" ? "processing" : "default"}>
-                  {isAuthenticated ? resolveRoleText(role) : "游客"}
-                </Tag>
-              </div>
-              {canSwitchPortal ? (
-                <PortalSwitch activeRole={activePortal} onChange={handlePortalChange} />
-              ) : null}
-              {isAuthenticated ? (
-                <Button size="small" icon={<LogoutOutlined />} onClick={() => void handleSignOut()}>
-                  退出
-                </Button>
-              ) : (
-                <Space size={8}>
-                  <Tag icon={<SafetyCertificateOutlined />} color="default" bordered={false}>
-                    匿名模式
-                  </Tag>
-                  <Button
-                    size="small"
-                    type="primary"
-                    icon={<LoginOutlined />}
-                    onClick={() => {
-                      navigate(`/login?next=${nextPath}`);
-                    }}
-                  >
-                    登录
-                  </Button>
-                </Space>
-              )}
-            </div>
-          </Header>
-        ) : null}
         <Content className={contentClassName}>
           <Outlet />
         </Content>

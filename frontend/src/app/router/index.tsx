@@ -12,14 +12,28 @@ import { LoginPage } from "../../pages/auth/LoginPage";
 const KbPage = lazy(async () =>
   import("../../pages/kb/KbPage").then((mod) => ({ default: mod.KbPage }))
 );
+const KbCreatePage = lazy(async () =>
+  import("../../pages/kb/KbCreatePage").then((mod) => ({ default: mod.KbCreatePage }))
+);
 const UsersPage = lazy(async () =>
   import("../../pages/users/UsersPage").then((mod) => ({ default: mod.UsersPage }))
+);
+const UsersCreatePage = lazy(async () =>
+  import("../../pages/users/UsersCreatePage").then((mod) => ({ default: mod.UsersCreatePage }))
 );
 const EvalPage = lazy(async () =>
   import("../../pages/eval/EvalPage").then((mod) => ({ default: mod.EvalPage }))
 );
+const EvalCreatePage = lazy(async () =>
+  import("../../pages/eval/EvalCreatePage").then((mod) => ({ default: mod.EvalCreatePage }))
+);
 const DocumentsPage = lazy(async () =>
   import("../../pages/documents/DocumentsPage").then((mod) => ({ default: mod.DocumentsPage }))
+);
+const DocumentsUploadPage = lazy(async () =>
+  import("../../pages/documents/DocumentsUploadPage").then((mod) => ({
+    default: mod.DocumentsUploadPage
+  }))
 );
 const AskPage = lazy(async () =>
   import("../../pages/ask/AskPage").then((mod) => ({ default: mod.AskPage }))
@@ -87,9 +101,13 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/admin/kb" replace /> },
       { path: "kb", element: withSuspense(<KbPage />) },
+      { path: "kb/create", element: withSuspense(<KbCreatePage />) },
       { path: "users", element: withSuspense(<UsersPage />) },
+      { path: "users/create", element: withSuspense(<UsersCreatePage />) },
       { path: "documents", element: withSuspense(<DocumentsPage />) },
+      { path: "documents/upload", element: withSuspense(<DocumentsUploadPage />) },
       { path: "eval", element: withSuspense(<EvalPage />) },
+      { path: "eval/create", element: withSuspense(<EvalCreatePage />) },
       { path: "monitor", element: withSuspense(<MonitorPage />) }
     ]
   },

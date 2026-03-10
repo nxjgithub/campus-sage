@@ -1,10 +1,10 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowRightOutlined,
   DatabaseOutlined,
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
-  PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
   SettingOutlined,
@@ -23,62 +23,28 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message
 } from "antd";
-import {
-  createKb,
-  deleteKb,
-  fetchKbDetail,
-  fetchKbList,
-  KbConfig,
-  updateKb
-} from "../../shared/api/modules/kb";
+import { useNavigate } from "react-router-dom";
+import { deleteKb, fetchKbDetail, fetchKbList, updateKb } from "../../shared/api/modules/kb";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { ConfirmAction } from "../../shared/components/ConfirmAction";
-import { OpsPane, OpsWorkbench } from "../../shared/components/OpsWorkbench";
+import { OpsPane } from "../../shared/components/OpsWorkbench";
 import { PageState } from "../../shared/components/PageState";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
-
-interface KbFormValues {
-  name: string;
-  description?: string;
-  visibility: "public" | "internal" | "admin";
-  topk: number;
-  threshold: number;
-  rerank_enabled: boolean;
-  max_context_tokens: number;
-  min_context_chars: number;
-  min_keyword_coverage: number;
-}
-
-interface KbEditValues {
-  description?: string;
-  visibility: "public" | "internal" | "admin";
-  topk: number;
-  threshold: number;
-  rerank_enabled: boolean;
-  max_context_tokens: number;
-  min_context_chars: number;
-  min_keyword_coverage: number;
-}
-
-type VisibilityFilter = "all" | "public" | "internal" | "admin";
-type TableDensity = "middle" | "small";
-
-function resolveVisibilityColor(value: VisibilityFilter | KbFormValues["visibility"]) {
-  if (value === "public") {
-    return "success";
-  }
-  if (value === "admin") {
-    return "error";
-  }
-  return "processing";
-}
+import {
+  formatDateParts,
+  KbEditValues,
+  resolveVisibilityColor,
+  TableDensity,
+  VisibilityFilter
+} from "./kbShared";
 
 export function KbPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [createForm] = Form.useForm<KbFormValues>();
   const [editForm] = Form.useForm<KbEditValues>();
   const [editingKbId, setEditingKbId] = useState<string | null>(null);
   const [keyword, setKeyword] = useState("");
@@ -112,34 +78,6 @@ export function KbPage() {
       min_keyword_coverage: kbDetailQuery.data.config.min_keyword_coverage ?? 0.3
     });
   }, [editForm, kbDetailQuery.data]);
-
-  const createMutation = useMutation({
-    mutationFn: async (values: KbFormValues) => {
-      const config: KbConfig = {
-        topk: values.topk,
-        threshold: values.threshold,
-        rerank_enabled: values.rerank_enabled,
-        max_context_tokens: values.max_context_tokens,
-        min_context_chars: values.min_context_chars,
-        min_keyword_coverage: values.min_keyword_coverage
-      };
-      return createKb({
-        name: values.name.trim(),
-        description: values.description?.trim() || null,
-        visibility: values.visibility,
-        config
-      });
-    },
-    onSuccess: async () => {
-      message.success("知识库创建成功");
-      createForm.resetFields();
-      await queryClient.invalidateQueries({ queryKey: ["kb", "list"] });
-    },
-    onError: (error) => {
-      const normalized = normalizeApiError(error);
-      message.error(formatApiErrorMessage(normalized));
-    }
-  });
 
   const updateMutation = useMutation({
     mutationFn: async (values: KbEditValues) => {
@@ -213,157 +151,82 @@ export function KbPage() {
 
   return (
     <div className="page-stack">
-      {(createMutation.isError || updateMutation.isError || deleteMutation.isError) && (
-        <RequestErrorAlert
-          error={normalizeApiError(
-            createMutation.error ?? updateMutation.error ?? deleteMutation.error
-          )}
-        />
+      {(updateMutation.isError || deleteMutation.isError) && (
+        <RequestErrorAlert error={normalizeApiError(updateMutation.error ?? deleteMutation.error)} />
       )}
 
-      <Card className="hero-card">
-        <div className="hero-layout">
-          <div>
-            <div className="hero-kicker">管理端 / 知识库治理</div>
-            <Typography.Title level={4} className="hero-title">
-              知识库配置中心
+      <Card className="card-soft kb-overview-card">
+        <div className="kb-overview">
+          <div className="kb-overview__copy">
+            <div className="kb-overview__label-row">
+              <span className="hero-kicker">知识库治理</span>
+              <Typography.Text className="kb-overview__eyebrow">
+                列表维护与创建分离
+              </Typography.Text>
+            </div>
+            <Typography.Title level={3} className="hero-title">
+              知识库列表与维护
             </Typography.Title>
-            <Typography.Text className="hero-desc">
-              统一控制知识库可见性、检索阈值、重排开关与上下文预算，避免策略分散在多个页面。
-            </Typography.Text>
-            <div className="hero-note" style={{ marginTop: 14 }}>
-              <span className="hero-note__item">创建后可立即进入文档入库</span>
-              <span className="hero-note__item">列表支持按可见性与重排策略筛选</span>
-              <span className="hero-note__item">编辑窗口集中维护检索契约参数</span>
+            <Typography.Paragraph className="kb-overview__desc">
+              当前页面只负责筛选、查看、编辑和删除。创建动作已经拆到独立页面，避免在同一视图里同时处理录入与治理。
+            </Typography.Paragraph>
+            <div className="kb-overview__notes">
+              <span className="kb-overview__note">列表页专注筛选和维护</span>
+              <span className="kb-overview__note">创建页专注录入和参数配置</span>
             </div>
-          </div>
-          <div className="summary-grid">
-            <div className="summary-item">
-              <div className="summary-item-label">知识库总数</div>
-              <div className="summary-item-value">{kbQuery.data?.items.length ?? 0}</div>
-            </div>
-            <div className="summary-item">
-              <div className="summary-item-label">Public</div>
-              <div className="summary-item-value">{publicCount}</div>
-            </div>
-            <div className="summary-item">
-              <div className="summary-item-label">Internal</div>
-              <div className="summary-item-value">{internalCount}</div>
-            </div>
-            <div className="summary-item">
-              <div className="summary-item-label">Admin</div>
-              <div className="summary-item-value">{adminCount}</div>
+            <div className="kb-overview__summary" aria-label="知识库概要统计">
+              <div className="kb-overview-summary-item">
+                <span className="kb-overview-summary-item__label">知识库</span>
+                <span className="kb-overview-summary-item__value">{kbQuery.data?.items.length ?? 0}</span>
+              </div>
+              <div className="kb-overview-summary-item">
+                <span className="kb-overview-summary-item__label">Public</span>
+                <span className="kb-overview-summary-item__value">{publicCount}</span>
+              </div>
+              <div className="kb-overview-summary-item">
+                <span className="kb-overview-summary-item__label">Internal</span>
+                <span className="kb-overview-summary-item__value">{internalCount}</span>
+              </div>
+              <div className="kb-overview-summary-item">
+                <span className="kb-overview-summary-item__label">Admin</span>
+                <span className="kb-overview-summary-item__value">{adminCount}</span>
+              </div>
             </div>
           </div>
         </div>
       </Card>
 
-      <OpsWorkbench
-        left={
-          <OpsPane
-            title={
-              <Space size={8}>
-                <PlusOutlined />
-                <span>创建知识库</span>
-              </Space>
-            }
-            introTitle="先定义访问边界，再定义检索策略"
-            introDescription="建议先确定知识库用途与可见性，再设置 TopK、阈值和最小上下文要求，避免后续问答表现漂移。"
-          >
-              <Form<KbFormValues>
-                form={createForm}
-                layout="vertical"
-                initialValues={{
-                  visibility: "internal",
-                  topk: 5,
-                  threshold: 0.25,
-                  rerank_enabled: false,
-                  max_context_tokens: 3000,
-                  min_context_chars: 20,
-                  min_keyword_coverage: 0.3
-                }}
-                onFinish={(values) => createMutation.mutate(values)}
-              >
-                <Form.Item
-                  name="name"
-                  label="知识库名称"
-                  rules={[{ required: true, message: "请输入名称" }]}
-                >
-                  <Input placeholder="例如：教务知识库" />
-                </Form.Item>
-                <Form.Item name="description" label="知识库说明">
-                  <Input.TextArea rows={2} placeholder="可选" />
-                </Form.Item>
-                <Form.Item name="visibility" label="可见性" rules={[{ required: true }]}>
-                  <Select
-                    options={[
-                      { value: "public", label: "public" },
-                      { value: "internal", label: "internal" },
-                      { value: "admin", label: "admin" }
-                    ]}
-                  />
-                </Form.Item>
-                <Card size="small" className="card-inset" title="检索参数">
-                  <Space wrap>
-                    <Form.Item name="topk" label="TopK">
-                      <InputNumber min={1} />
-                    </Form.Item>
-                    <Form.Item name="threshold" label="阈值">
-                      <InputNumber min={0} max={1} step={0.01} />
-                    </Form.Item>
-                    <Form.Item name="rerank_enabled" label="启用重排">
-                      <Select
-                        options={[
-                          { value: true, label: "true" },
-                          { value: false, label: "false" }
-                        ]}
-                      />
-                    </Form.Item>
-                    <Form.Item name="max_context_tokens" label="最大上下文">
-                      <InputNumber min={100} />
-                    </Form.Item>
-                    <Form.Item name="min_context_chars" label="最小上下文长度">
-                      <InputNumber min={1} />
-                    </Form.Item>
-                    <Form.Item name="min_keyword_coverage" label="最小关键词覆盖率">
-                      <InputNumber min={0} max={1} step={0.05} />
-                    </Form.Item>
-                  </Space>
-                </Card>
-                <Form.Item style={{ marginTop: 12 }}>
-                  <Button
-                    type="primary"
-                    htmlType="submit"
-                    icon={<PlusOutlined />}
-                    loading={createMutation.isPending}
-                  >
-                    创建
-                  </Button>
-                </Form.Item>
-              </Form>
-          </OpsPane>
-        }
-        right={
-          <OpsPane
-            title={
-              <Space size={8}>
-                <DatabaseOutlined />
-                <span>知识库列表</span>
-              </Space>
-            }
-            dense={tableDensity === "small"}
-            extra={
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => void kbQuery.refetch()}
-                loading={kbQuery.isFetching}
-              >
-                刷新
-              </Button>
-            }
-          >
-            <div className="density-toolbar">
-              <Space wrap>
+      <Card className="card-soft kb-list-card">
+        <OpsPane
+          title={
+            <Space size={8}>
+              <DatabaseOutlined />
+              <span>知识库列表</span>
+            </Space>
+          }
+          dense={tableDensity === "small"}
+          extra={
+            <Space size={8}>
+              <Tooltip title="刷新">
+                <Button
+                  shape="circle"
+                  icon={<ReloadOutlined />}
+                  onClick={() => void kbQuery.refetch()}
+                  loading={kbQuery.isFetching}
+                  aria-label="刷新知识库列表"
+                />
+              </Tooltip>
+            </Space>
+          }
+        >
+          <div className="kb-pane-copy kb-pane-copy--compact">
+            <Typography.Text className="kb-pane-copy__title">
+              用搜索和筛选快速定位目标
+            </Typography.Text>
+          </div>
+          <div className="kb-toolbar-stack">
+            <div className="density-toolbar density-toolbar--clean kb-toolbar-stack__row">
+              <div className="density-toolbar__group">
                 <Input
                   prefix={<SearchOutlined />}
                   placeholder="搜索名称 / 描述"
@@ -372,8 +235,24 @@ export function KbPage() {
                   onChange={(event) => {
                     setKeyword(event.target.value);
                   }}
-                  style={{ width: 220 }}
+                  className="kb-toolbar-stack__search"
                 />
+              </div>
+              <div className="density-toolbar__group density-toolbar__group--meta">
+                <Button
+                  type="primary"
+                  icon={<ArrowRightOutlined />}
+                  onClick={() => {
+                    navigate("/admin/kb/create");
+                  }}
+                >
+                  前往创建
+                </Button>
+              </div>
+            </div>
+
+            <div className="density-toolbar density-toolbar--clean kb-toolbar-stack__row">
+              <div className="density-toolbar__group">
                 <Segmented<VisibilityFilter>
                   value={visibilityFilter}
                   options={[
@@ -386,17 +265,19 @@ export function KbPage() {
                     setVisibilityFilter(value);
                   }}
                 />
-                <Button
-                  icon={<ThunderboltOutlined />}
-                  onClick={() => {
-                    setOnlyRerankEnabled((prev) => !prev);
-                  }}
-                  type={onlyRerankEnabled ? "primary" : "default"}
-                >
-                  仅看重排开启
-                </Button>
-              </Space>
-              <Space>
+                <Tooltip title="仅看重排开启">
+                  <Button
+                    shape="circle"
+                    icon={<ThunderboltOutlined />}
+                    onClick={() => {
+                      setOnlyRerankEnabled((prev) => !prev);
+                    }}
+                    type={onlyRerankEnabled ? "primary" : "default"}
+                    aria-label="仅看重排开启"
+                  />
+                </Tooltip>
+              </div>
+              <div className="density-toolbar__group density-toolbar__group--meta">
                 <Typography.Text className="density-meta">
                   当前 {filteredItems.length} / {kbQuery.data?.items.length ?? 0}
                 </Typography.Text>
@@ -411,100 +292,131 @@ export function KbPage() {
                     setTableDensity(value);
                   }}
                 />
-              </Space>
+              </div>
             </div>
-            {kbQuery.isError ? <RequestErrorAlert error={normalizeApiError(kbQuery.error)} /> : null}
-            <PageState status={status}>
-              <div className="ops-scroll-pane">
-                <Table
-                  size={tableDensity}
-                  className={tableDensity === "small" ? "dense-table" : undefined}
-                  rowKey="kb_id"
-                  dataSource={filteredItems}
-                  pagination={false}
-                  columns={[
-                    {
-                      title: "知识库",
-                      dataIndex: "name",
-                      render: (_value: string, record) => (
-                        <Space direction="vertical" size={2}>
-                          <Typography.Text strong>{record.name}</Typography.Text>
-                          <Typography.Text type="secondary">
-                            {record.description || "暂无说明"}
-                          </Typography.Text>
-                        </Space>
-                      )
-                    },
-                    {
-                      title: "策略",
-                      key: "retrieval",
-                      width: 260,
-                      render: (_, record) => (
-                        <Space size={4} wrap>
-                          <Tag>TopK {record.config?.topk ?? "-"}</Tag>
-                          <Tag>阈值 {record.config?.threshold ?? "-"}</Tag>
-                          <Tag color={record.config?.rerank_enabled ? "processing" : "default"}>
-                            重排 {record.config?.rerank_enabled ? "on" : "off"}
-                          </Tag>
-                        </Space>
-                      )
-                    },
-                    {
-                      title: "可见性",
-                      dataIndex: "visibility",
-                      width: 120,
-                      render: (value: KbEditValues["visibility"]) => (
-                        <Tag color={resolveVisibilityColor(value)} icon={<EyeOutlined />}>
-                          {value}
-                        </Tag>
-                      )
-                    },
-                    {
-                      title: "更新时间",
-                      dataIndex: "updated_at",
-                      width: 220,
-                      render: (value: string) => (
-                        <Typography.Text type="secondary">{value}</Typography.Text>
-                      )
-                    },
-                    {
-                      title: "操作",
-                      key: "actions",
-                      width: 220,
-                      render: (_, record: { kb_id: string }) => (
-                        <Space>
+          </div>
+          {kbQuery.isError ? <RequestErrorAlert error={normalizeApiError(kbQuery.error)} /> : null}
+          <PageState status={status}>
+            <div className="ops-scroll-pane">
+              <Table
+                size={tableDensity}
+                className={`kb-table${tableDensity === "small" ? " dense-table" : ""}`}
+                rowKey="kb_id"
+                tableLayout="fixed"
+                dataSource={filteredItems}
+                pagination={false}
+                scroll={{ x: 940 }}
+                columns={[
+                  {
+                    title: "知识库",
+                    dataIndex: "name",
+                    width: 248,
+                    render: (_value: string, record) => (
+                      <div className="kb-name-cell">
+                        <Typography.Text
+                          strong
+                          ellipsis={{ tooltip: record.name }}
+                          className="kb-name-cell__title"
+                        >
+                          {record.name}
+                        </Typography.Text>
+                        <Typography.Paragraph
+                          type="secondary"
+                          ellipsis={{ rows: 2, tooltip: record.description || "暂无说明" }}
+                          className="kb-name-cell__desc"
+                        >
+                          {record.description || "暂无说明"}
+                        </Typography.Paragraph>
+                      </div>
+                    )
+                  },
+                  {
+                    title: "策略",
+                    key: "retrieval",
+                    width: 196,
+                    render: (_, record) => (
+                      <div className="kb-strategy-cell">
+                        <Typography.Text className="kb-strategy-cell__primary">
+                          TopK {record.config?.topk ?? "-"} · 阈值 {record.config?.threshold ?? "-"}
+                        </Typography.Text>
+                        <Typography.Text type="secondary" className="kb-strategy-cell__secondary">
+                          重排 {record.config?.rerank_enabled ? "on" : "off"} · 上下文{" "}
+                          {record.config?.max_context_tokens ?? "-"}
+                        </Typography.Text>
+                      </div>
+                    )
+                  },
+                  {
+                    title: "可见性",
+                    dataIndex: "visibility",
+                    width: 112,
+                    render: (value: KbEditValues["visibility"]) => (
+                      <Tag color={resolveVisibilityColor(value)} icon={<EyeOutlined />}>
+                        {value}
+                      </Tag>
+                    )
+                  },
+                  {
+                    title: "更新时间",
+                    dataIndex: "updated_at",
+                    width: 168,
+                    render: (value: string) => {
+                      const formatted = formatDateParts(value);
+                      return (
+                        <div className="kb-updated-cell">
+                          <Typography.Text type="secondary">{formatted.date}</Typography.Text>
+                          {formatted.time ? (
+                            <Typography.Text type="secondary" className="kb-updated-cell__time">
+                              {formatted.time}
+                            </Typography.Text>
+                          ) : null}
+                        </div>
+                      );
+                    }
+                  },
+                  {
+                    title: "操作",
+                    key: "actions",
+                    width: 108,
+                    render: (_, record: { kb_id: string }) => (
+                      <Space size={8} className="kb-actions">
+                        <Tooltip title="编辑">
                           <Button
                             size="small"
+                            shape="circle"
                             icon={<EditOutlined />}
                             onClick={() => {
                               setEditingKbId(record.kb_id);
                             }}
-                          >
-                            编辑
-                          </Button>
-                          <ConfirmAction
-                            title="确认删除该知识库？"
-                            okText="确认删除"
-                            cancelText="取消"
-                            onConfirm={() => deleteMutation.mutate(record.kb_id)}
-                            buttonText="删除"
-                            icon={<DeleteOutlined />}
-                            danger
-                            size="small"
-                            loading={deleteMutation.isPending}
+                            aria-label="编辑知识库"
                           />
-                        </Space>
-                      )
-                    }
-                  ]}
-                />
-              </div>
-            </PageState>
-          </OpsPane>
-        }
-      />
+                        </Tooltip>
+                        <ConfirmAction
+                          title="确认删除该知识库？"
+                          okText="确认删除"
+                          cancelText="取消"
+                          onConfirm={() => deleteMutation.mutate(record.kb_id)}
+                          buttonText=""
+                          icon={<DeleteOutlined />}
+                          danger
+                          size="small"
+                          shape="circle"
+                          loading={deleteMutation.isPending}
+                          ariaLabel="删除知识库"
+                        />
+                      </Space>
+                    )
+                  }
+                ]}
+              />
+            </div>
+          </PageState>
+        </OpsPane>
+      </Card>
 
       <Modal
+        className="kb-edit-modal"
+        width={680}
         title={
           <Space size={8}>
             <SettingOutlined />
@@ -514,11 +426,21 @@ export function KbPage() {
         open={Boolean(editingKbId)}
         onCancel={() => setEditingKbId(null)}
         confirmLoading={updateMutation.isPending}
+        okText="保存变更"
+        cancelText="取消"
         onOk={() => {
           void editForm.submit();
         }}
       >
         {kbDetailQuery.isError ? <RequestErrorAlert error={normalizeApiError(kbDetailQuery.error)} /> : null}
+        <div className="kb-modal-copy">
+          <Typography.Text className="kb-pane-copy__title">
+            {kbDetailQuery.data?.name ?? "当前知识库"}
+          </Typography.Text>
+          <Typography.Text className="kb-pane-copy__desc">
+            只保留说明、可见性和关键检索参数，避免弹窗承载过多次要信息。
+          </Typography.Text>
+        </div>
         <Form<KbEditValues>
           form={editForm}
           layout="vertical"
@@ -527,35 +449,48 @@ export function KbPage() {
           <Form.Item name="description" label="知识库说明">
             <Input.TextArea rows={2} />
           </Form.Item>
-          <Form.Item name="visibility" label="可见性" rules={[{ required: true }]}>
-            <Select
-              options={[
-                { value: "public", label: "public" },
-                { value: "internal", label: "internal" },
-                { value: "admin", label: "admin" }
-              ]}
-            />
-          </Form.Item>
-          <Space wrap>
-            <Form.Item name="topk" label="TopK">
-              <InputNumber min={1} />
-            </Form.Item>
-            <Form.Item name="threshold" label="阈值">
-              <InputNumber min={0} max={1} step={0.01} />
-            </Form.Item>
-            <Form.Item name="rerank_enabled" label="启用重排">
-              <Select options={[{ value: true, label: "true" }, { value: false, label: "false" }]} />
-            </Form.Item>
-            <Form.Item name="max_context_tokens" label="最大上下文">
-              <InputNumber min={100} />
-            </Form.Item>
-            <Form.Item name="min_context_chars" label="最小上下文长度">
-              <InputNumber min={1} />
-            </Form.Item>
-            <Form.Item name="min_keyword_coverage" label="最小关键词覆盖率">
-              <InputNumber min={0} max={1} step={0.05} />
-            </Form.Item>
-          </Space>
+          <div className="kb-form-section kb-form-section--modal">
+            <div className="kb-form-section__head">
+              <Typography.Text className="kb-form-section__title">访问与策略</Typography.Text>
+              <Typography.Text className="kb-form-section__hint">
+                使用更轻的单栏布局，保证每个参数都有稳定阅读节奏。
+              </Typography.Text>
+            </div>
+            <div className="kb-modal-grid">
+              <Form.Item name="visibility" label="可见性" rules={[{ required: true }]}>
+                <Select
+                  options={[
+                    { value: "public", label: "public" },
+                    { value: "internal", label: "internal" },
+                    { value: "admin", label: "admin" }
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="topk" label="TopK">
+                <InputNumber min={1} style={{ width: "100%" }} />
+              </Form.Item>
+              <Form.Item name="threshold" label="阈值">
+                <InputNumber min={0} max={1} step={0.01} style={{ width: "100%" }} />
+              </Form.Item>
+              <Form.Item name="rerank_enabled" label="启用重排">
+                <Select
+                  options={[
+                    { value: true, label: "true" },
+                    { value: false, label: "false" }
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="max_context_tokens" label="最大上下文">
+                <InputNumber min={100} style={{ width: "100%" }} />
+              </Form.Item>
+              <Form.Item name="min_context_chars" label="最小上下文长度">
+                <InputNumber min={1} style={{ width: "100%" }} />
+              </Form.Item>
+              <Form.Item name="min_keyword_coverage" label="最小关键词覆盖率">
+                <InputNumber min={0} max={1} step={0.05} style={{ width: "100%" }} />
+              </Form.Item>
+            </div>
+          </div>
         </Form>
       </Modal>
     </div>

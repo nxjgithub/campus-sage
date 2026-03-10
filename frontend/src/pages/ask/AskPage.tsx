@@ -300,6 +300,38 @@ export function AskPage() {
     return matched ?? assistantMessages[assistantMessages.length - 1];
   }, [activeAssistantKey, assistantMessages]);
 
+  const answeredCount = useMemo(
+    () => assistantMessages.filter((item) => !item.refusal && !item.pending).length,
+    [assistantMessages]
+  );
+
+  const refusedCount = useMemo(
+    () => assistantMessages.filter((item) => Boolean(item.refusal)).length,
+    [assistantMessages]
+  );
+
+  const pendingCount = useMemo(
+    () => assistantMessages.filter((item) => item.pending).length,
+    [assistantMessages]
+  );
+
+  const citedAnswerCount = useMemo(
+    () => assistantMessages.filter((item) => item.citations.length > 0).length,
+    [assistantMessages]
+  );
+
+  const totalCitationCount = useMemo(
+    () => assistantMessages.reduce((sum, item) => sum + item.citations.length, 0),
+    [assistantMessages]
+  );
+
+  const citationCoverage = useMemo(() => {
+    if (!assistantMessages.length) {
+      return 0;
+    }
+    return Math.round((citedAnswerCount / assistantMessages.length) * 100);
+  }, [assistantMessages.length, citedAnswerCount]);
+
   const latestAssistantContent = assistantMessages[assistantMessages.length - 1]?.content ?? "";
 
   useEffect(() => {
@@ -933,10 +965,10 @@ export function AskPage() {
             title={
               <div className="chat-sidebar-brand-tooltip">
                 <div className="chat-sidebar-brand-tooltip__title">
-                  Evidence-grounded University Knowledge Assistant
+                  校园证据问答助手
                 </div>
                 <div className="chat-sidebar-brand-tooltip__desc">
-                  RAG 检索增强问答平台 · 会话、引用、评测、监控一体化
+                  基于证据的问答、引用与会话工作台
                 </div>
               </div>
             }
@@ -979,15 +1011,35 @@ export function AskPage() {
               }}
             />
             <div className="chat-sidebar-toolbar">
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => void startNewChat()} disabled={isBusy || !kbId}>
-                新建
-              </Button>
-              <Button icon={<EditOutlined />} onClick={openRenameDialog} disabled={!activeConversationId || isBusy}>
-                重命名
-              </Button>
-              <Button danger icon={<DeleteOutlined />} onClick={handleDeleteConversation} disabled={!activeConversationId || isBusy}>
-                删除
-              </Button>
+              <Tooltip title="新建会话">
+                <Button
+                  type="primary"
+                  shape="circle"
+                  icon={<PlusOutlined />}
+                  aria-label="新建会话"
+                  onClick={() => void startNewChat()}
+                  disabled={isBusy || !kbId}
+                />
+              </Tooltip>
+              <Tooltip title="重命名会话">
+                <Button
+                  shape="circle"
+                  icon={<EditOutlined />}
+                  aria-label="重命名会话"
+                  onClick={openRenameDialog}
+                  disabled={!activeConversationId || isBusy}
+                />
+              </Tooltip>
+              <Tooltip title="删除会话">
+                <Button
+                  danger
+                  shape="circle"
+                  icon={<DeleteOutlined />}
+                  aria-label="删除会话"
+                  onClick={handleDeleteConversation}
+                  disabled={!activeConversationId || isBusy}
+                />
+              </Tooltip>
             </div>
           </div>
 
@@ -1038,7 +1090,7 @@ export function AskPage() {
               <Typography.Text strong>
                 {isAuthenticated ? user?.email ?? "当前用户" : "游客模式"}
               </Typography.Text>
-              <Typography.Text type="secondary">基于证据回答，点击助手消息可查看引用与耗时。</Typography.Text>
+              <Typography.Text type="secondary">点击回答查看引用。</Typography.Text>
             </div>
             {isAuthenticated ? (
               <div className="chat-sidebar-user__actions">
@@ -1049,23 +1101,33 @@ export function AskPage() {
                       navigate(targetRole === "admin" ? "/admin/kb" : "/app/ask");
                     }}
                     compact
+                    labelsHidden
                   />
                 ) : null}
-                <Button size="small" icon={<LogoutOutlined />} onClick={() => void handleSignOut()} loading={signingOut}>
-                  退出
-                </Button>
+                <Tooltip title="退出登录">
+                  <Button
+                    size="small"
+                    shape="circle"
+                    icon={<LogoutOutlined />}
+                    aria-label="退出登录"
+                    onClick={() => void handleSignOut()}
+                    loading={signingOut}
+                  />
+                </Tooltip>
               </div>
             ) : (
-              <Button
-                size="small"
-                type="primary"
-                icon={<LoginOutlined />}
-                onClick={() => {
-                  navigate("/login?next=/app/ask");
-                }}
-              >
-                登录
-              </Button>
+              <Tooltip title="登录">
+                <Button
+                  size="small"
+                  shape="circle"
+                  type="primary"
+                  icon={<LoginOutlined />}
+                  aria-label="登录"
+                  onClick={() => {
+                    navigate("/login?next=/app/ask");
+                  }}
+                />
+              </Tooltip>
             )}
           </div>
         </div>
@@ -1073,11 +1135,59 @@ export function AskPage() {
 
       <Card className="chat-thread-card" title={<Space size={8}><MessageOutlined /><span>智能问答</span></Space>}>
         <div className="chat-thread-head">
-          <Space wrap>
-            {selectedKbName ? <Tag color="geekblue">知识库：{selectedKbName}</Tag> : null}
-            <Tag color={COMPOSER_STATUS_COLOR[composerStatus]} className="chat-status-tag">状态：{COMPOSER_STATUS_LABEL[composerStatus]}</Tag>
-          </Space>
+          <div className="chat-thread-titlebar">
+            <Space wrap>
+              {selectedKbName ? <Tag color="geekblue">知识库：{selectedKbName}</Tag> : null}
+              <Tag color={COMPOSER_STATUS_COLOR[composerStatus]} className="chat-status-tag">状态：{COMPOSER_STATUS_LABEL[composerStatus]}</Tag>
+            </Space>
+            <Typography.Text className="chat-thread-kicker">
+              点回答看引用
+            </Typography.Text>
+          </div>
         </div>
+
+        {threadStatus === "success" && threadMessages.length ? (
+          <div className="chat-insight-strip">
+            <div className="chat-insight-strip__items">
+              <div className="chat-insight-pill">
+                <span className="chat-insight-pill__label">消息</span>
+                <span className="chat-insight-pill__value">{threadMessages.length}</span>
+              </div>
+              <div className="chat-insight-pill">
+                <span className="chat-insight-pill__label">回答 / 拒答</span>
+                <span className="chat-insight-pill__value">
+                  {answeredCount} / {refusedCount}
+                </span>
+              </div>
+              <div className="chat-insight-pill">
+                <span className="chat-insight-pill__label">证据覆盖</span>
+                <span className="chat-insight-pill__value">{citationCoverage}%</span>
+              </div>
+              <div className="chat-insight-pill">
+                <span className="chat-insight-pill__label">引用总数</span>
+                <span className="chat-insight-pill__value">{totalCitationCount}</span>
+              </div>
+              {pendingCount ? (
+                <div className="chat-insight-pill">
+                  <span className="chat-insight-pill__label">生成中</span>
+                  <span className="chat-insight-pill__value">{pendingCount}</span>
+                </div>
+              ) : null}
+            </div>
+            <div className="chat-insight-strip__coverage">
+              <div className="chat-insight-strip__coverage-meta">
+                <span>有引用回答 {citedAnswerCount}</span>
+                <span>覆盖率 {citationCoverage}%</span>
+              </div>
+              <div className="chat-insight-strip__coverage-track" aria-hidden="true">
+                <div
+                  className="chat-insight-strip__coverage-fill"
+                  style={{ width: `${citationCoverage}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {threadError ? <RequestErrorAlert error={threadError} /> : null}
         {messagesError ? <RequestErrorAlert error={messagesError} /> : null}
@@ -1110,86 +1220,98 @@ export function AskPage() {
 
           {threadStatus === "success"
             ? threadMessages.map((item) => (
-                <article
+                <div
                   key={item.local_id}
                   className={
                     item.role === "user"
-                      ? "chat-bubble chat-bubble--user"
-                      : "chat-bubble chat-bubble--assistant"
+                      ? "chat-message-row chat-message-row--user"
+                      : "chat-message-row chat-message-row--assistant"
                   }
-                  onClick={(event) => {
-                    if (item.role === "assistant") {
-                      const target = event.target as HTMLElement;
-                      if (target.closest(".chat-bubble-actions")) {
-                        return;
-                      }
-                      openEvidenceModal(item);
-                    }
-                  }}
                 >
-                  <header className="chat-bubble__header">
-                    <Space size={8}>
-                      <Tag color={item.role === "user" ? "blue" : "green"}>
-                        {item.role === "user" ? "用户" : "助手"}
-                      </Tag>
-                      {item.pending ? <Tag color="processing">生成中</Tag> : null}
-                      {item.refusal ? <Tag color="warning">拒答</Tag> : null}
-                    </Space>
-                    <Typography.Text type="secondary">{compactTime(item.created_at)}</Typography.Text>
-                  </header>
-                  <Typography.Paragraph className="chat-bubble__content">
-                    {item.role === "assistant"
-                      ? renderWithMarkers(item.content, (citationId) => {
-                          openEvidenceModal(item, citationId);
-                        })
-                      : item.content}
-                  </Typography.Paragraph>
-                  {item.refusal && item.suggestions.length ? (
-                    <Card size="small" title="下一步建议" className="chat-refusal-card">
-                      <ul className="muted-list">
-                        {item.suggestions.map((tip) => (
-                          <li key={tip}>{tip}</li>
-                        ))}
-                      </ul>
-                    </Card>
-                  ) : null}
-                  {item.role === "assistant" ? (
-                    <Space wrap className="chat-bubble-actions">
-                      {item.message_id ? (
-                        <FeedbackAction
-                          messageId={item.message_id}
-                          submitting={submittingFeedbackMessageId === item.message_id}
-                          submitted={Boolean(submittedFeedbackMap[item.message_id])}
-                          onSubmit={handleFeedbackSubmit}
-                        />
-                      ) : null}
-                      {item.message_id ? (
-                        <Button
-                          size="small"
-                          icon={<HistoryOutlined />}
-                          loading={actioningMessageId === item.message_id && regenerateMutation.isPending}
-                          onClick={() => {
-                            void handleRegenerate(item.message_id as string);
-                          }}
-                        >
-                          重试
-                        </Button>
-                      ) : null}
-                      {item.message_id ? (
-                        <Button
-                          size="small"
-                          icon={<EditOutlined />}
-                          loading={actioningMessageId === item.message_id && editResendMutation.isPending}
-                          onClick={() => {
-                            openEditDialog(item.message_id as string);
-                          }}
-                        >
-                          改写
-                        </Button>
-                      ) : null}
-                    </Space>
-                  ) : null}
-                </article>
+                  <article
+                    className={
+                      item.role === "user"
+                        ? "chat-bubble chat-bubble--user"
+                        : "chat-bubble chat-bubble--assistant"
+                    }
+                    onClick={(event) => {
+                      if (item.role === "assistant") {
+                        const target = event.target as HTMLElement;
+                        if (target.closest(".chat-bubble-actions")) {
+                          return;
+                        }
+                        openEvidenceModal(item);
+                      }
+                    }}
+                  >
+                    <header className="chat-bubble__header">
+                      <Space size={8}>
+                        <Tag color={item.role === "user" ? "blue" : "green"}>
+                          {item.role === "user" ? "用户" : "助手"}
+                        </Tag>
+                        {item.pending ? <Tag color="processing">生成中</Tag> : null}
+                        {item.refusal ? <Tag color="warning">拒答</Tag> : null}
+                      </Space>
+                      <Typography.Text type="secondary">{compactTime(item.created_at)}</Typography.Text>
+                    </header>
+                    <Typography.Paragraph className="chat-bubble__content">
+                      {item.role === "assistant"
+                        ? renderWithMarkers(item.content, (citationId) => {
+                            openEvidenceModal(item, citationId);
+                          })
+                        : item.content}
+                    </Typography.Paragraph>
+                    {item.refusal && item.suggestions.length ? (
+                      <Card size="small" title="下一步建议" className="chat-refusal-card">
+                        <ul className="muted-list">
+                          {item.suggestions.map((tip) => (
+                            <li key={tip}>{tip}</li>
+                          ))}
+                        </ul>
+                      </Card>
+                    ) : null}
+                    {item.role === "assistant" ? (
+                      <Space wrap className="chat-bubble-actions">
+                        {item.message_id ? (
+                          <FeedbackAction
+                            messageId={item.message_id}
+                            submitting={submittingFeedbackMessageId === item.message_id}
+                            submitted={Boolean(submittedFeedbackMap[item.message_id])}
+                            onSubmit={handleFeedbackSubmit}
+                          />
+                        ) : null}
+                        {item.message_id ? (
+                          <Tooltip title="重试">
+                            <Button
+                              size="small"
+                              shape="circle"
+                              icon={<HistoryOutlined />}
+                              aria-label="重试"
+                              loading={actioningMessageId === item.message_id && regenerateMutation.isPending}
+                              onClick={() => {
+                                void handleRegenerate(item.message_id as string);
+                              }}
+                            />
+                          </Tooltip>
+                        ) : null}
+                        {item.message_id ? (
+                          <Tooltip title="改写后重发">
+                            <Button
+                              size="small"
+                              shape="circle"
+                              icon={<EditOutlined />}
+                              aria-label="改写后重发"
+                              loading={actioningMessageId === item.message_id && editResendMutation.isPending}
+                              onClick={() => {
+                                openEditDialog(item.message_id as string);
+                              }}
+                            />
+                          </Tooltip>
+                        ) : null}
+                      </Space>
+                    ) : null}
+                  </article>
+                </div>
               ))
             : null}
         </div>
@@ -1215,7 +1337,7 @@ export function AskPage() {
               }}
             />
             <div className="chat-composer-actions">
-              <Typography.Text type="secondary">回答会自动保留引用编号，可随时打开证据面板查看来源。</Typography.Text>
+              <Typography.Text type="secondary">引用编号会保留在回答里。</Typography.Text>
               <Space>
                 <Button
                   type="primary"
@@ -1248,7 +1370,7 @@ export function AskPage() {
         destroyOnHidden
       >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
-          <Typography.Text type="secondary">按任意键或点击右上角关闭</Typography.Text>
+          <Typography.Text type="secondary">按键或点右上角关闭</Typography.Text>
           {!selectedAssistant ? (
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="选择一条助手消息查看证据与耗时" />
           ) : (

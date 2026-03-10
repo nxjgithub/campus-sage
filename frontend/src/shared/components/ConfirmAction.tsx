@@ -9,11 +9,12 @@ interface ConfirmActionProps {
   cancelText?: string;
   onConfirm: () => void;
   disabled?: boolean;
-  buttonText: string;
+  buttonText?: string;
   buttonType?: ButtonProps["type"];
   danger?: boolean;
   loading?: boolean;
   size?: ButtonProps["size"];
+  shape?: ButtonProps["shape"];
   icon?: ReactNode;
   ariaLabel?: string;
 }
@@ -30,6 +31,7 @@ export function ConfirmAction({
   danger = false,
   loading = false,
   size = "middle",
+  shape,
   icon,
   ariaLabel
 }: ConfirmActionProps) {
@@ -48,6 +50,7 @@ export function ConfirmAction({
         loading={loading}
         disabled={disabled}
         size={size}
+        shape={shape}
         icon={icon}
         aria-label={ariaLabel}
       >

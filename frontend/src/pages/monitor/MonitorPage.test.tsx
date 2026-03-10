@@ -53,14 +53,14 @@ describe("MonitorPage 二次确认交互", () => {
     renderWithProviders(<MonitorPage />);
 
     const moveButton = await screen.findByRole("button", {
-      name: /转移失败任务到死信/
+      name: /迁移失败任务到死信队列/
     });
     await userEvent.click(moveButton);
 
-    expect(await screen.findByText("确认转移失败任务到死信队列？")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "确认迁移" })).toBeInTheDocument();
     expect(moveDeadJobs).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole("button", { name: "确认转移" }));
+    await userEvent.click(screen.getByRole("button", { name: "确认迁移" }));
     await waitFor(() => {
       expect(moveDeadJobs).toHaveBeenCalledTimes(1);
     });

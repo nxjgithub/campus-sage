@@ -1,21 +1,15 @@
-﻿import { ReactNode } from "react";
+import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createEvalSet, fetchEvalRun, runEval } from "../../shared/api/modules/eval";
-import { fetchKbList } from "../../shared/api/modules/kb";
-import { EvalPage } from "./EvalPage";
+import { createEvalSet } from "../../shared/api/modules/eval";
+import { EvalCreatePage } from "./EvalCreatePage";
 
 vi.mock("../../shared/api/modules/eval", () => ({
-  createEvalSet: vi.fn(),
-  runEval: vi.fn(),
-  fetchEvalRun: vi.fn()
-}));
-
-vi.mock("../../shared/api/modules/kb", () => ({
-  fetchKbList: vi.fn()
+  createEvalSet: vi.fn()
 }));
 
 function renderWithProviders(node: ReactNode) {
@@ -27,75 +21,52 @@ function renderWithProviders(node: ReactNode) {
   });
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <AntdApp>{node}</AntdApp>
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={["/admin/eval/create"]}>
+      <QueryClientProvider client={queryClient}>
+        <AntdApp>{node}</AntdApp>
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
-describe("EvalPage", () => {
+describe("EvalCreatePage submit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(fetchKbList).mockResolvedValue({
-      items: [
-        {
-          kb_id: "kb-1",
-          name: "教务知识库",
-          visibility: "internal",
-          updated_at: "2026-02-12T10:00:00Z"
-        }
-      ]
-    });
     vi.mocked(createEvalSet).mockResolvedValue({
       eval_set_id: "es-1",
-      name: "教务评测集_v1",
+      name: "\u6559\u52a1\u8bc4\u6d4b\u96c6_v1",
       description: null,
       item_count: 1,
       created_at: "2026-02-12T10:00:00Z"
     });
-    vi.mocked(runEval).mockResolvedValue({
-      run_id: "run-1",
-      eval_set_id: "es-1",
-      kb_id: "kb-1",
-      topk: 5,
-      threshold: 0.25,
-      rerank_enabled: false,
-      metrics: {
-        recall_at_k: 0.8,
-        mrr: 0.7,
-        avg_ms: 120,
-        p95_ms: 240,
-        samples: 10
-      },
-      created_at: "2026-02-12T10:01:00Z"
-    });
-    vi.mocked(fetchEvalRun).mockResolvedValue({
-      run_id: "run-1",
-      eval_set_id: "es-1",
-      kb_id: "kb-1",
-      topk: 5,
-      threshold: 0.25,
-      rerank_enabled: false,
-      metrics: null,
-      created_at: "2026-02-12T10:01:00Z"
-    });
   });
 
-  it("创建评测集时提交结构化样本", async () => {
-    renderWithProviders(<EvalPage />);
+  it("should submit structured samples when creating an eval set", async () => {
+    renderWithProviders(<EvalCreatePage />);
 
-    await userEvent.type(screen.getByLabelText("评测集名称"), " 教务评测集_v1 ");
-    await userEvent.type(screen.getByLabelText("问题"), " 补考申请流程是什么？ ");
-    await userEvent.type(screen.getByLabelText("标签（逗号分隔）"), "policy, exam ");
-    await userEvent.click(screen.getByRole("button", { name: /创建评测集/ }));
+    await userEvent.type(
+      screen.getByLabelText("\u8bc4\u6d4b\u96c6\u540d\u79f0"),
+      " \u6559\u52a1\u8bc4\u6d4b\u96c6_v1 "
+    );
+    await userEvent.type(
+      screen.getByLabelText("\u95ee\u9898"),
+      " \u8865\u8003\u7533\u8bf7\u6d41\u7a0b\u662f\u4ec0\u4e48\uff1f "
+    );
+    await userEvent.type(
+      screen.getByLabelText("\u6807\u7b7e\uff08\u9017\u53f7\u5206\u9694\uff09"),
+      "policy, exam "
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /\u521b\u5efa\u8bc4\u6d4b\u96c6/ })
+    );
 
     await waitFor(() => {
       expect(createEvalSet).toHaveBeenCalledWith({
-        name: "教务评测集_v1",
+        name: "\u6559\u52a1\u8bc4\u6d4b\u96c6_v1",
         description: undefined,
         items: [
           {
-            question: "补考申请流程是什么？",
+            question: "\u8865\u8003\u7533\u8bf7\u6d41\u7a0b\u662f\u4ec0\u4e48\uff1f",
             gold_page_start: undefined,
             gold_page_end: undefined,
             tags: ["policy", "exam"]

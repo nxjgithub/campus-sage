@@ -195,12 +195,12 @@ describe("AskPage 聊天交互", () => {
     await fillQuestionInput("补考申请条件？");
     await userEvent.click(screen.getByRole("button", { name: /发送/ }));
     await userEvent.click(await screen.findByRole("button", { name: "[1]" }));
-    expect(await screen.findByText("按任意键或点击右上角关闭")).toBeInTheDocument();
+    expect(await screen.findByText("按键或点右上角关闭")).toBeInTheDocument();
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
 
     await waitFor(() => {
-      expect(screen.queryByText("按任意键或点击右上角关闭")).not.toBeInTheDocument();
+      expect(screen.queryByText("按键或点右上角关闭")).not.toBeInTheDocument();
     });
   });
 

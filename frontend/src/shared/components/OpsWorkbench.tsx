@@ -1,5 +1,6 @@
-﻿import { ReactNode } from "react";
-import { Card, Typography } from "antd";
+import { InfoCircleOutlined } from "@ant-design/icons";
+import { ReactNode } from "react";
+import { Card, Space, Tooltip, Typography } from "antd";
 
 interface OpsWorkbenchProps {
   left: ReactNode;
@@ -29,23 +30,31 @@ export function OpsPane({
   dense = false,
   children
 }: OpsPaneProps) {
+  const introTooltip = introTitle || introDescription ? (
+    <Space direction="vertical" size={4}>
+      {introTitle ? <Typography.Text strong>{introTitle}</Typography.Text> : null}
+      {introDescription ? <Typography.Text>{introDescription}</Typography.Text> : null}
+    </Space>
+  ) : null;
+
   return (
     <Card
-      title={title}
+      title={
+        <div className="ops-pane-head">
+          <div className="ops-pane-head__title">{title}</div>
+          {introTooltip ? (
+            <Tooltip title={introTooltip} placement="topRight">
+              <span className="ops-pane-head__hint" role="img" aria-label="查看面板说明">
+                <InfoCircleOutlined />
+              </span>
+            </Tooltip>
+          ) : null}
+        </div>
+      }
       extra={extra}
       className={`card-soft ops-pane-card${dense ? " ops-pane-card--dense" : ""}`}
     >
       <div className="ops-pane-body">
-        {introTitle || introDescription ? (
-          <div className="ops-pane-intro">
-            {introTitle ? (
-              <Typography.Text className="ops-pane-intro__title">{introTitle}</Typography.Text>
-            ) : null}
-            {introDescription ? (
-              <Typography.Text className="ops-pane-intro__desc">{introDescription}</Typography.Text>
-            ) : null}
-          </div>
-        ) : null}
         {toolbar ? <div className="ops-pane-toolbar">{toolbar}</div> : null}
         <div className="ops-scroll-pane">{children}</div>
       </div>

@@ -82,9 +82,13 @@ export const USER_PUBLIC_NAV_ITEMS: NavEntry[] = [
 
 export const ROUTE_PRELOADERS: Record<string, () => Promise<unknown>> = {
   "/admin/kb": async () => import("../../pages/kb/KbPage"),
+  "/admin/kb/create": async () => import("../../pages/kb/KbCreatePage"),
   "/admin/users": async () => import("../../pages/users/UsersPage"),
+  "/admin/users/create": async () => import("../../pages/users/UsersCreatePage"),
   "/admin/documents": async () => import("../../pages/documents/DocumentsPage"),
+  "/admin/documents/upload": async () => import("../../pages/documents/DocumentsUploadPage"),
   "/admin/eval": async () => import("../../pages/eval/EvalPage"),
+  "/admin/eval/create": async () => import("../../pages/eval/EvalCreatePage"),
   "/admin/monitor": async () => import("../../pages/monitor/MonitorPage"),
   "/app/ask": async () => import("../../pages/ask/AskPage"),
   "/app/conversations": async () => import("../../pages/conversations/ConversationsPage")
