@@ -183,3 +183,8 @@
 ### 9.4 取消与断连约束
 - 服务端检测到客户端断连后，应尽快将 run 标记为 `canceled`。
 - 取消相关错误事件应使用枚举错误码（如 `CHAT_RUN_CANCELED`），禁止散落硬编码字符串。
+
+## source_type 落地补充（2026-03 第三轮）
+- 当前入库链路已按文件类型写入 `source_type`：`pdf`、`docx`、`html`、`text`。
+- `md` 与 `txt` 统一归入 `text`；`html/htm` 统一归入 `html`。
+- 非 PDF 类型允许 `page_start/page_end=null`，但应尽量提供 `section_path` 保障引用可定位性。

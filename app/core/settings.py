@@ -101,7 +101,10 @@ class Settings(BaseSettings):
 
     storage_dir: str = Field(default="./data/storage", description="本地文件存储目录")
     upload_max_mb: int = Field(default=30, description="上传最大大小（MB）")
-    upload_allowed_exts: str = Field(default="pdf", description="允许的文件扩展名列表")
+    upload_allowed_exts: str = Field(
+        default="pdf,docx,html,htm,md,txt",
+        description="允许的文件扩展名列表",
+    )
 
     redis_url: str = Field(
         default="redis://127.0.0.1:6379/0", description="Redis 连接地址"

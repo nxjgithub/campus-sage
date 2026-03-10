@@ -953,3 +953,8 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 `502/503`：外部依赖不可用（Qdrant/vLLM）  
 
 注意：RAG “拒答”不应使用 4xx/5xx，而应返回 `200 + refusal=true`（业务可预期结果）。
+
+## 多类型上传补充（2026-03 第三轮）
+- `POST /api/v1/kb/{kb_id}/documents` 首批正式支持：`pdf`、`docx`、`html`、`htm`、`md`、`txt`。
+- 非支持后缀仍返回 `400 + FILE_TYPE_NOT_ALLOWED`。
+- 引用定位规则保持不变：`pdf` 优先页码，其余类型优先 `section_path + snippet`。

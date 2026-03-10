@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
+from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
 import pytest
@@ -258,13 +260,51 @@ def test_upload_document_invalid_extension() -> None:
     kb_id = client.post("/api/v1/kb", json={"name": "教务知识库"}, headers=headers).json()[
         "kb_id"
     ]
-    files = {"file": ("demo.txt", b"dummy content", "text/plain")}
+    files = {"file": ("demo.exe", b"dummy content", "application/octet-stream")}
     response = client.post(
         f"/api/v1/kb/{kb_id}/documents", files=files, headers=headers
     )
     assert response.status_code == 400
     payload = response.json()
     assert payload["error"]["code"] == "FILE_TYPE_NOT_ALLOWED"
+
+
+def test_upload_document_txt() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post("/api/v1/kb", json={"name": "文本知识库"}, headers=headers).json()[
+        "kb_id"
+    ]
+    files = {"file": ("demo.txt", "补考申请条件".encode("utf-8"), "text/plain")}
+    response = client.post(
+        f"/api/v1/kb/{kb_id}/documents", files=files, headers=headers
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["doc"]["status"] in {"processing", "indexed", "failed"}
+    assert payload["job"]["status"] in {"queued", "running", "succeeded", "failed"}
+
+
+def test_upload_document_docx() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post("/api/v1/kb", json={"name": "Docx知识库"}, headers=headers).json()[
+        "kb_id"
+    ]
+    files = {
+        "file": (
+            "demo.docx",
+            _build_docx_bytes(["补考申请流程", "学生需在规定时间内提交申请。"]),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    }
+    response = client.post(
+        f"/api/v1/kb/{kb_id}/documents", files=files, headers=headers
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["doc"]["status"] in {"processing", "indexed", "failed"}
+    assert payload["job"]["status"] in {"queued", "running", "succeeded", "failed"}
 
 
 def test_upload_document_too_large() -> None:
@@ -503,3 +543,37 @@ def _create_admin_user() -> None:
     )
     service.ensure_roles_seeded()
     service.create_user("admin@example.com", "Admin1234", ["admin"])
+
+
+def _build_docx_bytes(paragraphs: list[str]) -> bytes:
+    buffer = io.BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>""",
+        )
+        archive.writestr(
+            "_rels/.rels",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>""",
+        )
+        body = "".join(
+            f"<w:p><w:r><w:t>{paragraph}</w:t></w:r></w:p>" for paragraph in paragraphs
+        )
+        archive.writestr(
+            "word/document.xml",
+            f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    {body}
+  </w:body>
+</w:document>""",
+        )
+    return buffer.getvalue()

@@ -18,6 +18,7 @@ class PreparedDocument:
     published_at: str | None
     storage_path: Path
     extension: str
+    source_type: str
 
 
 @dataclass(slots=True)

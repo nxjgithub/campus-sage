@@ -34,6 +34,7 @@ class IngestPipeline:
         doc_version: str | None,
         published_at: str | None,
         file_path: str,
+        source_type: str = "pdf",
         cancel_checker: Callable[[], bool] | None = None,
         progress_callback: Callable[[str, dict[str, int]], None] | None = None,
     ) -> IngestResult:
@@ -164,7 +165,7 @@ class IngestPipeline:
                 "chunk_index": _normalize_int(chunk.chunk_index, fallback_chunk_index),
                 "text": chunk_text,
                 "hash": hashlib.sha256(chunk_text.encode("utf-8")).hexdigest(),
-                "source_type": "pdf",
+                "source_type": source_type,
                 "source_uri": None,
                 "tokens": None,
                 "created_at": created_at,

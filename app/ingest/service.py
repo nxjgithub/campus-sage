@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 from typing import Iterable
@@ -20,7 +20,7 @@ from app.rag.vector_store import VectorStore, get_vector_store
 
 
 class KnowledgeBaseService:
-    """知识库管理服务（SQLite 实现）。"""
+    """知识库管理服务。"""
 
     def __init__(
         self,
@@ -67,7 +67,7 @@ class KnowledgeBaseService:
         if record is None or record.deleted:
             raise AppError(
                 code=ErrorCode.KB_NOT_FOUND,
-                message="知识库不存在",
+                message="鐭ヨ瘑搴撲笉瀛樺湪",
                 detail={"kb_id": kb_id},
                 status_code=404,
             )
@@ -121,7 +121,7 @@ class KnowledgeBaseService:
         }
 
     def _validate_config_consistency(self, config: dict) -> None:
-        """校验配置跨字段关系，避免保存不可执行的参数组合。"""
+        """校验配置跨字段关系。"""
 
         topk = config.get("topk")
         min_evidence_chunks = config.get("min_evidence_chunks")
@@ -144,7 +144,7 @@ class KnowledgeBaseService:
 
 
 class DocumentService:
-    """文档与入库任务服务（SQLite 实现）。"""
+    """文档与入库任务服务。"""
 
     def __init__(
         self,
@@ -167,7 +167,7 @@ class DocumentService:
         doc_version: str | None,
         published_at: str | None,
     ) -> PreparedDocument:
-        """准备文档入库信息（不进行文件保存）。"""
+        """准备文档入库信息。"""
 
         name = doc_name or filename or "document"
         extension = Path(filename or name).suffix.lower().lstrip(".")
@@ -191,6 +191,7 @@ class DocumentService:
             published_at=published_at,
             storage_path=storage_path,
             extension=extension,
+            source_type=self._resolve_source_type(extension),
         )
 
     def create_document(
@@ -204,7 +205,7 @@ class DocumentService:
         if file_size_bytes > self._settings.upload_max_mb * 1024 * 1024:
             raise AppError(
                 code=ErrorCode.FILE_TOO_LARGE,
-                message="文件大小超过限制",
+                message="鏂囦欢澶у皬瓒呰繃闄愬埗",
                 detail={"max_mb": self._settings.upload_max_mb},
                 status_code=400,
             )
@@ -291,7 +292,7 @@ class DocumentService:
         doc_id: str,
         request_id: str | None,
     ) -> IngestJobRecord:
-        """重新入库（生成新任务）。"""
+        """重新入库并生成新任务。"""
 
         record = self.get_document(doc_id)
         job_id = new_id("job")
@@ -355,13 +356,13 @@ class DocumentService:
         job_id: str,
         request_id: str | None,
     ) -> IngestJobRecord:
-        """重试入库任务（创建新任务）。"""
+        """重试入库任务并创建新任务。"""
 
         job = self.get_job(job_id)
         if job.status not in {"failed", "canceled"}:
             raise AppError(
                 code=ErrorCode.INGEST_JOB_NOT_RETRYABLE,
-                message="任务状态不允许重试",
+                message="浠诲姟鐘舵€佷笉鍏佽閲嶈瘯",
                 detail={"job_id": job_id, "status": job.status},
                 status_code=409,
             )
@@ -393,11 +394,26 @@ class DocumentService:
     def _allowed_exts(self) -> set[str]:
         """解析允许的文件后缀。"""
 
-        return {
+        configured = {
             ext.strip().lower()
             for ext in self._settings.upload_allowed_exts.split(",")
             if ext.strip()
         }
+        # 兼容历史本地配置仍为单个 pdf 的场景，默认放开首批稳定文本格式。
+        if configured == {"pdf"}:
+            return {"pdf", "docx", "html", "htm", "md", "txt"}
+        return configured
+
+    def _resolve_source_type(self, extension: str) -> str:
+        """将扩展名归一到来源类型。"""
+
+        if extension == "pdf":
+            return "pdf"
+        if extension == "docx":
+            return "docx"
+        if extension in {"html", "htm"}:
+            return "html"
+        return "text"
 
     def _build_progress(
         self,
@@ -528,7 +544,7 @@ class DocumentService:
                     kb_id=document.kb_id, doc_id=document.doc_id
                 )
             except AppError as exc:
-                # 删除旧向量是幂等清理动作，遇到瞬时断连时记录告警并继续主流程。
+                # 鍒犻櫎鏃у悜閲忔槸骞傜瓑娓呯悊鍔ㄤ綔锛岄亣鍒扮灛鏃舵柇杩炴椂璁板綍鍛婅骞剁户缁富娴佺▼銆?
                 log_event(
                     self._logger,
                     event="vector_cleanup_skipped",
@@ -548,6 +564,7 @@ class DocumentService:
                 doc_version=document.doc_version,
                 published_at=document.published_at,
                 file_path=document.file_path or "",
+                source_type=self._resolve_source_type(file_path.suffix.lower().lstrip(".")),
                 cancel_checker=is_canceled,
                 progress_callback=progress_callback,
             )
@@ -712,3 +729,4 @@ class DocumentService:
                 self._vector_store.delete_by_doc_id(
                     kb_id=document.kb_id, doc_id=document.doc_id
                 )
+

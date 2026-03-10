@@ -106,3 +106,7 @@
 ## 8. 开关与调试
 - `DEBUG_MODE`：true/false
 - `ENABLE_SWAGGER`：true/false（prod 可关闭）
+
+## 上传类型补充（2026-03 第三轮）
+- `UPLOAD_ALLOWED_EXTS` 默认值调整为 `pdf,docx,html,htm,md,txt`。
+- 推荐首批启用文本可稳定提取的格式；`csv/xlsx/pptx/图片 OCR` 暂不纳入默认支持集。

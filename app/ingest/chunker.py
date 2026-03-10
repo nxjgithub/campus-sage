@@ -27,7 +27,7 @@ class Chunker:
         chunks: list[Chunk] = []
         chunk_index = 0
         for page in pages:
-            section_path = self._extract_section_path(page.text)
+            section_path = page.section_path or self._extract_section_path(page.text)
             for text in self._split_text(page.text):
                 chunks.append(
                     Chunk(
