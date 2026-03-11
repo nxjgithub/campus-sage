@@ -386,6 +386,7 @@ def edit_and_resend_message(
         refusal=False,
         refusal_reason=None,
         timing=None,
+        next_steps=None,
         citations=None,
         edited_from_message_id=message_id,
     )

@@ -36,6 +36,9 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 问答上下文已附证据编号，vLLM 提示词要求强制引用编号；缺引用时服务层自动补全。
 - 拒答策略已强化，增加关键词覆盖率阈值与最小上下文长度约束。
 - 已支持流式问答 SSE：`start/token/citation/refusal/done/error` 事件并携带 request_id。
+- 拒答响应已补充结构化 `next_steps`，便于前端渲染“下一步建议”而不只展示纯文本。
+- 会话历史中的助手消息也已持久化 `next_steps`，拒答引导可在历史回放中保持一致。
+- 文档上传现可选填写 `source_uri`，问答引用与拒答建议会透传官方来源链接，前端可直接跳转核对原文。
 - SSE 已增强心跳 `ping` 与断连取消处理，长连接稳定性更高。
 - 已支持 chat run 取消接口：`POST /api/v1/chat/runs/{run_id}/cancel`。
 - 已支持 chat run 状态查询接口：`GET /api/v1/chat/runs/{run_id}`（断线恢复）。

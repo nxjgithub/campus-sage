@@ -486,6 +486,11 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                           {record.doc_version ? `版本：${record.doc_version}` : "未填写版本"}
                           {record.published_at ? ` · 发布：${record.published_at}` : ""}
                         </Typography.Text>
+                        {record.source_uri ? (
+                          <Typography.Link href={record.source_uri} target="_blank" rel="noreferrer">
+                            官方来源
+                          </Typography.Link>
+                        ) : null}
                       </Space>
                     )
                   },

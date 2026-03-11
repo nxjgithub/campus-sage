@@ -6,6 +6,7 @@ export interface DocumentItem {
   doc_name: string;
   doc_version?: string | null;
   published_at?: string | null;
+  source_uri?: string | null;
   status: "pending" | "processing" | "indexed" | "failed" | "deleted";
   error_message?: string | null;
   chunk_count: number;
@@ -63,6 +64,7 @@ export async function uploadDocument(params: {
   docName?: string;
   docVersion?: string;
   publishedAt?: string;
+  sourceUri?: string;
 }) {
   const formData = new FormData();
   formData.append("file", params.file);
@@ -74,6 +76,9 @@ export async function uploadDocument(params: {
   }
   if (params.publishedAt) {
     formData.append("published_at", params.publishedAt);
+  }
+  if (params.sourceUri) {
+    formData.append("source_uri", params.sourceUri);
   }
   const { data } = await apiClient.post<DocumentUploadResponse>(
     `/kb/${params.kbId}/documents`,

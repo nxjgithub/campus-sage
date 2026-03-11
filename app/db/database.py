@@ -106,6 +106,7 @@ def init_database(settings: Settings) -> None:
             doc_name TEXT NOT NULL,
             doc_version TEXT,
             published_at TEXT,
+            source_uri TEXT,
             status TEXT NOT NULL,
             error_message TEXT,
             chunk_count INTEGER NOT NULL,
@@ -117,6 +118,7 @@ def init_database(settings: Settings) -> None:
         );
         """
     )
+    _try_add_column(database, "document", "source_uri", "TEXT")
     database.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_document_kb_id
@@ -193,6 +195,7 @@ def init_database(settings: Settings) -> None:
             refusal INTEGER NOT NULL,
             refusal_reason TEXT,
             timing_json TEXT,
+            next_steps_json TEXT,
             citations_json TEXT,
             parent_message_id TEXT,
             edited_from_message_id TEXT,
@@ -204,6 +207,7 @@ def init_database(settings: Settings) -> None:
         );
         """
     )
+    _try_add_column(database, "message", "next_steps_json", "TEXT")
     _try_add_column(database, "message", "parent_message_id", "TEXT")
     _try_add_column(database, "message", "edited_from_message_id", "TEXT")
     _try_add_column(database, "message", "sequence_no", "INTEGER")

@@ -61,8 +61,15 @@
 - `done` 事件到达后回填 `conversation_id / message_id / user_message_id / created_at`。
 - 如果 `citations` 非空，默认允许快速打开引用面板。
 - 如果 `refusal=true`，显示建议块，不按接口失败处理。
+- 如果 `refusal=true` 且存在 `next_steps`，优先渲染结构化建议卡片；`suggestions` 仅作为兼容文本补充。
+- `next_steps.action` 交互建议：
+  - `search_keyword` / `rewrite_question` / `add_context`：优先回填到问答输入框，辅助用户继续追问
+  - `check_official_source`：若 `value` 为 http/https 链接，则直接新开页跳转；否则管理员可跳转文档管理页，普通用户给出查看官网或联系管理员的提示
+  - `verify_kb_scope`：管理员可跳转文档管理页；普通用户给出查看官网或联系管理员的提示
+- 历史会话回放时，若助手消息已持久化 `next_steps`，渲染规则与当次问答完成态保持一致。
 - 点击助手消息打开证据弹窗。
 - 证据弹窗支持按钮关闭与键盘关闭。
+- 证据卡片若带 `source_uri`，应提供“官方来源”链接，避免用户只能停留在片段级证据。
 - 输入区必须始终可见，不被消息流挤出页面。
 
 ## 6. 会话列表规则

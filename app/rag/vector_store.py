@@ -619,6 +619,10 @@ def _validate_payload(payload: dict[str, Any]) -> None:
         _raise_payload_type_error("doc_version", payload.get("doc_version"))
     if not _is_optional_str(payload.get("published_at")):
         _raise_payload_type_error("published_at", payload.get("published_at"))
+    if "source_type" in payload and not _is_optional_str(payload.get("source_type")):
+        _raise_payload_type_error("source_type", payload.get("source_type"))
+    if "source_uri" in payload and not _is_optional_str(payload.get("source_uri")):
+        _raise_payload_type_error("source_uri", payload.get("source_uri"))
     if "published_at_ts" in payload and not _is_optional_int(payload.get("published_at_ts")):
         _raise_payload_type_error("published_at_ts", payload.get("published_at_ts"))
     if not _is_optional_int(payload.get("page_start")):

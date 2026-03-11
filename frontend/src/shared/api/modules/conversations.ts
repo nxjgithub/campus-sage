@@ -1,5 +1,5 @@
 import { apiClient } from "../client";
-import { CitationItem } from "./ask";
+import { CitationItem, NextStepItem } from "./ask";
 
 export interface ConversationListItem {
   conversation_id: string;
@@ -24,6 +24,7 @@ export interface ConversationMessage {
   citations?: CitationItem[] | null;
   refusal?: boolean | null;
   refusal_reason?: string | null;
+  next_steps?: NextStepItem[] | null;
   timing?: Record<string, number> | null;
   created_at: string;
 }

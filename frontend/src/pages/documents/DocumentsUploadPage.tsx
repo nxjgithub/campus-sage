@@ -41,7 +41,8 @@ export function DocumentsUploadPage() {
         file: targetFile.originFileObj,
         docName: values.doc_name?.trim() || undefined,
         docVersion: values.doc_version?.trim() || undefined,
-        publishedAt: values.published_at?.trim() || undefined
+        publishedAt: values.published_at?.trim() || undefined,
+        sourceUri: values.source_uri?.trim() || undefined
       });
     },
     onSuccess: async (data) => {
@@ -62,6 +63,7 @@ export function DocumentsUploadPage() {
   const watchedDocName = Form.useWatch("doc_name", form) ?? "";
   const watchedDocVersion = Form.useWatch("doc_version", form) ?? "";
   const watchedPublishedAt = Form.useWatch("published_at", form) ?? "";
+  const watchedSourceUri = Form.useWatch("source_uri", form) ?? "";
   const selectedKbName = kbNameMap.get(watchedKbId) ?? "未选择";
   const selectedFileName = fileList[0]?.name ?? "未选择";
 
@@ -194,6 +196,9 @@ export function DocumentsUploadPage() {
                 <Form.Item name="published_at" label="发布日期（可选）">
                   <Input placeholder="YYYY-MM-DD" />
                 </Form.Item>
+                <Form.Item name="source_uri" label="官方来源链接（可选）">
+                  <Input placeholder="https://example.edu/policy" />
+                </Form.Item>
 
                 <Form.Item style={{ marginBottom: 0 }}>
                   <div className="split-actions">
@@ -249,6 +254,12 @@ export function DocumentsUploadPage() {
                     <span className="split-side-metric__label">发布日期</span>
                     <span className="split-side-metric__value">
                       {watchedPublishedAt.trim() || "未填写"}
+                    </span>
+                  </div>
+                  <div className="split-side-metric">
+                    <span className="split-side-metric__label">官方来源</span>
+                    <span className="split-side-metric__value">
+                      {watchedSourceUri.trim() || "未填写"}
                     </span>
                   </div>
                 </div>

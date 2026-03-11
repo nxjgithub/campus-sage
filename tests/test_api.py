@@ -13,6 +13,7 @@ from app.db.database import get_database, reset_database
 from app.db.repos import RepositoryProvider
 from app.main import app
 from app.auth.service import UserService
+from app.rag.next_steps import NEXT_STEP_ACTIONS
 from tests.conftest import is_qdrant_available, is_qdrant_backend, is_redis_available
 
 
@@ -140,7 +141,59 @@ def test_ask_refusal_when_no_evidence() -> None:
         "LOW_EVIDENCE",
         "LOW_COVERAGE",
     }
+    assert payload["suggestions"]
+    assert payload["next_steps"]
+    assert payload["next_steps"][0]["action"]
+    assert payload["next_steps"][0]["label"]
+    assert payload["next_steps"][0]["detail"]
+    assert payload["next_steps"][0]["action"] in NEXT_STEP_ACTIONS
     assert payload["citations"] == []
+
+
+def test_conversation_detail_persists_refusal_next_steps() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post("/api/v1/kb", json={"name": "拒答会话知识库"}, headers=headers).json()[
+        "kb_id"
+    ]
+    response = client.post(
+        f"/api/v1/kb/{kb_id}/ask",
+        json={"question": "补考申请需要什么条件？"},
+        headers=headers,
+    )
+    if is_qdrant_backend() and not is_qdrant_available():
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "VECTOR_SEARCH_FAILED"
+        return
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refusal"] is True
+
+    detail_response = client.get(
+        f"/api/v1/conversations/{payload['conversation_id']}",
+        headers=headers,
+    )
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assistant_messages = [
+        item for item in detail_payload["messages"] if item["role"] == "assistant"
+    ]
+    assert assistant_messages
+    assistant_message = assistant_messages[-1]
+    assert assistant_message["refusal"] is True
+    assert assistant_message["refusal_reason"] == payload["refusal_reason"]
+    assert assistant_message["next_steps"]
+    assert assistant_message["next_steps"][0]["action"] in NEXT_STEP_ACTIONS
+
+    page_response = client.get(
+        f"/api/v1/conversations/{payload['conversation_id']}/messages?limit=10",
+        headers=headers,
+    )
+    assert page_response.status_code == 200
+    page_payload = page_response.json()
+    paged_assistant = [item for item in page_payload["items"] if item["role"] == "assistant"]
+    assert paged_assistant
+    assert paged_assistant[-1]["next_steps"]
 
 
 def test_ask_with_legacy_invalid_kb_config_fallback() -> None:
@@ -182,6 +235,7 @@ def test_ask_with_legacy_invalid_kb_config_fallback() -> None:
         "LOW_EVIDENCE",
         "LOW_COVERAGE",
     }
+    assert payload["next_steps"]
 
 
 def test_ask_rejects_invalid_runtime_topk() -> None:
@@ -267,6 +321,25 @@ def test_upload_document_invalid_extension() -> None:
     assert response.status_code == 400
     payload = response.json()
     assert payload["error"]["code"] == "FILE_TYPE_NOT_ALLOWED"
+
+
+def test_upload_document_rejects_invalid_source_uri() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post("/api/v1/kb", json={"name": "来源链接知识库"}, headers=headers).json()[
+        "kb_id"
+    ]
+    files = {"file": ("demo.pdf", b"dummy content", "application/pdf")}
+    response = client.post(
+        f"/api/v1/kb/{kb_id}/documents",
+        files=files,
+        data={"source_uri": "javascript:alert(1)"},
+        headers=headers,
+    )
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "VALIDATION_FAILED"
+    assert payload["error"]["detail"]["field"] == "source_uri"
 
 
 def test_upload_document_txt() -> None:
@@ -372,8 +445,14 @@ def test_ask_with_evidence() -> None:
     }
     kb_id = client.post("/api/v1/kb", json=kb_payload, headers=headers).json()["kb_id"]
     files = {"file": ("demo.pdf", "补考 申请 条件".encode("utf-8"), "application/pdf")}
-    upload = client.post(f"/api/v1/kb/{kb_id}/documents", files=files, headers=headers)
+    upload = client.post(
+        f"/api/v1/kb/{kb_id}/documents",
+        files=files,
+        data={"source_uri": "https://example.edu/academic/policy"},
+        headers=headers,
+    )
     assert upload.status_code == 200
+    assert upload.json()["doc"]["source_uri"] == "https://example.edu/academic/policy"
     job_id = upload.json()["job"]["job_id"]
     _wait_for_job(client, job_id, headers)
 
@@ -389,7 +468,9 @@ def test_ask_with_evidence() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["refusal"] is False
+    assert payload["next_steps"] == []
     assert payload["citations"]
+    assert payload["citations"][0]["source_uri"] == "https://example.edu/academic/policy"
     if is_qdrant_backend() and is_qdrant_available():
         import os
         from qdrant_client import QdrantClient  # type: ignore

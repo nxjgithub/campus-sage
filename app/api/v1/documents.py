@@ -33,6 +33,7 @@ async def upload_document(
     doc_name: str | None = Form(default=None),
     doc_version: str | None = Form(default=None),
     published_at: str | None = Form(default=None),
+    source_uri: str | None = Form(default=None),
     current_user: CurrentUser = Depends(require_permission(Permission.DOC_WRITE)),
     authz: AuthorizationService = Depends(get_authorization_service),
     kb_service: KnowledgeBaseService = Depends(get_kb_service),
@@ -55,6 +56,7 @@ async def upload_document(
         doc_name=doc_name,
         doc_version=doc_version,
         published_at=published_at,
+        source_uri=source_uri,
     )
     max_bytes = settings.upload_max_mb * 1024 * 1024
     size = await save_upload_file(file, prepared.storage_path, max_bytes)

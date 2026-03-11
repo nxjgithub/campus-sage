@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from app.api.v1.schemas.common import RequestIdMixin
+from app.rag.next_steps import NextStepAction
 
 
 class AskFilters(BaseModel):
@@ -54,12 +55,22 @@ class Citation(BaseModel):
     doc_name: str = Field(description="文档名称")
     doc_version: str | None = Field(default=None, description="文档版本")
     published_at: str | None = Field(default=None, description="发布日期")
+    source_uri: str | None = Field(default=None, description="文档官方来源链接")
     page_start: int | None = Field(default=None, description="起始页码")
     page_end: int | None = Field(default=None, description="结束页码")
     section_path: str | None = Field(default=None, description="章节路径")
     chunk_id: str = Field(description="分块ID")
     snippet: str = Field(description="引用片段")
     score: float | None = Field(default=None, description="相似度分数")
+
+
+class NextStep(BaseModel):
+    """拒答后的结构化下一步建议。"""
+
+    action: NextStepAction = Field(description="建议动作类型")
+    label: str = Field(description="建议标题")
+    detail: str = Field(description="建议说明")
+    value: str | None = Field(default=None, description="建议动作附带值")
 
 
 class AskResponse(RequestIdMixin):
@@ -69,6 +80,7 @@ class AskResponse(RequestIdMixin):
     refusal: bool = Field(description="是否拒答")
     refusal_reason: str | None = Field(default=None, description="拒答原因")
     suggestions: list[str] = Field(description="建议列表")
+    next_steps: list[NextStep] = Field(description="结构化下一步建议")
     citations: list[Citation] = Field(description="引用列表")
     conversation_id: str | None = Field(default=None, description="会话ID")
     message_id: str | None = Field(default=None, description="消息ID")

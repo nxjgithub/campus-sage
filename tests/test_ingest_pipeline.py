@@ -43,6 +43,7 @@ def test_pipeline_raises_when_embedding_count_mismatch(monkeypatch: pytest.Monke
             doc_name="demo.pdf",
             doc_version="v1",
             published_at="2025-01-01",
+            source_uri=None,
             file_path="ignored-by-monkeypatch",
         )
 
@@ -95,6 +96,7 @@ def test_pipeline_wraps_upsert_app_error_with_source_detail(
             doc_name="demo.pdf",
             doc_version="v1",
             published_at="2025-01-01",
+            source_uri=None,
             file_path="ignored-by-monkeypatch",
         )
 
@@ -147,6 +149,7 @@ def test_pipeline_normalizes_payload_types_before_upsert(
         doc_name=300,  # type: ignore[arg-type]
         doc_version=400,  # type: ignore[arg-type]
         published_at=500,  # type: ignore[arg-type]
+        source_uri=600,  # type: ignore[arg-type]
         file_path="ignored-by-monkeypatch",
     )
 
@@ -158,6 +161,7 @@ def test_pipeline_normalizes_payload_types_before_upsert(
     assert payload["doc_name"] == "300"
     assert payload["doc_version"] == "400"
     assert payload["published_at"] == "500"
+    assert payload["source_uri"] == "600"
     assert payload["page_start"] == 3
     assert payload["page_end"] == 4
     assert payload["section_path"] == "5"
@@ -206,6 +210,7 @@ def test_pipeline_filters_blank_chunks_before_embedding(
         doc_name="demo.pdf",
         doc_version=None,
         published_at=None,
+        source_uri=None,
         file_path="ignored-by-monkeypatch",
     )
 

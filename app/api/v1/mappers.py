@@ -6,7 +6,7 @@ from app.api.v1.schemas.conversations import ConversationListItem, MessageItem
 from app.api.v1.schemas.documents import DocumentResponse
 from app.api.v1.schemas.ingest import IngestJobResponse
 from app.api.v1.schemas.kb import KnowledgeBaseListItem, KnowledgeBaseResponse
-from app.api.v1.schemas.rag import AskResponse, Citation
+from app.api.v1.schemas.rag import AskResponse, Citation, NextStep
 from app.db.models import (
     ConversationRecord,
     DocumentRecord,
@@ -14,7 +14,7 @@ from app.db.models import (
     KnowledgeBaseRecord,
     MessageRecord,
 )
-from app.rag.dto import AskResult, CitationDTO
+from app.rag.dto import AskResult, CitationDTO, NextStepDTO
 
 
 def kb_to_response(record: KnowledgeBaseRecord, request_id: str | None) -> KnowledgeBaseResponse:
@@ -52,6 +52,7 @@ def doc_to_response(record: DocumentRecord) -> DocumentResponse:
         doc_name=record.doc_name,
         doc_version=record.doc_version,
         published_at=record.published_at,
+        source_uri=record.source_uri,
         status=record.status,
         error_message=record.error_message,
         chunk_count=record.chunk_count,
@@ -105,6 +106,7 @@ def message_to_item(record: MessageRecord) -> MessageItem:
         citations=record.citations or None,
         refusal=record.refusal if record.role == "assistant" else None,
         refusal_reason=record.refusal_reason if record.role == "assistant" else None,
+        next_steps=record.next_steps if record.role == "assistant" else None,
         timing=record.timing if record.role == "assistant" else None,
         created_at=record.created_at,
     )
@@ -118,6 +120,7 @@ def rag_result_to_response(result: AskResult) -> AskResponse:
         refusal=result.refusal,
         refusal_reason=result.refusal_reason,
         suggestions=list(result.suggestions),
+        next_steps=[_next_step_from_dto(item) for item in result.next_steps],
         citations=[_citation_from_dto(item) for item in result.citations],
         conversation_id=result.conversation_id,
         message_id=result.message_id,
@@ -135,12 +138,22 @@ def _citation_from_dto(dto: CitationDTO) -> Citation:
         doc_name=dto.doc_name,
         doc_version=dto.doc_version,
         published_at=dto.published_at,
+        source_uri=dto.source_uri,
         page_start=dto.page_start,
         page_end=dto.page_end,
         section_path=dto.section_path,
         chunk_id=dto.chunk_id,
         snippet=dto.snippet,
         score=dto.score,
+    )
+
+
+def _next_step_from_dto(dto: NextStepDTO) -> NextStep:
+    return NextStep(
+        action=dto.action,
+        label=dto.label,
+        detail=dto.detail,
+        value=dto.value,
     )
 
 

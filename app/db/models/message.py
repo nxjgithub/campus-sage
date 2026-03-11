@@ -16,6 +16,7 @@ class MessageRecord:
     refusal: bool
     refusal_reason: str | None
     timing: dict[str, int] | None
+    next_steps: list[dict[str, object]]
     citations: list[dict[str, object]]
     created_at: str
     parent_message_id: str | None = None

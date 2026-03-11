@@ -89,6 +89,7 @@
 - `doc_name: str`
 - `doc_version: str | null`
 - `published_at: str | null`
+- `source_uri: str | null`
 - `page_start: int | null`
 - `page_end: int | null`
 - `section_path: str | null`
@@ -132,11 +133,22 @@
 - `answer`：中文提示，明确“当前知识库证据不足，无法给出可靠答案”
 - `refusal_reason: str`：机器可读原因码（例如 "NO_EVIDENCE" / "LOW_SCORE" / "LOW_EVIDENCE" / "LOW_COVERAGE"）
 - `suggestions: List[str]`：给用户的下一步建议（例如“请到教务处官网查询”“建议关键词：缓考 申请 条件”）
+- `next_steps: List[NextStep]`：结构化下一步建议，建议字段至少包含：
+  - `action: str`：动作类型，当前允许值固定为：
+    - `search_keyword`
+    - `rewrite_question`
+    - `add_context`
+    - `check_official_source`
+    - `verify_kb_scope`
+  - `label: str`：前端展示标题
+  - `detail: str`：具体说明
+  - `value: str | null`：可选附带值（如推荐关键词；`check_official_source` 可直接给出 http/https 官方来源链接）
 - `citations`：允许为空数组（[]），或给出弱相关证据（不建议）
 
 当 `refusal=false` 时：
 - `refusal_reason` 可为 null 或省略
 - `suggestions` 可为空
+- `next_steps` 应为空数组
 
 
 ## 6. 上下文构造（Context Builder）契约（强制）
@@ -167,7 +179,7 @@
 - `ping`：心跳事件，至少包含 `run_id`、`request_id`
 - `token`：增量文本，至少包含 `run_id`、`delta`、`request_id`
 - `citation`：单条引用，至少包含 `run_id`、`citation`、`request_id`
-- `refusal`：拒答结果，至少包含 `run_id`、`answer`、`refusal_reason`、`suggestions`、`request_id`
+- `refusal`：拒答结果，至少包含 `run_id`、`answer`、`refusal_reason`、`suggestions`、`next_steps`、`request_id`
 - `done`：流结束，至少包含 `run_id`、`status`、`request_id`
 - `error`：流内错误，至少包含 `run_id`、`code`、`message`、`request_id`
 

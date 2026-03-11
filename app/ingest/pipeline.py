@@ -33,6 +33,7 @@ class IngestPipeline:
         doc_name: str,
         doc_version: str | None,
         published_at: str | None,
+        source_uri: str | None,
         file_path: str,
         source_type: str = "pdf",
         cancel_checker: Callable[[], bool] | None = None,
@@ -166,7 +167,7 @@ class IngestPipeline:
                 "text": chunk_text,
                 "hash": hashlib.sha256(chunk_text.encode("utf-8")).hexdigest(),
                 "source_type": source_type,
-                "source_uri": None,
+                "source_uri": _normalize_optional_str(source_uri),
                 "tokens": None,
                 "created_at": created_at,
             }

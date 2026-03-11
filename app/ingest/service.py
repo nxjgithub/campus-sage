@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import urlparse
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
@@ -166,6 +167,7 @@ class DocumentService:
         doc_name: str | None,
         doc_version: str | None,
         published_at: str | None,
+        source_uri: str | None,
     ) -> PreparedDocument:
         """准备文档入库信息。"""
 
@@ -189,6 +191,7 @@ class DocumentService:
             doc_name=name,
             doc_version=doc_version,
             published_at=published_at,
+            source_uri=self._normalize_source_uri(source_uri),
             storage_path=storage_path,
             extension=extension,
             source_type=self._resolve_source_type(extension),
@@ -217,6 +220,7 @@ class DocumentService:
             doc_name=prepared.doc_name,
             doc_version=prepared.doc_version,
             published_at=prepared.published_at,
+            source_uri=prepared.source_uri,
             status="processing",
             error_message=None,
             chunk_count=0,
@@ -415,6 +419,24 @@ class DocumentService:
             return "html"
         return "text"
 
+    def _normalize_source_uri(self, source_uri: str | None) -> str | None:
+        """规整文档来源链接，并限制为 http/https。"""
+
+        if source_uri is None:
+            return None
+        normalized = source_uri.strip()
+        if not normalized:
+            return None
+        parsed = urlparse(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise AppError(
+                code=ErrorCode.VALIDATION_FAILED,
+                message="文档来源链接格式不合法",
+                detail={"field": "source_uri", "reason": "must_be_http_or_https"},
+                status_code=400,
+            )
+        return normalized
+
     def _build_progress(
         self,
         stage: str,
@@ -563,6 +585,7 @@ class DocumentService:
                 doc_name=document.doc_name,
                 doc_version=document.doc_version,
                 published_at=document.published_at,
+                source_uri=document.source_uri,
                 file_path=document.file_path or "",
                 source_type=self._resolve_source_type(file_path.suffix.lower().lstrip(".")),
                 cancel_checker=is_canceled,

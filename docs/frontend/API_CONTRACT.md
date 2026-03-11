@@ -60,7 +60,7 @@
 ## 4. 文档与入库接口
 - `POST /kb/{kb_id}/documents`
   - 类型：`multipart/form-data`
-  - 字段：`file`(必填), `doc_name`, `doc_version`, `published_at`
+  - 字段：`file`(必填), `doc_name`, `doc_version`, `published_at`, `source_uri`
   - 成功：返回 `doc + job`
 - `GET /kb/{kb_id}/documents`
   - 用途：文档列表
@@ -92,6 +92,7 @@
     - `refusal`
     - `refusal_reason`
     - `suggestions[]`
+    - `next_steps[]`
     - `citations[]`
     - `conversation_id`
     - `message_id`
@@ -108,12 +109,24 @@
 前端强约束：
 - `refusal=false`：显示答案正文与引用卡片。
 - `refusal=true`：显示拒答态与建议列表，不显示“请求失败”。
+- `refusal=true` 时优先渲染 `next_steps[]`，`suggestions[]` 作为兼容性兜底文本保留。
+- `next_steps[].action` 当前仅允许：
+  - `search_keyword`
+  - `rewrite_question`
+  - `add_context`
+- `check_official_source`
+- `verify_kb_scope`
+- 建议动作映射：
+  - `search_keyword` / `rewrite_question` / `add_context`：回填输入框，帮助用户继续追问
+  - `check_official_source`：若 `next_steps[].value` 为 http/https 链接，则直接打开官方来源；否则再回退到文档治理入口或提示用户查看官网
+  - `verify_kb_scope`：优先跳到已有文档治理入口；若当前门户无该入口，则提示用户查看官网或联系管理员
 - 即使 `answer` 已带 `[1][2]`，也必须仍然展示结构化 `citations[]`。
 - 问答主界面不展示内部标识（如 `kb_id/run_id/conversation_id/message_id`）。
 - `citations[]` 每项至少渲染：
   - `doc_name`
   - `page_start/page_end` 或 `section_path`
   - `snippet`
+  - 若存在 `source_uri`，应提供“官方来源”跳转入口
   - 调试模式下 `score` 可能有值，生产态可为 `null`。
 
 - `POST /kb/{kb_id}/ask/stream`
@@ -123,7 +136,7 @@
     - `start`: `run_id/conversation_id/request_id`
     - `token`: `delta`
     - `citation`: `citation`
-    - `refusal`: `answer/refusal_reason/suggestions`
+    - `refusal`: `answer/refusal_reason/suggestions/next_steps`
     - `done`: `status/conversation_id/user_message_id/message_id/assistant_created_at`
     - `error`: `code/message/request_id`
   - 前端规则：
@@ -153,7 +166,7 @@
   - 用途：会话列表（侧栏）
   - 返回增强：`total/next_cursor/last_message_preview/last_message_at`
 - `GET /conversations/{conversation_id}`
-  - 用途：会话详情（含消息与助手引用）
+  - 用途：会话详情（含消息、助手引用与拒答后的 `next_steps`）
 - `PATCH /conversations/{conversation_id}`
   - 用途：重命名会话
 - `DELETE /conversations/{conversation_id}`
@@ -164,6 +177,7 @@
 
 前端展示约束：
 - 用户消息与助手消息视觉区分。
+- 助手消息若 `refusal=true` 且存在 `next_steps`，历史会话中也必须渲染同一套下一步建议卡片。
 - 助手消息点击后打开证据弹窗，弹窗内展示 `timing/citations`。
 - 问答主界面必须支持“加载更早消息”。
 

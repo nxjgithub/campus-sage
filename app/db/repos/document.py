@@ -18,9 +18,9 @@ class DocumentRepository:
         self._db.execute(
             """
             INSERT INTO document (
-                doc_id, kb_id, doc_name, doc_version, published_at, status,
+                doc_id, kb_id, doc_name, doc_version, published_at, source_uri, status,
                 error_message, chunk_count, file_path, created_at, updated_at, deleted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             (
                 record.doc_id,
@@ -28,6 +28,7 @@ class DocumentRepository:
                 record.doc_name,
                 record.doc_version,
                 record.published_at,
+                record.source_uri,
                 record.status,
                 record.error_message,
                 record.chunk_count,
@@ -44,7 +45,7 @@ class DocumentRepository:
 
         row = self._db.fetch_one(
             """
-            SELECT doc_id, kb_id, doc_name, doc_version, published_at, status,
+            SELECT doc_id, kb_id, doc_name, doc_version, published_at, source_uri, status,
                    error_message, chunk_count, file_path, created_at, updated_at, deleted
             FROM document
             WHERE doc_id = ?;
@@ -59,6 +60,7 @@ class DocumentRepository:
             doc_name=row["doc_name"],
             doc_version=row["doc_version"],
             published_at=row["published_at"],
+            source_uri=row["source_uri"],
             status=row["status"],
             error_message=row["error_message"],
             chunk_count=int(row["chunk_count"]),
@@ -73,7 +75,7 @@ class DocumentRepository:
 
         rows = self._db.fetch_all(
             """
-            SELECT doc_id, kb_id, doc_name, doc_version, published_at, status,
+            SELECT doc_id, kb_id, doc_name, doc_version, published_at, source_uri, status,
                    error_message, chunk_count, file_path, created_at, updated_at, deleted
             FROM document
             WHERE kb_id = ? AND deleted = 0
@@ -88,6 +90,7 @@ class DocumentRepository:
                 doc_name=row["doc_name"],
                 doc_version=row["doc_version"],
                 published_at=row["published_at"],
+                source_uri=row["source_uri"],
                 status=row["status"],
                 error_message=row["error_message"],
                 chunk_count=int(row["chunk_count"]),
@@ -105,7 +108,7 @@ class DocumentRepository:
         self._db.execute(
             """
             UPDATE document
-            SET doc_name = ?, doc_version = ?, published_at = ?, status = ?,
+            SET doc_name = ?, doc_version = ?, published_at = ?, source_uri = ?, status = ?,
                 error_message = ?, chunk_count = ?, file_path = ?, updated_at = ?, deleted = ?
             WHERE doc_id = ?;
             """,
@@ -113,6 +116,7 @@ class DocumentRepository:
                 record.doc_name,
                 record.doc_version,
                 record.published_at,
+                record.source_uri,
                 record.status,
                 record.error_message,
                 record.chunk_count,

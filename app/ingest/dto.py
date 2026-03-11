@@ -16,6 +16,7 @@ class PreparedDocument:
     doc_name: str
     doc_version: str | None
     published_at: str | None
+    source_uri: str | None
     storage_path: Path
     extension: str
     source_type: str

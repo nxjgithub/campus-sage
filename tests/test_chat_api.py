@@ -15,7 +15,9 @@ from app.db.models import RoleRecord
 from app.db.repos import RepositoryProvider
 from app.main import app
 from app.rag.chat_run_service import ChatRunService
+from app.rag.next_steps import NEXT_STEP_ACTIONS
 from app.rag.service import RagService
+from tests.conftest import is_qdrant_available, is_qdrant_backend
 
 
 @pytest.fixture(autouse=True)
@@ -151,6 +153,7 @@ def test_stream_sse_events_and_request_id_consistency() -> None:
     upload = client.post(
         f"/api/v1/kb/{kb_id}/documents",
         files={"file": ("evidence.pdf", "补考 申请 条件 说明".encode("utf-8"), "application/pdf")},
+        data={"source_uri": "https://example.edu/academic/policy"},
         headers=headers,
     )
     assert upload.status_code == 200
@@ -172,6 +175,39 @@ def test_stream_sse_events_and_request_id_consistency() -> None:
     assert "token" in event_names
     assert "citation" in event_names
     assert event_names[-1] == "done"
+    citation_payload = next(payload for event_name, payload in sse_events if event_name == "citation")
+    assert citation_payload["citation"]["source_uri"] == "https://example.edu/academic/policy"
+
+
+def test_stream_refusal_event_contains_next_steps() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post("/api/v1/kb", json={"name": "拒答SSE知识库"}, headers=headers).json()["kb_id"]
+
+    with client.stream(
+        "POST",
+        f"/api/v1/kb/{kb_id}/ask/stream",
+        headers=headers,
+        json={"question": "补考申请条件是什么？"},
+    ) as response:
+        assert response.status_code == 200
+        sse_events = _collect_sse_events(response)
+
+    refusal_events = [payload for event_name, payload in sse_events if event_name == "refusal"]
+    if is_qdrant_backend() and not is_qdrant_available():
+        assert refusal_events == []
+        return
+    assert refusal_events
+    refusal_payload = refusal_events[0]
+    assert refusal_payload["refusal_reason"] in {
+        "NO_EVIDENCE",
+        "LOW_SCORE",
+        "LOW_EVIDENCE",
+        "LOW_COVERAGE",
+    }
+    assert refusal_payload["suggestions"]
+    assert refusal_payload["next_steps"]
+    assert refusal_payload["next_steps"][0]["action"] in NEXT_STEP_ACTIONS
 
 
 def test_stream_cancel_and_run_cancel_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:

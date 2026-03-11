@@ -17,7 +17,7 @@ from app.db.repos.conversation import ConversationRepository
 from app.db.repos.interfaces import KnowledgeBaseRepositoryProtocol
 from app.rag.context_builder import ContextBuilder
 from app.rag.conversation_service import ConversationService
-from app.rag.dto import AskResult, CitationDTO
+from app.rag.dto import AskResult, CitationDTO, NextStepDTO
 from app.rag.embedding import Embedder, get_embedder
 from app.rag.llm_client import VllmClient
 from app.rag.reranker import SimpleReranker
@@ -32,6 +32,7 @@ class _ComputationResult:
     refusal: bool
     refusal_reason: str | None
     suggestions: list[str]
+    next_steps: list[NextStepDTO]
     citations: list[CitationDTO]
     timing: dict[str, int]
     topk: int
@@ -101,6 +102,7 @@ class RagService:
             refusal=computed.refusal,
             refusal_reason=computed.refusal_reason,
             suggestions=computed.suggestions,
+            next_steps=computed.next_steps,
             citations=computed.citations,
             conversation_id=conversation.conversation_id,
             message_id=assistant_message.message_id,
@@ -160,6 +162,7 @@ class RagService:
             refusal=computed.refusal,
             refusal_reason=computed.refusal_reason,
             suggestions=computed.suggestions,
+            next_steps=computed.next_steps,
             citations=computed.citations,
             conversation_id=conversation_id,
             message_id=assistant_message.message_id,
@@ -270,6 +273,7 @@ class RagService:
                     "answer": computed.answer,
                     "refusal_reason": computed.refusal_reason,
                     "suggestions": computed.suggestions,
+                    "next_steps": [item.model_dump() for item in computed.next_steps],
                     "conversation_id": conversation.conversation_id,
                     "user_message_id": user_message.message_id,
                     "message_id": assistant_message.message_id,
@@ -399,15 +403,18 @@ class RagService:
             question, hits, resolved_threshold, min_chunks, min_coverage
         )
         if refusal_reason is not None:
+            suggestions, next_steps = self._build_refusal_guidance(
+                question=question,
+                refusal_reason=refusal_reason,
+                hits=hits,
+            )
             total_ms = int((time.perf_counter() - total_start) * 1000)
             return _ComputationResult(
-                answer="当前知识库中未找到足够证据，无法给出可靠答案。",
+                answer=self._build_refusal_answer(refusal_reason),
                 refusal=True,
                 refusal_reason=refusal_reason,
-                suggestions=[
-                    "建议到教务处官网查询相关规定",
-                    f"建议关键词：{question} 条件",
-                ],
+                suggestions=suggestions,
+                next_steps=next_steps,
                 citations=[],
                 timing={
                     "retrieve_ms": retrieve_ms,
@@ -432,15 +439,18 @@ class RagService:
         context_result = self._context_builder.build(hits)
         context_ms = int((time.perf_counter() - context_start) * 1000)
         if not context_result.hits or len(context_result.context.strip()) < min_context_chars:
+            suggestions, next_steps = self._build_refusal_guidance(
+                question=question,
+                refusal_reason="LOW_EVIDENCE",
+                hits=context_result.hits,
+            )
             total_ms = int((time.perf_counter() - total_start) * 1000)
             return _ComputationResult(
-                answer="当前知识库中未找到足够证据，无法给出可靠答案。",
+                answer=self._build_refusal_answer("LOW_EVIDENCE"),
                 refusal=True,
                 refusal_reason="LOW_EVIDENCE",
-                suggestions=[
-                    "建议到教务处官网查询相关规定",
-                    f"建议关键词：{question} 条件",
-                ],
+                suggestions=suggestions,
+                next_steps=next_steps,
                 citations=[],
                 timing={
                     "retrieve_ms": retrieve_ms,
@@ -469,6 +479,7 @@ class RagService:
             refusal=False,
             refusal_reason=None,
             suggestions=[],
+            next_steps=[],
             citations=citations,
             timing={
                 "retrieve_ms": retrieve_ms,
@@ -533,6 +544,7 @@ class RagService:
             refusal=False,
             refusal_reason=None,
             timing=None,
+            next_steps=None,
             citations=None,
         )
 
@@ -551,6 +563,7 @@ class RagService:
             refusal=computed.refusal,
             refusal_reason=computed.refusal_reason,
             timing=computed.timing,
+            next_steps=[item.model_dump() for item in computed.next_steps],
             citations=[item.model_dump() for item in computed.citations],
             message_id=new_id("msg"),
             parent_message_id=parent_message_id,
@@ -643,6 +656,7 @@ class RagService:
                     doc_name=payload.get("doc_name"),
                     doc_version=payload.get("doc_version"),
                     published_at=payload.get("published_at"),
+                    source_uri=payload.get("source_uri"),
                     page_start=payload.get("page_start"),
                     page_end=payload.get("page_end"),
                     section_path=payload.get("section_path"),
@@ -682,6 +696,88 @@ class RagService:
             return content
         markers = "".join(f"[{item.citation_id}]" for item in citations)
         return f"{content}\n\n参考：{markers}"
+
+    def _build_refusal_answer(self, refusal_reason: str) -> str:
+        """根据拒答原因构造用户可读提示。"""
+
+        base = "当前知识库中未找到足够证据，无法给出可靠答案。"
+        if refusal_reason == "LOW_COVERAGE":
+            return f"{base} 请补充更具体的场景信息后再提问。"
+        if refusal_reason == "LOW_SCORE":
+            return f"{base} 当前命中文本与问题关联度偏低。"
+        if refusal_reason == "LOW_EVIDENCE":
+            return f"{base} 当前检索到的内容过少，暂时不足以支持回答。"
+        return base
+
+    def _build_refusal_guidance(
+        self, question: str, refusal_reason: str, hits: list[VectorHit]
+    ) -> tuple[list[str], list[NextStepDTO]]:
+        """构造拒答后的建议与结构化下一步。"""
+
+        normalized_question = " ".join(question.strip().split())
+        keyword_hint = normalized_question if normalized_question else "补充业务关键词"
+        official_source_uri = self._pick_official_source_uri(hits)
+        suggestions = [
+            f"建议补充关键词后重试：{keyword_hint}",
+            "建议优先查看对应业务部门官网或最新制度原文",
+        ]
+        next_steps = [
+            NextStepDTO(
+                action="search_keyword",
+                label="补充关键词",
+                detail="将问题补充为“事项 + 对象 + 条件/时间/材料”后重新提问。",
+                value=keyword_hint,
+            ),
+            NextStepDTO(
+                action="check_official_source",
+                label="查看官方来源",
+                detail="优先核对学校官网、教务处或学院公告中的最新制度原文。",
+                value=official_source_uri,
+            ),
+        ]
+        if refusal_reason == "LOW_COVERAGE":
+            suggestions.insert(0, "建议补充学院、年级、身份或办理场景等限定信息")
+            next_steps.insert(
+                0,
+                NextStepDTO(
+                    action="add_context",
+                    label="补充场景条件",
+                    detail="补充学院、年级、学生类型或办理场景，可提高证据匹配度。",
+                    value="学院/年级/身份/办理场景",
+                ),
+            )
+        elif refusal_reason == "LOW_SCORE":
+            suggestions.insert(0, "建议改用更贴近制度原文的关键词重新提问")
+            next_steps.insert(
+                0,
+                NextStepDTO(
+                    action="rewrite_question",
+                    label="改写问题",
+                    detail="尽量使用制度原文中的业务词汇，避免口语化或过于宽泛的表达。",
+                    value=keyword_hint,
+                ),
+            )
+        elif refusal_reason == "LOW_EVIDENCE":
+            suggestions.insert(0, "建议确认该问题是否已有对应制度文档被收录到当前知识库")
+            next_steps.insert(
+                0,
+                NextStepDTO(
+                    action="verify_kb_scope",
+                    label="确认知识库范围",
+                    detail="先确认当前知识库是否已收录对应制度；若未收录，需要先补充文档。",
+                    value=None,
+                ),
+            )
+        return suggestions, next_steps
+
+    def _pick_official_source_uri(self, hits: list[VectorHit]) -> str | None:
+        """从候选证据中选择首个可跳转的官方来源链接。"""
+
+        for hit in hits:
+            candidate = hit.payload.get("source_uri")
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        return None
 
     def _keyword_coverage_ratio(self, question: str, hits: list[VectorHit]) -> float:
         """计算问题关键词在命中文本中的覆盖率。"""

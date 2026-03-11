@@ -26,6 +26,7 @@ export interface CitationItem {
   doc_name: string;
   doc_version?: string | null;
   published_at?: string | null;
+  source_uri?: string | null;
   page_start?: number | null;
   page_end?: number | null;
   section_path?: string | null;
@@ -34,11 +35,34 @@ export interface CitationItem {
   score?: number | null;
 }
 
+export type NextStepAction =
+  | "search_keyword"
+  | "rewrite_question"
+  | "add_context"
+  | "check_official_source"
+  | "verify_kb_scope";
+
+export const NEXT_STEP_ACTIONS: NextStepAction[] = [
+  "search_keyword",
+  "rewrite_question",
+  "add_context",
+  "check_official_source",
+  "verify_kb_scope"
+];
+
+export interface NextStepItem {
+  action: NextStepAction;
+  label: string;
+  detail: string;
+  value?: string | null;
+}
+
 export interface AskResponse {
   answer: string;
   refusal: boolean;
   refusal_reason?: string | null;
   suggestions: string[];
+  next_steps: NextStepItem[];
   citations: CitationItem[];
   conversation_id?: string | null;
   message_id?: string | null;
@@ -102,6 +126,7 @@ export interface AskStreamRefusalData {
   answer: string;
   refusal_reason?: string | null;
   suggestions: string[];
+  next_steps: NextStepItem[];
   conversation_id?: string | null;
   user_message_id?: string | null;
   message_id?: string | null;

@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.api.v1.schemas.common import RequestIdMixin
-from app.api.v1.schemas.rag import Citation
+from app.api.v1.schemas.rag import Citation, NextStep
 
 
 class ConversationListItem(BaseModel):
@@ -68,6 +68,7 @@ class MessageItem(BaseModel):
     citations: list[Citation] | None = Field(default=None, description="引用列表")
     refusal: bool | None = Field(default=None, description="是否拒答")
     refusal_reason: str | None = Field(default=None, description="拒答原因")
+    next_steps: list[NextStep] | None = Field(default=None, description="结构化下一步建议")
     timing: dict[str, int] | None = Field(default=None, description="耗时信息")
     created_at: str = Field(description="创建时间")
 

@@ -98,4 +98,40 @@ describe("ConversationsPage 引用交互", () => {
       });
     });
   });
+
+  it("拒答消息应展示结构化下一步建议", () => {
+    const item: ConversationMessage = {
+      message_id: "msg-4",
+      role: "assistant",
+      content: "当前知识库中未找到足够证据，无法给出可靠答案。",
+      citations: [],
+      refusal: true,
+      refusal_reason: "LOW_EVIDENCE",
+      next_steps: [
+        {
+          action: "verify_kb_scope",
+          label: "确认知识库范围",
+          detail: "先确认当前知识库是否已收录对应制度；若未收录，需要先补充文档。",
+          value: null
+        }
+      ],
+      created_at: "2026-02-12T10:12:00Z"
+    };
+
+    render(
+      <AntdApp>
+        <MessageCard
+          item={item}
+          submitting={false}
+          submitted={false}
+          onFeedbackSubmit={vi.fn().mockResolvedValue(undefined)}
+        />
+      </AntdApp>
+    );
+
+    expect(screen.getByText("确认知识库范围")).toBeInTheDocument();
+    expect(
+      screen.getByText("先确认当前知识库是否已收录对应制度；若未收录，需要先补充文档。")
+    ).toBeInTheDocument();
+  });
 });

@@ -112,18 +112,75 @@ function mockBasicStream() {
   });
 }
 
+function mockRefusalStream() {
+  vi.mocked(askStreamByKb).mockImplementation(async (_kbId, _payload, options) => {
+    options?.onEvent?.({
+      event: "start",
+      data: { run_id: "run_refusal", conversation_id: "conv_refusal", request_id: "req_refusal" }
+    });
+    options?.onEvent?.({
+      event: "refusal",
+      data: {
+        run_id: "run_refusal",
+        answer: "当前知识库中未找到足够证据，无法给出可靠答案。",
+        refusal_reason: "LOW_COVERAGE",
+        suggestions: ["建议补充学院、年级、身份或办理场景等限定信息"],
+        next_steps: [
+          {
+            action: "add_context",
+            label: "补充场景条件",
+            detail: "补充学院、年级、学生类型或办理场景，可提高证据匹配度。",
+            value: "学院/年级/身份/办理场景"
+          },
+          {
+            action: "check_official_source",
+            label: "查看官方来源",
+            detail: "优先核对学校官网、教务处或学院公告中的最新制度原文。",
+            value: "https://example.edu/academic/policy"
+          }
+        ],
+        conversation_id: "conv_refusal",
+        user_message_id: "msg_user_refusal",
+        message_id: "msg_assistant_refusal",
+        assistant_created_at: "2026-02-21T10:05:00Z",
+        timing: { total_ms: 80 },
+        request_id: "req_refusal"
+      }
+    });
+    options?.onEvent?.({
+      event: "done",
+      data: {
+        run_id: "run_refusal",
+        status: "succeeded",
+        conversation_id: "conv_refusal",
+        user_message_id: "msg_user_refusal",
+        message_id: "msg_assistant_refusal",
+        assistant_created_at: "2026-02-21T10:05:00Z",
+        refusal: true,
+        timing: { total_ms: 80 },
+        request_id: "req_refusal"
+      }
+    });
+  });
+}
+
 async function fillQuestionInput(question: string) {
   await userEvent.type(await screen.findByPlaceholderText(/请输入你的问题|请输入问题/), question);
 }
 
 describe("AskPage 聊天交互", () => {
   const scrollIntoViewMock = vi.fn();
+  const windowOpenMock = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
       value: scrollIntoViewMock
+    });
+    Object.defineProperty(window, "open", {
+      configurable: true,
+      value: windowOpenMock
     });
     vi.mocked(fetchKbList).mockResolvedValue({
       items: [{ kb_id: "kb_1", name: "教务知识库", visibility: "public", updated_at: "2026-02-21" }]
@@ -225,5 +282,33 @@ describe("AskPage 聊天交互", () => {
         expected_hint: undefined
       });
     });
+  });
+
+  it("拒答时应渲染结构化下一步建议，并支持填入追问与跳转官方来源", async () => {
+    mockRefusalStream();
+    renderWithProviders(<AskPage />);
+
+    await fillQuestionInput("这个问题信息不够");
+    await userEvent.click(screen.getByRole("button", { name: /发送/ }));
+
+    expect(await screen.findByText("补充场景条件")).toBeInTheDocument();
+    expect(screen.getByText("建议补充学院、年级、身份或办理场景等限定信息")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看官方来源" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "填入补充条件" }));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/请输入你的问题|请输入问题/)).toHaveValue(
+        "学院/年级/身份/办理场景"
+      );
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "查看官方来源" }));
+
+    expect(windowOpenMock).toHaveBeenCalledWith(
+      "https://example.edu/academic/policy",
+      "_blank",
+      "noopener,noreferrer"
+    );
   });
 });

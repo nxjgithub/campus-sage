@@ -14,6 +14,7 @@ class DocumentRecord:
     doc_name: str
     doc_version: str | None
     published_at: str | None
+    source_uri: str | None
     status: str
     error_message: str | None
     chunk_count: int

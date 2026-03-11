@@ -77,6 +77,7 @@
 `doc_name: str`  
 `doc_version: str | null`  
 `published_at: str | null`  
+`source_uri: str | null`  
 `page_start: int | null`  
 `page_end: int | null`  
 `section_path: str | null`  
@@ -91,6 +92,8 @@
 `refusal: bool`  
 `refusal_reason: str | null`  
 `suggestions: List[str]`  
+`next_steps: List[{action, label, detail, value}]`  
+其中 `action` 当前允许值：`search_keyword | rewrite_question | add_context | check_official_source | verify_kb_scope`
 `citations: List[Citation]`  
 `conversation_id: str | null`  
 `message_id: str | null`  
@@ -217,11 +220,12 @@
 
 Content-Type：`multipart/form-data`
 
-表单字段：
+表单字段：  
 `file`：上传文件（建议先支持 PDF）  
 `doc_name`：可选，不传则使用文件名  
 `doc_version`：可选  
 `published_at`：可选，格式 `YYYY-MM-DD`
+`source_uri`：可选，要求为 `http/https` 官方来源链接
 
 响应示例：
 ```json
@@ -381,6 +385,7 @@ Content-Type：`multipart/form-data`
   "refusal": false,
   "refusal_reason": null,
   "suggestions": [],
+  "next_steps": [],
   "citations": [
     {
       "citation_id": 1,
@@ -388,6 +393,7 @@ Content-Type：`multipart/form-data`
       "doc_name": "教务管理规定.pdf",
       "doc_version": "2025-09",
       "published_at": "2025-09-01",
+      "source_uri": "https://example.edu/academic/policy",
       "page_start": 12,
       "page_end": 12,
       "section_path": "考试管理/补考规定",
@@ -412,6 +418,20 @@ Content-Type：`multipart/form-data`
   "refusal": true,
   "refusal_reason": "NO_EVIDENCE",
   "suggestions": ["建议关键词：补考 申请 条件", "建议到：教务处官网 考试管理栏目"],
+  "next_steps": [
+    {
+      "action": "search_keyword",
+      "label": "补充关键词",
+      "detail": "将问题补充为“事项 + 对象 + 条件/时间/材料”后重新提问。",
+      "value": "补考申请条件"
+    },
+    {
+      "action": "check_official_source",
+      "label": "查看官方来源",
+      "detail": "优先核对学校官网、教务处或学院公告中的最新制度原文。",
+      "value": "https://example.edu/academic/policy"
+    }
+  ],
   "citations": [],
   "conversation_id": "conv_001",
   "message_id": "msg_792",
@@ -441,7 +461,7 @@ SSE 事件约定（每个事件都必须带 `request_id`）：
 - `ping`：心跳事件（保活）
 - `token`：增量文本片段（`delta`）
 - `citation`：单条引用对象
-- `refusal`：拒答结果
+- `refusal`：拒答结果（包含 `answer/refusal_reason/suggestions/next_steps`）
 - `done`：流结束（`status` 为 `succeeded/failed/canceled`）
 - `error`：流内错误（包括取消信号）
 
@@ -457,7 +477,7 @@ event: ping
 data: {"run_id":"run_123","request_id":"req_xxx"}
 
 event: citation
-data: {"run_id":"run_123","citation":{"citation_id":1,"doc_id":"doc_123","doc_name":"教务管理规定.pdf","doc_version":"2025-09","published_at":"2025-09-01","page_start":12,"page_end":12,"section_path":"考试管理/补考规定","chunk_id":"chunk_a","snippet":"……补考申请条件包括……","score":null},"request_id":"req_xxx"}
+data: {"run_id":"run_123","citation":{"citation_id":1,"doc_id":"doc_123","doc_name":"教务管理规定.pdf","doc_version":"2025-09","published_at":"2025-09-01","source_uri":"https://example.edu/academic/policy","page_start":12,"page_end":12,"section_path":"考试管理/补考规定","chunk_id":"chunk_a","snippet":"……补考申请条件包括……","score":null},"request_id":"req_xxx"}
 
 event: done
 data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","user_message_id":"msg_789","message_id":"msg_790","assistant_created_at":"2026-02-07T10:10:02Z","refusal":false,"timing":{"retrieve_ms":45,"rerank_ms":0,"context_ms":12,"generate_ms":380,"total_ms":450},"request_id":"req_xxx"}
@@ -601,7 +621,7 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 {
   "conversation_id": "conv_001",
   "kb_id": "kb_123",
-  "messages": [
+ "messages": [
     {
       "message_id": "msg_789",
       "role": "user",
@@ -615,6 +635,7 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
       "citations": [],
       "refusal": false,
       "refusal_reason": null,
+      "next_steps": [],
       "timing": {"retrieve_ms": 45, "rerank_ms": 0, "context_ms": 12, "generate_ms": 380, "total_ms": 450},
       "created_at": "2026-02-07T10:10:02Z"
     }
@@ -622,7 +643,7 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
   "request_id": "req_xxx"
 }
 ```
-说明：`assistant` 消息包含 `citations/refusal/refusal_reason/timing` 字段，`user` 消息这些字段为 `null` 或省略。
+说明：`assistant` 消息包含 `citations/refusal/refusal_reason/next_steps/timing` 字段，`user` 消息这些字段为 `null` 或省略。
 
 ### 5.4 重命名会话
 `PATCH /api/v1/conversations/{conversation_id}`
@@ -671,6 +692,7 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
       "citations": [],
       "refusal": false,
       "refusal_reason": null,
+      "next_steps": [],
       "timing": {"retrieve_ms": 40, "rerank_ms": 0, "context_ms": 9, "generate_ms": 210, "total_ms": 259},
       "created_at": "2026-02-07T10:08:02Z"
     }

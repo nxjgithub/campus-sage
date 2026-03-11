@@ -35,6 +35,7 @@ import { CitationItem } from "../../shared/api/modules/ask";
 import { fetchKbList } from "../../shared/api/modules/kb";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { FeedbackAction } from "../../shared/components/FeedbackAction";
+import { RefusalNextStepsCard } from "../../shared/components/RefusalNextStepsCard";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import { splitCitationMarkers } from "../../shared/utils/citation";
 
@@ -156,6 +157,11 @@ export function MessageCard(props: {
                 <Typography.Text type="secondary">{item.refusal_reason}</Typography.Text>
               </Card>
             ) : null}
+            {item.refusal ? (
+              <RefusalNextStepsCard
+                nextSteps={Array.isArray(item.next_steps) ? item.next_steps : []}
+              />
+            ) : null}
             {timing.length > 0 ? (
               <Card
                 size="small"
@@ -214,6 +220,11 @@ export function MessageCard(props: {
                         <Typography.Paragraph style={{ marginBottom: 0 }}>
                           {citation.snippet}
                         </Typography.Paragraph>
+                        {citation.source_uri ? (
+                          <Typography.Link href={citation.source_uri} target="_blank" rel="noreferrer">
+                            官方来源
+                          </Typography.Link>
+                        ) : null}
                       </Space>
                     </Card>
                   ))}

@@ -21,6 +21,7 @@ import {
   AskStreamDoneData,
   AskStreamErrorData,
   AskStreamEvent,
+  NextStepItem,
   AskStreamRefusalData,
   AskStreamStartData,
   AskStreamTokenData,
@@ -51,6 +52,7 @@ import { useAuth } from "../../shared/auth/auth";
 import { getAccessToken } from "../../shared/auth/token";
 import { FeedbackAction } from "../../shared/components/FeedbackAction";
 import { PortalSwitch } from "../../shared/components/PortalSwitch";
+import { RefusalNextStepsCard } from "../../shared/components/RefusalNextStepsCard";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import { splitCitationMarkers } from "../../shared/utils/citation";
 
@@ -65,6 +67,7 @@ interface ThreadMessage {
   refusal: boolean | null;
   refusal_reason: string | null;
   suggestions: string[];
+  next_steps: NextStepItem[];
   timing: Record<string, number> | null;
   created_at: string;
   request_id: string | null;
@@ -98,6 +101,7 @@ function toThreadMessage(item: ConversationMessage): ThreadMessage {
     refusal: item.refusal ?? null,
     refusal_reason: item.refusal_reason ?? null,
     suggestions: [],
+    next_steps: Array.isArray(item.next_steps) ? item.next_steps : [],
     timing: item.timing ?? null,
     created_at: item.created_at,
     request_id: null,
@@ -122,6 +126,45 @@ function messageKey(item: ThreadMessage) {
 
 function nowIsoString() {
   return new Date().toISOString();
+}
+
+function buildDraftFromNextStep(step: NextStepItem, currentQuestion: string) {
+  const trimmedQuestion = currentQuestion.trim();
+  const value = step.value?.trim() ?? "";
+
+  if (step.action === "rewrite_question") {
+    return value || trimmedQuestion;
+  }
+  if (step.action === "search_keyword") {
+    return value ? `${trimmedQuestion || "请根据以下关键词帮助我检索"}：${value}` : trimmedQuestion;
+  }
+  if (step.action === "add_context") {
+    if (trimmedQuestion && value) {
+      return `${trimmedQuestion}\n补充信息：${value}`;
+    }
+    return value || trimmedQuestion;
+  }
+  return value || trimmedQuestion;
+}
+
+function isOfficialSourceUrl(value?: string | null) {
+  if (!value) {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function resolveOfficialSourceUrl(step: NextStepItem, citations: CitationItem[]) {
+  if (isOfficialSourceUrl(step.value)) {
+    return step.value as string;
+  }
+  const candidate = citations.find((citation) => isOfficialSourceUrl(citation.source_uri));
+  return candidate?.source_uri ?? null;
 }
 
 function compactTime(iso?: string | null) {
@@ -537,6 +580,7 @@ export function AskPage() {
         refusal: true,
         refusal_reason: data.refusal_reason ?? null,
         suggestions: data.suggestions ?? [],
+        next_steps: data.next_steps ?? [],
         timing: data.timing ?? null,
         created_at: data.assistant_created_at ?? nowIsoString(),
         request_id: data.request_id ?? null,
@@ -617,6 +661,7 @@ export function AskPage() {
         refusal: null,
         refusal_reason: null,
         suggestions: [],
+        next_steps: [],
         timing: null,
         created_at: nowIsoString(),
         request_id: null,
@@ -631,6 +676,7 @@ export function AskPage() {
         refusal: null,
         refusal_reason: null,
         suggestions: [],
+        next_steps: [],
         timing: null,
         created_at: nowIsoString(),
         request_id: null,
@@ -879,6 +925,26 @@ export function AskPage() {
     setActiveAssistantKey(messageKey(assistant));
     setActiveCitationId(citationId ?? null);
     setEvidenceOpen(true);
+  };
+
+  const handleApplyNextStep = (step: NextStepItem, citations: CitationItem[] = []) => {
+    if (step.action === "check_official_source") {
+      const sourceUrl = resolveOfficialSourceUrl(step, citations);
+      if (sourceUrl) {
+        window.open(sourceUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+    }
+    if (step.action === "check_official_source" || step.action === "verify_kb_scope") {
+      if (role === "admin") {
+        navigate(kbId ? `/admin/documents?kb=${encodeURIComponent(kbId)}` : "/admin/documents");
+        return;
+      }
+      message.info("当前用户端无法直接打开文档管理页，请优先查看学校官网或联系管理员核对原文。");
+      return;
+    }
+    const nextDraft = buildDraftFromNextStep(step, composerText);
+    setComposerText(nextDraft);
   };
 
   const handleEditResend = async () => {
@@ -1261,14 +1327,14 @@ export function AskPage() {
                           })
                         : item.content}
                     </Typography.Paragraph>
-                    {item.refusal && item.suggestions.length ? (
-                      <Card size="small" title="下一步建议" className="chat-refusal-card">
-                        <ul className="muted-list">
-                          {item.suggestions.map((tip) => (
-                            <li key={tip}>{tip}</li>
-                          ))}
-                        </ul>
-                      </Card>
+                    {item.refusal ? (
+                      <RefusalNextStepsCard
+                        nextSteps={item.next_steps}
+                        suggestions={item.suggestions}
+                        onApplyStep={(step) => {
+                          handleApplyNextStep(step, item.citations);
+                        }}
+                      />
                     ) : null}
                     {item.role === "assistant" ? (
                       <Space wrap className="chat-bubble-actions">
@@ -1381,6 +1447,15 @@ export function AskPage() {
               {selectedAssistant.refusal_reason ? (
                 <Alert type="warning" showIcon message={selectedAssistant.refusal_reason} />
               ) : null}
+              {selectedAssistant.refusal ? (
+                <RefusalNextStepsCard
+                  nextSteps={selectedAssistant.next_steps}
+                  suggestions={selectedAssistant.suggestions}
+                  onApplyStep={(step) => {
+                    handleApplyNextStep(step, selectedAssistant.citations);
+                  }}
+                />
+              ) : null}
               {selectedAssistant.timing ? (
                 <Card size="small" title="耗时信息">
                   <Space wrap>
@@ -1428,6 +1503,11 @@ export function AskPage() {
                             <Typography.Paragraph style={{ marginBottom: 0 }}>
                               {citation.snippet}
                             </Typography.Paragraph>
+                            {citation.source_uri ? (
+                              <Typography.Link href={citation.source_uri} target="_blank" rel="noreferrer">
+                                官方来源
+                              </Typography.Link>
+                            ) : null}
                           </Space>
                         </Card>
                       );

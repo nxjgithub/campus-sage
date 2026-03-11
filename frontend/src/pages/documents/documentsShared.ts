@@ -5,6 +5,7 @@ export interface UploadFormValues {
   doc_name?: string;
   doc_version?: string;
   published_at?: string;
+  source_uri?: string;
 }
 
 export type TableDensity = "middle" | "small";

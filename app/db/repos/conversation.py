@@ -218,9 +218,9 @@ class ConversationRepository:
             """
             INSERT INTO message (
                 message_id, conversation_id, role, content, refusal, refusal_reason,
-                timing_json, citations_json, parent_message_id, edited_from_message_id,
+                timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
                 sequence_no, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             (
                 record.message_id,
@@ -230,6 +230,7 @@ class ConversationRepository:
                 int(record.refusal),
                 record.refusal_reason,
                 self._dumps(record.timing),
+                self._dumps(record.next_steps),
                 self._dumps(record.citations),
                 record.parent_message_id,
                 record.edited_from_message_id,
@@ -255,7 +256,7 @@ class ConversationRepository:
         rows = self._db.fetch_all(
             """
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, citations_json, parent_message_id, edited_from_message_id,
+                   timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
                    sequence_no, created_at
             FROM message
             WHERE conversation_id = ?
@@ -272,6 +273,7 @@ class ConversationRepository:
                 refusal=bool(row["refusal"]),
                 refusal_reason=row["refusal_reason"],
                 timing=self._loads(row["timing_json"]),
+                next_steps=self._loads(row["next_steps_json"]) or [],
                 citations=self._loads(row["citations_json"]) or [],
                 parent_message_id=row["parent_message_id"],
                 edited_from_message_id=row["edited_from_message_id"],
@@ -301,7 +303,7 @@ class ConversationRepository:
         rows = self._db.fetch_all(
             f"""
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, citations_json, parent_message_id, edited_from_message_id,
+                   timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
                    sequence_no, created_at
             FROM message
             {where_clause}
@@ -322,6 +324,7 @@ class ConversationRepository:
                 refusal=bool(row["refusal"]),
                 refusal_reason=row["refusal_reason"],
                 timing=self._loads(row["timing_json"]),
+                next_steps=self._loads(row["next_steps_json"]) or [],
                 citations=self._loads(row["citations_json"]) or [],
                 parent_message_id=row["parent_message_id"],
                 edited_from_message_id=row["edited_from_message_id"],
@@ -339,7 +342,7 @@ class ConversationRepository:
         row = self._db.fetch_one(
             """
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, citations_json, parent_message_id, edited_from_message_id,
+                   timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
                    sequence_no, created_at
             FROM message
             WHERE message_id = ?;
@@ -356,6 +359,7 @@ class ConversationRepository:
             refusal=bool(row["refusal"]),
             refusal_reason=row["refusal_reason"],
             timing=self._loads(row["timing_json"]),
+            next_steps=self._loads(row["next_steps_json"]) or [],
             citations=self._loads(row["citations_json"]) or [],
             parent_message_id=row["parent_message_id"],
             edited_from_message_id=row["edited_from_message_id"],
@@ -375,7 +379,7 @@ class ConversationRepository:
         row = self._db.fetch_one(
             """
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, citations_json, parent_message_id, edited_from_message_id,
+                   timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
                    sequence_no, created_at
             FROM message
             WHERE conversation_id = ? AND role = 'user' AND COALESCE(sequence_no, 0) < ?
@@ -394,6 +398,7 @@ class ConversationRepository:
             refusal=bool(row["refusal"]),
             refusal_reason=row["refusal_reason"],
             timing=self._loads(row["timing_json"]),
+            next_steps=self._loads(row["next_steps_json"]) or [],
             citations=self._loads(row["citations_json"]) or [],
             parent_message_id=row["parent_message_id"],
             edited_from_message_id=row["edited_from_message_id"],

@@ -2292,6 +2292,51 @@ body {
   margin-bottom: 8px;
 }
 
+.refusal-next-steps {
+  display: grid;
+  gap: 10px;
+}
+
+.refusal-next-step {
+  padding: 12px;
+  border: 1px solid rgba(15, 91, 216, 0.12);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.95), rgba(255, 255, 255, 0.98));
+}
+
+.refusal-next-step__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.refusal-next-step__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(15, 91, 216, 0.1);
+  color: var(--brand-main);
+}
+
+.refusal-next-step__detail {
+  margin-bottom: 6px !important;
+  color: var(--text-secondary);
+}
+
+.refusal-next-step__value {
+  margin-bottom: 10px !important;
+  color: var(--text-main);
+}
+
+.refusal-next-steps__fallback {
+  padding-top: 2px;
+}
+
 .chat-composer-shell {
   flex: 0 0 auto;
   margin-top: 4px;
