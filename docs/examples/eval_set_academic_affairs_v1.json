@@ -1,0 +1,102 @@
+{
+  "name": "高校教务评测集_v1",
+  "description": "用于离线检索评测的高校教务样例集。建议优先按 gold_doc_name 对齐导入后的文档名，必要时再替换为真实 gold_doc_id。",
+  "items": [
+    {
+      "question": "缓考申请一般需要经过哪些办理步骤？",
+      "gold_doc_name": "本科生考试管理规定.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 5,
+      "gold_page_end": 6,
+      "tags": ["教务", "考试", "流程"]
+    },
+    {
+      "question": "补考资格通常适用于哪些学生情形？",
+      "gold_doc_name": "本科生考试管理规定.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 7,
+      "gold_page_end": 8,
+      "tags": ["教务", "考试", "资格"]
+    },
+    {
+      "question": "课程重修报名一般在什么阶段开放？",
+      "gold_doc_name": "选课与重修操作指南.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 3,
+      "gold_page_end": 4,
+      "tags": ["选课", "重修", "时间"]
+    },
+    {
+      "question": "转专业申请通常需要满足哪些成绩条件？",
+      "gold_doc_name": "本科生转专业实施细则.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 2,
+      "gold_page_end": 3,
+      "tags": ["学籍", "转专业", "条件"]
+    },
+    {
+      "question": "学分认定申请提交时一般需要哪些材料？",
+      "gold_doc_name": "学分认定与课程替代管理办法.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 4,
+      "gold_page_end": 5,
+      "tags": ["学分", "材料"]
+    },
+    {
+      "question": "毕业审核通常重点检查哪些学分和培养要求？",
+      "gold_doc_name": "本科生培养方案与毕业审核说明.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 9,
+      "gold_page_end": 10,
+      "tags": ["毕业", "学分", "审核"]
+    },
+    {
+      "question": "国家奖学金申请时成绩排名一般有什么要求？",
+      "gold_doc_name": "奖助学金评审办法.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 3,
+      "gold_page_end": 4,
+      "tags": ["奖学金", "条件"]
+    },
+    {
+      "question": "助学金评定通常会考虑哪些家庭经济情况证明？",
+      "gold_doc_name": "奖助学金评审办法.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 5,
+      "gold_page_end": 6,
+      "tags": ["助学金", "材料"]
+    },
+    {
+      "question": "学生宿舍报修一般通过什么渠道提交？",
+      "gold_doc_name": "后勤服务办事指南.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 2,
+      "gold_page_end": 2,
+      "tags": ["后勤", "宿舍", "报修"]
+    },
+    {
+      "question": "门禁晚归登记通常需要联系哪些值班单位？",
+      "gold_doc_name": "学生宿舍管理规定.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 6,
+      "gold_page_end": 7,
+      "tags": ["宿舍", "门禁"]
+    },
+    {
+      "question": "图书逾期后续借阅权限会受到什么影响？",
+      "gold_doc_name": "图书馆借阅规则.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 4,
+      "gold_page_end": 4,
+      "tags": ["图书馆", "借阅", "逾期"]
+    },
+    {
+      "question": "毕业论文中期检查一般需要提交哪些阶段性成果？",
+      "gold_doc_name": "本科毕业论文工作手册.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": 8,
+      "gold_page_end": 9,
+      "tags": ["论文", "中期检查"]
+    }
+  ]
+}

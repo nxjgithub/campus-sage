@@ -964,6 +964,43 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 }
 ```
 
+### 8.3 获取运行时诊断摘要
+`GET /api/v1/monitor/runtime`
+
+说明：
+- 仅返回排障所需的配置摘要，不返回密钥原文。
+- 该接口用于确认当前服务实际加载的数据库 schema 版本、关键开关和上传配置。
+
+响应示例：
+```json
+{
+  "app_env": "local",
+  "log_level": "INFO",
+  "debug_mode": false,
+  "enable_swagger": true,
+  "database": {
+    "backend": "sqlite",
+    "target": "./data/csage.db",
+    "schema_version": 4
+  },
+  "services": {
+    "vector_backend": "qdrant",
+    "embedding_backend": "http",
+    "vllm_enabled": false,
+    "ingest_queue_enabled": false
+  },
+  "upload": {
+    "max_mb": 30,
+    "allowed_exts": ["pdf", "docx", "html", "htm", "md", "txt"]
+  },
+  "security": {
+    "jwt_default_secret": false
+  },
+  "warnings": [],
+  "request_id": "req_xxx"
+}
+```
+
 
 ## 9. 状态码建议映射
 `400`：入参校验失败（VALIDATION_*）  

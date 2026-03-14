@@ -175,6 +175,16 @@ ruff check .
 pytest -q
 ```
 
+## 7.1 SQLite 迁移排查
+- `uvicorn app.main:app --reload` 启动时会自动执行 SQLite schema 迁移，无需手工建表。
+- 若你本地保留了较早阶段的 `csage.db`，启动后应自动生成 `schema_migration` 表并补齐缺失列。
+- 可用以下命令快速检查迁移状态：
+```powershell
+python -c "import sqlite3; conn=sqlite3.connect('./data/csage.db'); print(conn.execute('SELECT version, name FROM schema_migration ORDER BY version').fetchall())"
+```
+- 若数据库文件已损坏或历史结构异常，优先备份后删除本地 SQLite 文件，再重启服务让系统重建；不要手工跳过迁移记录。
+- 若你怀疑服务实际加载的配置与 `.env` 不一致，可登录后访问 `GET /api/v1/monitor/runtime` 检查当前 schema 版本、上传配置和关键开关。
+
 ## 8. 运行评测脚本
 评测集 JSON 格式示例：
 ```json
@@ -190,6 +200,55 @@ pytest -q
 ```powershell
 python scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --topk 5
 ```
+
+执行参数对比实验：
+```powershell
+python scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true
+```
+说明：
+- `--threshold` 与 `--rerank-enabled` 现在也可用于单次评测。
+- `--compare-*` 任一参数出现时，脚本会生成参数矩阵并输出排序后的实验结果。
+- `--compare-threshold` 中可使用 `none` 表示不额外做分数阈值过滤。
+- 仓库已提供可复用样例：`docs/examples/eval_set_academic_affairs_v1.json`
+- 若你需要一套可直接导入的校园示例语料，可使用：`docs/examples/academic_demo_corpus/`
+- 与示例语料配套的 Markdown 评测集：`docs/examples/eval_set_academic_affairs_demo_md.json`
+- 离线脚本除 `gold_doc_id` 外，也支持按 `gold_doc_name` 匹配文档，适合在文档导入后 `doc_id` 不稳定的本地实验场景。
+- 若你直接使用 API 创建评测集，仍应以 `gold_doc_id` 为准；`gold_doc_name` 仅用于离线脚本样例与本地实验。
+
+若你还没有对齐好的评测集，可先导出知识库中的文档清单：
+```powershell
+python scripts/export_eval_inventory.py --kb-id kb_123
+```
+补充说明：
+- 该脚本会直接读取 Qdrant payload，输出 `doc_name / doc_id / page_start_min / page_end_max / section_path_examples`。
+- 推荐先用导出的文档清单核对 `gold_doc_name` 与页码范围，再运行 `run_eval.py` 做参数实验。
+
+若你想直接搭一套可复现的实验基线，可执行：
+```powershell
+python scripts/bootstrap_demo_academic_kb.py
+```
+补充说明：
+- 该脚本会调用本地 API，登录默认管理员 `admin@example.com / Admin1234`，创建“高校教务示例知识库”并上传 `docs/examples/academic_demo_corpus/` 中的示例文档。
+- 导入完成后，可直接配合 `docs/examples/eval_set_academic_affairs_demo_md.json` 运行 `run_eval.py`。
+
+若你希望先从学校官网抓取公开真实语料，再人工筛选入库，可执行：
+```powershell
+python scripts/crawl_suse_public_corpus.py
+```
+补充说明：
+- 当前脚本默认抓取四川轻化工大学主站通知公告、教务处、学生工作部、研究生院、后勤保障部等公开栏目。
+- 抓取结果默认写入 `data/crawl/suse_public_<时间戳>/`，页面保存为 Markdown，附件原样下载，并在 `manifest.json` 中记录 `source_uri`。
+- 该脚本只抓公开页面与公开附件，不会尝试登录或进入校内权限系统。
+
+若你已经抓到官网公开语料，希望直接做“二次清洗 + 列表页详情补抓 + 自动入库”，可执行：
+```powershell
+python scripts/bootstrap_suse_public_kb.py --crawl-dir data\crawl\suse_public_<时间戳> --kb-name 四川轻化工大学真实官网语料知识库
+```
+补充说明：
+- 该脚本会自动过滤空页、重复页、不可入库格式和超大附件，只保留当前后端支持的 `PDF/DOCX/HTML/Markdown/TXT`。
+- 对列表页会再次访问公开详情页，尽量补齐正文级语料；若详情页中引用公开附件，也会一并下载并按可入库规则筛选。
+- 清洗结果默认写入 `data/prepared/<crawl_dir_name>_kb_ready/`，并生成 `prepare_report.json` 与 `import_report.json` 便于追踪。
+- 若你只想先检查清洗结果、不立即导入，可追加 `--skip-import`。
 
 
 ## 9. vLLM 启动说明（可选）

@@ -93,6 +93,14 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 代码检查：`conda run -n campus-sage ruff check .`
 - 单元测试：`conda run -n campus-sage pytest -q`
 - 运行评测：`conda run -n campus-sage python scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --topk 5`
+- 运行参数对比实验：`conda run -n campus-sage python scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true`
+- 评测前导出知识库文档清单：`conda run -n campus-sage python scripts/export_eval_inventory.py --kb-id <kb_id>`
+- 一键导入示例校园语料：`conda run -n campus-sage python scripts/bootstrap_demo_academic_kb.py`
+- 抓取学校官网公开语料：`conda run -n campus-sage python scripts/crawl_suse_public_corpus.py`
+- 清洗公开抓取结果并自动导入知识库：`conda run -n campus-sage python scripts/bootstrap_suse_public_kb.py --crawl-dir data/crawl/suse_public_<时间戳> --kb-name 四川轻化工大学真实官网语料知识库`
+- 样例评测集：`docs/examples/eval_set_academic_affairs_v1.json`
+- 示例 Markdown 语料：`docs/examples/academic_demo_corpus/`
+- 配套 Markdown 评测集：`docs/examples/eval_set_academic_affairs_demo_md.json`
 
 说明：
 - 若未启动 Qdrant/Redis，相关集成测试可能被跳过或返回依赖不可用错误，这属于可预期行为。
@@ -168,3 +176,28 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 知识库页头统计已从四张大卡收敛为横向摘要带，减少大块卡片感，让视觉重心回到列表本身。
 - 知识库表格头与分隔线已继续减重，改为低对比浅底表头与轻 hover，整体观感更安静。
 - 各管理端创建页已统一补齐“主表单 + 辅助摘要栏”布局，知识库创建、用户创建、文档上传与评测集创建不再只剩单列窄表单悬在空白容器中。
+
+## 后端近期更新（2026-03 数据层）
+- SQLite 初始化已重构为显式版本迁移，迁移入口位于 `app/db/migrations.py`，启动时自动执行。
+- 迁移历史落表到 `schema_migration`，后续 schema 变更应新增迁移版本，而不是继续在初始化逻辑里堆积兼容补丁。
+- 已补充空库初始化、旧库升级、默认角色补种测试，保证数据库层改动具备最小回归保护。
+
+## 后端近期更新（2026-03 配置与观测）
+- 上传后缀配置已收口到 `Settings` 层统一归一化，避免文档上传链路各处重复解析。
+- 新增 `GET /api/v1/monitor/runtime`，可直接查看当前数据库 schema 版本、关键开关与运行告警。
+- 统一错误响应现在会额外写入结构化日志，便于按 `request_id + error_code + path` 检索排障。
+
+## 后端近期更新（2026-03 评测实验）
+- `scripts/run_eval.py` 已支持 `threshold` 与 `rerank_enabled` 单次评测参数。
+- 新增参数矩阵对比能力，可一次批量比较 `topk / threshold / rerank_enabled` 组合并输出最佳方案摘要。
+- 离线评测脚本新增 `gold_doc_name` 匹配能力，便于使用稳定文档名维护样例评测集。
+- 第二阶段后续检索优化可直接基于该脚本做可复现实验，而不必手工一组组跑。
+
+## 后端近期更新（2026-03 检索优化）
+- `SimpleReranker` 已改为融合正文短语命中、文档标题命中与章节路径命中的启发式重排，适合高校教务类中文问句。
+- 重排仍以向量分数作为并列排序兜底，避免仅靠词面命中把明显无关的候选抬到前面。
+- 已补充 `tests/test_reranker.py`，覆盖“正文精确命中优先”“标题/章节命中优先”“空问题不改序”三类回归场景。
+- 新增 `scripts/export_eval_inventory.py`，可从 Qdrant 直接导出知识库中的文档名、页码范围与章节路径样本，降低离线评测集对齐成本。
+- 新增 `scripts/bootstrap_demo_academic_kb.py` 与配套示例语料，可在空环境中快速构建第二阶段参数实验基线。
+- 新增 `scripts/crawl_suse_public_corpus.py`，可定向抓取四川轻化工大学公开栏目与附件，生成带 `source_uri` 的本地真实语料清单。
+- 新增 `scripts/bootstrap_suse_public_kb.py`，可对公开抓取结果做二次清洗、列表页详情补抓、可入库格式筛选，并自动创建知识库完成批量导入。

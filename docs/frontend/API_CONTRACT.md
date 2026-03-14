@@ -272,3 +272,8 @@
 - `POST /kb/{kb_id}/documents` 首批支持 `pdf/docx/html/htm/md/txt`。
 - 前端上传控件应根据支持集展示明确提示，不再写死“仅 PDF”。
 - 不支持的后缀继续按 `FILE_TYPE_NOT_ALLOWED` 处理。
+# 2026-03 补充：异常展示契约
+
+- 前端对后端统一错误结构做二次加工后再展示，不直接把 `error.code` 作为用户主文案。
+- `toast` 与页内错误卡片的主文案优先使用前端错误码映射；未命中时回退到 `error.message`。
+- `error.code` 与 `request_id` 保留为排障信息，用于复制与定位，不作为主提示文案。

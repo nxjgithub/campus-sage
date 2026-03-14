@@ -123,6 +123,9 @@ API 层统一捕获并映射 HTTP 状态码
  - hit_docs, hit_chunks, refusal_reason
 - 评测：
  - eval_set_id, samples, recall_at_k, mrr, avg_ms, p95_ms
+- 错误响应：
+ - request_id, method, path, status_code, error_code
+ - 允许记录 `detail_keys` 这类结构摘要，禁止把敏感明细原样打入日志
 
 ### 6.3 敏感信息
 - 禁止将手机号/身份证/学号等敏感数据原样写日志。

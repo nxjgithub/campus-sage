@@ -1,0 +1,90 @@
+{
+  "name": "高校教务评测集_demo_md",
+  "description": "与 academic_demo_corpus 配套的示例评测集，使用 Markdown 文档名作为 gold_doc_name。",
+  "items": [
+    {
+      "question": "缓考申请一般需要经过哪些办理步骤？",
+      "gold_doc_name": "本科生考试管理规定.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "补考资格通常适用于哪些学生情形？",
+      "gold_doc_name": "本科生考试管理规定.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "课程重修报名一般在什么阶段开放？",
+      "gold_doc_name": "选课与重修操作指南.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "转专业申请通常需要满足哪些成绩条件？",
+      "gold_doc_name": "本科生转专业实施细则.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "学分认定申请提交时一般需要哪些材料？",
+      "gold_doc_name": "学分认定与毕业审核说明.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "毕业审核通常重点检查哪些学分和培养要求？",
+      "gold_doc_name": "学分认定与毕业审核说明.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "国家奖学金申请时成绩排名一般有什么要求？",
+      "gold_doc_name": "奖助学金评审办法.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "助学金评定通常会考虑哪些家庭经济情况证明？",
+      "gold_doc_name": "奖助学金评审办法.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "学生宿舍报修一般通过什么渠道提交？",
+      "gold_doc_name": "后勤与宿舍服务指南.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "门禁晚归登记通常需要联系哪些值班单位？",
+      "gold_doc_name": "后勤与宿舍服务指南.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "图书逾期后续借权限会受到什么影响？",
+      "gold_doc_name": "图书馆借阅规则.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "毕业论文中期检查一般需要提交哪些阶段性成果？",
+      "gold_doc_name": "本科毕业论文工作手册.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    }
+  ]
+}

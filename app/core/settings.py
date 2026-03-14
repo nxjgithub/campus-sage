@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """应用配置（统一从环境变量读取）。"""
+    """应用配置，统一从环境变量读取。"""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -33,7 +34,9 @@ class Settings(BaseSettings):
     vector_dim: int = Field(default=1024, description="向量维度")
 
     vllm_base_url: str = Field(default="http://127.0.0.1:8001/v1", description="vLLM 地址")
-    vllm_model_name: str = Field(default="Qwen2.5-7B-Instruct", description="vLLM 模型名")
+    vllm_model_name: str = Field(
+        default="Qwen2.5-7B-Instruct", description="vLLM 模型名"
+    )
     vllm_timeout_s: int = Field(default=60, description="vLLM 超时秒数")
     vllm_api_key: str | None = Field(default=None, description="vLLM API Key")
     vllm_enabled: bool = Field(default=False, description="是否启用 vLLM 生成")
@@ -132,6 +135,39 @@ class Settings(BaseSettings):
     debug_mode: bool = Field(default=False, description="调试模式")
     enable_swagger: bool = Field(default=True, description="是否启用 Swagger")
 
+    @property
+    def allowed_upload_extensions(self) -> tuple[str, ...]:
+        """返回归一化后的允许上传后缀，供上传与诊断统一复用。"""
+
+        configured = tuple(
+            dict.fromkeys(
+                ext.strip().lower()
+                for ext in self.upload_allowed_exts.split(",")
+                if ext.strip()
+            )
+        )
+        # 兼容历史仅配置 pdf 的本地环境，自动放开首批稳定文本格式。
+        if configured == ("pdf",):
+            return ("pdf", "docx", "html", "htm", "md", "txt")
+        return configured
+
+    @property
+    def database_backend(self) -> str:
+        """提取数据库后端名称，便于诊断接口展示。"""
+
+        parsed = urlparse(self.database_url)
+        return parsed.scheme or "unknown"
+
+    def runtime_warnings(self) -> list[str]:
+        """汇总当前运行配置下需要额外关注的告警信息。"""
+
+        warnings: list[str] = []
+        if self.jwt_secret_key == "CHANGE_ME":
+            warnings.append("JWT_SECRET_KEY 仍为默认值，部署前必须替换。")
+        if not self.allowed_upload_extensions:
+            warnings.append("UPLOAD_ALLOWED_EXTS 为空，上传接口将拒绝所有文件。")
+        return warnings
+
     @field_validator("embedding_dimensions", mode="before")
     @classmethod
     def _normalize_embedding_dimensions(cls, value: object) -> object:
@@ -170,7 +206,7 @@ def get_settings() -> Settings:
 
 
 def reset_settings() -> None:
-    """重置配置单例（测试使用）。"""
+    """重置配置单例，供测试使用。"""
 
     global _settings
     _settings = None

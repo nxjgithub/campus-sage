@@ -48,3 +48,53 @@ def test_run_eval_returns_metrics() -> None:
     assert result.samples == 1
     assert result.recall_at_k == 1.0
     assert result.mrr == 1.0
+
+
+def test_run_eval_can_match_by_doc_name() -> None:
+    settings = Settings()
+    embedder = SimpleEmbedder(vector_dim=8)
+    store = InMemoryVectorStore()
+
+    kb_id = "kb_eval_name"
+    question = "重修报名时间"
+    vector = embedder.embed_query(question)
+    payload = {
+        "contract_version": "0.1",
+        "kb_id": kb_id,
+        "doc_id": "doc_generated_id",
+        "doc_name": "选课与重修操作指南.pdf",
+        "doc_version": None,
+        "published_at": "2025-01-01",
+        "page_start": 3,
+        "page_end": 3,
+        "section_path": None,
+        "chunk_id": "chunk_eval_name",
+        "chunk_index": 0,
+        "text": "重修报名时间一般安排在开学初补退选阶段。",
+    }
+    store.upsert(kb_id=kb_id, entries=[VectorEntry(vector=vector, payload=payload)])
+
+    eval_set = EvalSet(
+        name="eval_by_doc_name",
+        items=[
+            EvalItem(
+                question=question,
+                gold_doc_id=None,
+                gold_doc_name="选课与重修操作指南.pdf",
+                gold_page_start=3,
+                gold_page_end=3,
+            )
+        ],
+    )
+    result = run_eval(
+        kb_id=kb_id,
+        eval_set=eval_set,
+        topk=5,
+        settings=settings,
+        embedder=embedder,
+        vector_store=store,
+    )
+
+    assert result.samples == 1
+    assert result.recall_at_k == 1.0
+    assert result.mrr == 1.0

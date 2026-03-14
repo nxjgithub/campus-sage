@@ -398,15 +398,7 @@ class DocumentService:
     def _allowed_exts(self) -> set[str]:
         """解析允许的文件后缀。"""
 
-        configured = {
-            ext.strip().lower()
-            for ext in self._settings.upload_allowed_exts.split(",")
-            if ext.strip()
-        }
-        # 兼容历史本地配置仍为单个 pdf 的场景，默认放开首批稳定文本格式。
-        if configured == {"pdf"}:
-            return {"pdf", "docx", "html", "htm", "md", "txt"}
-        return configured
+        return set(self._settings.allowed_upload_extensions)
 
     def _resolve_source_type(self, extension: str) -> str:
         """将扩展名归一到来源类型。"""

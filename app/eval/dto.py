@@ -8,9 +8,10 @@ class EvalItem:
     """单条评测样本。"""
 
     question: str
-    gold_doc_id: str
+    gold_doc_id: str | None
     gold_page_start: int | None
     gold_page_end: int | None
+    gold_doc_name: str | None = None
 
 
 @dataclass(slots=True)

@@ -10,6 +10,7 @@ import time
 
 from app.core.settings import get_settings
 from app.db.database import get_database, reset_database
+from app.db.migrations import LATEST_SCHEMA_VERSION
 from app.db.repos import RepositoryProvider
 from app.main import app
 from app.auth.service import UserService
@@ -555,6 +556,21 @@ def test_monitor_queue_stats() -> None:
     assert "stats" in payload
     assert "queued" in payload["stats"]
     assert "dead" in payload["stats"]
+
+
+def test_monitor_runtime_diagnostics() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    response = client.get("/api/v1/monitor/runtime", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["request_id"]
+    assert payload["database"]["schema_version"] == LATEST_SCHEMA_VERSION
+    assert payload["database"]["backend"] == "sqlite"
+    assert payload["services"]["vector_backend"] == get_settings().vector_backend
+    assert payload["services"]["embedding_backend"] == get_settings().embedding_backend
+    assert "pdf" in payload["upload"]["allowed_exts"]
+    assert payload["security"]["jwt_default_secret"] is False
 
 
 def test_cancel_and_retry_job() -> None:

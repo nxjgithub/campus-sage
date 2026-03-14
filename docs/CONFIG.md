@@ -107,6 +107,24 @@
 - `DEBUG_MODE`：true/false
 - `ENABLE_SWAGGER`：true/false（prod 可关闭）
 
+## 9. SQLite schema 迁移说明（2026-03）
+- 后端启动时会自动执行 SQLite schema 迁移，不再依赖 `init_database()` 内部的隐式 `ALTER TABLE` 补列。
+- 迁移历史保存在 `schema_migration` 表，当前版本按代码内置迁移序列递增。
+- 已存在的旧库在启动时会按版本顺序补齐缺失表、列与索引；全新数据库会直接初始化到最新版本。
+- 迁移机制当前仅覆盖 SQLite。若后续切换 MySQL，需要单独设计迁移实现，不应复用 SQLite DDL。
+- 开发与测试时如果怀疑 schema 未升级，可检查：
+  - `SELECT version, name, applied_at FROM schema_migration ORDER BY version;`
+  - `PRAGMA table_info(document);`
+  - `PRAGMA table_info(message);`
+
+## 10. 配置归一化与诊断补充（2026-03）
+- `UPLOAD_ALLOWED_EXTS` 会在运行时自动执行：
+  - 去空白
+  - 小写化
+  - 去重并保留声明顺序
+- 为兼容历史本地环境，若该配置仅为 `pdf`，系统会自动扩展为 `pdf,docx,html,htm,md,txt`。
+- 管理员可通过 `GET /api/v1/monitor/runtime` 查看当前生效的关键配置摘要与告警信息。
+
 ## 上传类型补充（2026-03 第三轮）
 - `UPLOAD_ALLOWED_EXTS` 默认值调整为 `pdf,docx,html,htm,md,txt`。
 - 推荐首批启用文本可稳定提取的格式；`csv/xlsx/pptx/图片 OCR` 暂不纳入默认支持集。

@@ -18,8 +18,10 @@ def run_eval(
     settings: Settings,
     embedder: Embedder | None = None,
     vector_store: VectorStore | None = None,
+    rerank_enabled: bool = False,
+    threshold: float | None = None,
 ) -> EvalResult:
-    """运行评测并返回指标。"""
+    """运行评测并返回汇总指标。"""
 
     item_results = evaluate_items(
         kb_id=kb_id,
@@ -28,6 +30,8 @@ def run_eval(
         settings=settings,
         embedder=embedder,
         vector_store=vector_store,
+        rerank_enabled=rerank_enabled,
+        threshold=threshold,
     )
     ranks = [item.rank for item in item_results]
     durations = [item.retrieve_ms for item in item_results]
@@ -83,7 +87,7 @@ def _build_metrics(
 
 
 def _first_match_rank(hits: list[VectorHit], item: EvalItem) -> int | None:
-    """找到首个命中文档的排名（从 1 开始）。"""
+    """找到首个命中文档的排名，从 1 开始。"""
 
     for index, hit in enumerate(hits, start=1):
         if _match_hit(hit, item):
@@ -95,7 +99,13 @@ def _match_hit(hit: VectorHit, item: EvalItem) -> bool:
     """判断检索结果是否命中标准证据。"""
 
     payload = hit.payload
-    if payload.get("doc_id") != item.gold_doc_id:
+    if item.gold_doc_id:
+        if payload.get("doc_id") != item.gold_doc_id:
+            return False
+    elif item.gold_doc_name:
+        if payload.get("doc_name") != item.gold_doc_name:
+            return False
+    else:
         return False
     if item.gold_page_start is None:
         return True
