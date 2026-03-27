@@ -150,6 +150,21 @@
 - `suggestions` 可为空
 - `next_steps` 应为空数组
 
+### 5.3 多轮澄清与意图分流（强制）
+- 问答服务必须支持基础意图分流：`业务问答`、`需要澄清`、`闲聊/非业务问题`。
+- 对“信息明显不足”的提问（如大量指代词、缺少业务对象）必须先返回澄清型拒答：
+  - `refusal=true`
+  - `refusal_reason` 建议使用既有拒答码（如 `LOW_COVERAGE`）
+  - `next_steps` 中至少包含 `add_context` 或 `rewrite_question`
+- 多轮追问场景应在检索前做上下文补全（query rewrite），但不得篡改用户原始消息存储内容。
+- 多轮状态至少应基于会话历史消息计算，不得仅凭单轮输入决策。
+
+### 5.4 时效问题提示（强制）
+- 当问题包含明显时效诉求（如“最新/当前/今年”）时，服务层必须检查引用的 `published_at`：
+  - 若发布日期缺失，需在答案中追加“请核验最新官方通知”的提示；
+  - 若发布日期超过 `RAG_STALE_WARNING_DAYS`，需提示“证据可能过期”并引导核验。
+- 时效提示属于正常业务结果，不应改为 4xx/5xx；仍返回 `200`。
+
 
 ## 6. 上下文构造（Context Builder）契约（强制）
 - 必须存在最大上下文预算（token/字符）：
@@ -200,3 +215,12 @@
 - 当前入库链路已按文件类型写入 `source_type`：`pdf`、`docx`、`html`、`text`。
 - `md` 与 `txt` 统一归入 `text`；`html/htm` 统一归入 `html`。
 - 非 PDF 类型允许 `page_start/page_end=null`，但应尽量提供 `section_path` 保障引用可定位性。
+
+## 运行时指标补充（2026-03）
+为便于联调回归，系统会基于最近助手消息计算运行时指标，并通过 `GET /api/v1/monitor/runtime` 返回：
+- 澄清型拒答占比（`clarification_rate`）
+- 总拒答占比（`refusal_rate`）
+- 时效提示占比（`freshness_warning_rate`）
+- 引用覆盖占比（`citation_coverage_rate`）
+
+这些指标只用于运行态观察，不改变问答契约本身。

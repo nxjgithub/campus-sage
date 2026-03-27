@@ -426,6 +426,87 @@ def test_stream_supports_ping_event(monkeypatch: pytest.MonkeyPatch) -> None:
     assert event_names[-1] == "done"
 
 
+def test_multiturn_clarification_then_answer() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post(
+        "/api/v1/kb",
+        json={"name": "多轮澄清知识库", "config": _kb_config(topk=1, threshold=0.0)},
+        headers=headers,
+    ).json()["kb_id"]
+    upload = client.post(
+        f"/api/v1/kb/{kb_id}/documents",
+        files={"file": ("clarify.pdf", "补考 申请 条件".encode("utf-8"), "application/pdf")},
+        headers=headers,
+    )
+    assert upload.status_code == 200
+    _wait_for_job(client, upload.json()["job"]["job_id"], headers)
+
+    first = client.post(
+        f"/api/v1/kb/{kb_id}/ask",
+        json={"question": "这个怎么办"},
+        headers=headers,
+    )
+    assert first.status_code == 200
+    first_payload = first.json()
+    assert first_payload["refusal"] is True
+    assert any(step["action"] == "add_context" for step in first_payload["next_steps"])
+
+    second = client.post(
+        f"/api/v1/kb/{kb_id}/ask",
+        json={
+            "question": "补考申请条件是什么？",
+            "conversation_id": first_payload["conversation_id"],
+        },
+        headers=headers,
+    )
+    if is_qdrant_backend() and not is_qdrant_available():
+        assert second.status_code == 503
+        assert second.json()["error"]["code"] == "VECTOR_SEARCH_FAILED"
+        return
+    assert second.status_code == 200
+    second_payload = second.json()
+    assert second_payload["conversation_id"] == first_payload["conversation_id"]
+    assert second_payload["refusal"] is False
+
+
+def test_latest_question_adds_freshness_warning() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post(
+        "/api/v1/kb",
+        json={"name": "时效提示知识库", "config": _kb_config(topk=1, threshold=0.0)},
+        headers=headers,
+    ).json()["kb_id"]
+    upload = client.post(
+        f"/api/v1/kb/{kb_id}/documents",
+        files={"file": ("freshness.pdf", "补考 申请 条件".encode("utf-8"), "application/pdf")},
+        data={
+            "published_at": "2020-01-01",
+            "source_uri": "https://example.edu/academic/policy",
+        },
+        headers=headers,
+    )
+    assert upload.status_code == 200
+    _wait_for_job(client, upload.json()["job"]["job_id"], headers)
+
+    response = client.post(
+        f"/api/v1/kb/{kb_id}/ask",
+        json={"question": "最新补考申请条件是什么？"},
+        headers=headers,
+    )
+    if is_qdrant_backend() and not is_qdrant_available():
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "VECTOR_SEARCH_FAILED"
+        return
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refusal"] is False
+    assert "提示：问题涉及时效" in payload["answer"]
+    assert payload["suggestions"]
+    assert any(step["action"] == "check_official_source" for step in payload["next_steps"])
+
+
 def _collect_sse_events(response) -> list[tuple[str, dict[str, object]]]:
     events: list[tuple[str, dict[str, object]]] = []
     current_event = ""

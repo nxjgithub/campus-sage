@@ -62,6 +62,20 @@ class RuntimeSecurityInfo(BaseModel):
     jwt_default_secret: bool = Field(description="JWT 密钥是否仍为默认值")
 
 
+class RuntimeRagMetricsInfo(BaseModel):
+    """RAG 运行时联调指标。"""
+
+    sample_size: int = Field(description="统计样本数量（助手消息数）")
+    refusal_count: int = Field(description="拒答消息数量")
+    clarification_count: int = Field(description="澄清型拒答数量")
+    freshness_warning_count: int = Field(description="时效提醒数量")
+    citation_covered_count: int = Field(description="带引用的非拒答数量")
+    refusal_rate: float = Field(description="拒答占比")
+    clarification_rate: float = Field(description="澄清型拒答占比")
+    freshness_warning_rate: float = Field(description="时效提醒占比")
+    citation_coverage_rate: float = Field(description="非拒答消息的引用覆盖占比")
+
+
 class RuntimeDiagnosticsResponse(RequestIdMixin):
     """运行时诊断响应。"""
 
@@ -73,4 +87,5 @@ class RuntimeDiagnosticsResponse(RequestIdMixin):
     services: RuntimeServicesInfo = Field(description="关键服务配置")
     upload: RuntimeUploadInfo = Field(description="上传配置")
     security: RuntimeSecurityInfo = Field(description="安全配置")
+    rag_metrics: RuntimeRagMetricsInfo = Field(description="RAG 运行时联调指标")
     warnings: list[str] = Field(description="运行时告警提示")

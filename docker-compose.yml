@@ -14,9 +14,9 @@ services:
       EMBEDDING_API_PATH: ${EMBEDDING_API_PATH_INTERNAL:-/embeddings}
       NO_PROXY: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
       no_proxy: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: [ "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000" ]
     ports:
-      - "8000:8000"
+      - "8010:8000"
     volumes:
       - ./data:/app/data
     depends_on:
@@ -38,7 +38,7 @@ services:
       EMBEDDING_API_PATH: ${EMBEDDING_API_PATH_INTERNAL:-/embeddings}
       NO_PROXY: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
       no_proxy: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
-    command: ["python", "-m", "app.ingest.worker_runner", "--queue", "ingest"]
+    command: [ "python", "-m", "app.ingest.worker_runner", "--queue", "ingest" ]
     volumes:
       - ./data:/app/data
     depends_on:

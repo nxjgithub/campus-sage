@@ -1,0 +1,60 @@
+name: backend-ci
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+
+jobs:
+  lint-test-smoke:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: ci
+      JWT_SECRET_KEY: ci-only-secret
+      DATABASE_URL: sqlite:///./data/csage_ci.db
+      VECTOR_BACKEND: memory
+      EMBEDDING_BACKEND: simple
+      VLLM_ENABLED: "false"
+      INGEST_QUEUE_ENABLED: "false"
+      ENABLE_SWAGGER: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create .venv
+        run: python -m venv .venv
+
+      - name: Install Dependencies
+        run: |
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -r requirements.txt
+
+      - name: Ruff
+        run: .venv/bin/python -m ruff check .
+
+      - name: Pytest
+        run: .venv/bin/python -m pytest -q
+
+      - name: API Smoke
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8010 > data/ci_api.log 2>&1 &
+          for _ in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8010/docs > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          .venv/bin/python scripts/run_api_smoke.py \
+            --base-url http://127.0.0.1:8010 \
+            --create-admin-if-missing

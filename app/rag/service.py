@@ -17,6 +17,13 @@ from app.db.repos.conversation import ConversationRepository
 from app.db.repos.interfaces import KnowledgeBaseRepositoryProtocol
 from app.rag.context_builder import ContextBuilder
 from app.rag.conversation_service import ConversationService
+from app.rag.dialog_policy import (
+    DialogState,
+    IntentDecision,
+    analyze_intent,
+    build_dialog_state,
+    build_freshness_notice,
+)
 from app.rag.dto import AskResult, CitationDTO, NextStepDTO
 from app.rag.embedding import Embedder, get_embedder
 from app.rag.llm_client import VllmClient
@@ -39,6 +46,8 @@ class _ComputationResult:
     threshold: float
     rerank_enabled: bool
     hits_for_log: list[VectorHit]
+    intent: str
+    slots: dict[str, str]
 
 
 class RagService:
@@ -79,14 +88,19 @@ class RagService:
             title=question.strip()[:50] if question.strip() else None,
             user_id=user_id,
         )
+        dialog_state = self._build_dialog_state(conversation.conversation_id)
+        intent_decision = analyze_intent(question, dialog_state)
         computed = self._compute_answer(
             kb=kb,
-            question=question,
+            question=intent_decision.retrieval_query,
             topk=topk,
             threshold=threshold,
             rerank_enabled=rerank_enabled,
             filters=filters,
             debug=debug,
+            normalized_question=intent_decision.normalized_question,
+            dialog_state=dialog_state,
+            intent_decision=intent_decision,
         )
         user_message = self._save_user_message(
             conversation_id=conversation.conversation_id,
@@ -124,6 +138,8 @@ class RagService:
             total_ms=computed.timing["total_ms"],
             hits=computed.hits_for_log,
             refusal_reason=computed.refusal_reason,
+            intent=computed.intent,
+            slots=computed.slots,
         )
         return result
 
@@ -143,14 +159,19 @@ class RagService:
         """基于已存在用户消息生成新回答。"""
 
         kb = self._get_kb(kb_id)
+        dialog_state = self._build_dialog_state(conversation_id)
+        intent_decision = analyze_intent(question, dialog_state)
         computed = self._compute_answer(
             kb=kb,
-            question=question,
+            question=intent_decision.retrieval_query,
             topk=topk,
             threshold=threshold,
             rerank_enabled=rerank_enabled,
             filters=filters,
             debug=debug,
+            normalized_question=intent_decision.normalized_question,
+            dialog_state=dialog_state,
+            intent_decision=intent_decision,
         )
         assistant_message = self._save_assistant_message(
             conversation_id=conversation_id,
@@ -184,6 +205,8 @@ class RagService:
             total_ms=computed.timing["total_ms"],
             hits=computed.hits_for_log,
             refusal_reason=computed.refusal_reason,
+            intent=computed.intent,
+            slots=computed.slots,
         )
         return result
 
@@ -211,6 +234,8 @@ class RagService:
             title=question.strip()[:50] if question.strip() else None,
             user_id=user_id,
         )
+        dialog_state = self._build_dialog_state(conversation.conversation_id)
+        intent_decision = analyze_intent(question, dialog_state)
         yield {
             "event": "start",
             "data": {
@@ -239,12 +264,15 @@ class RagService:
             return
         computed = self._compute_answer(
             kb=kb,
-            question=question,
+            question=intent_decision.retrieval_query,
             topk=topk,
             threshold=threshold,
             rerank_enabled=rerank_enabled,
             filters=filters,
             debug=debug,
+            normalized_question=intent_decision.normalized_question,
+            dialog_state=dialog_state,
+            intent_decision=intent_decision,
         )
         if computed.refusal:
             assistant_message = self._save_assistant_message(
@@ -265,6 +293,8 @@ class RagService:
                 total_ms=computed.timing["total_ms"],
                 hits=computed.hits_for_log,
                 refusal_reason=computed.refusal_reason,
+                intent=computed.intent,
+                slots=computed.slots,
             )
             yield {
                 "event": "refusal",
@@ -339,6 +369,8 @@ class RagService:
             total_ms=computed.timing["total_ms"],
             hits=computed.hits_for_log,
             refusal_reason=None,
+            intent=computed.intent,
+            slots=computed.slots,
         )
         yield self._done_event(
             run_id,
@@ -361,6 +393,9 @@ class RagService:
         rerank_enabled: bool | None,
         filters: dict[str, object] | None,
         debug: bool,
+        normalized_question: str,
+        dialog_state: DialogState,
+        intent_decision: IntentDecision,
     ) -> _ComputationResult:
         """执行检索与生成计算。"""
 
@@ -390,6 +425,29 @@ class RagService:
         )
 
         total_start = time.perf_counter()
+        if intent_decision.early_refusal:
+            total_ms = int((time.perf_counter() - total_start) * 1000)
+            return _ComputationResult(
+                answer=self._build_refusal_answer(intent_decision.refusal_reason or "LOW_COVERAGE"),
+                refusal=True,
+                refusal_reason=intent_decision.refusal_reason,
+                suggestions=intent_decision.suggestions,
+                next_steps=intent_decision.next_steps,
+                citations=[],
+                timing={
+                    "retrieve_ms": 0,
+                    "rerank_ms": 0,
+                    "context_ms": 0,
+                    "generate_ms": 0,
+                    "total_ms": total_ms,
+                },
+                topk=resolved_topk,
+                threshold=resolved_threshold,
+                rerank_enabled=resolved_rerank_enabled,
+                hits_for_log=[],
+                intent=intent_decision.intent,
+                slots=intent_decision.slots,
+            )
         query_vector = self._embedder.embed_query(question)
         retrieve_start = time.perf_counter()
         hits = self._vector_store.search(
@@ -400,11 +458,15 @@ class RagService:
         )
         retrieve_ms = int((time.perf_counter() - retrieve_start) * 1000)
         refusal_reason = self._get_refusal_reason(
-            question, hits, resolved_threshold, min_chunks, min_coverage
+            normalized_question,
+            hits,
+            resolved_threshold,
+            min_chunks,
+            min_coverage,
         )
         if refusal_reason is not None:
             suggestions, next_steps = self._build_refusal_guidance(
-                question=question,
+                question=normalized_question,
                 refusal_reason=refusal_reason,
                 hits=hits,
             )
@@ -427,12 +489,14 @@ class RagService:
                 threshold=resolved_threshold,
                 rerank_enabled=resolved_rerank_enabled,
                 hits_for_log=hits,
+                intent=intent_decision.intent,
+                slots=intent_decision.slots,
             )
 
         rerank_ms = 0
         if resolved_rerank_enabled:
             rerank_start = time.perf_counter()
-            hits = self._reranker.rerank(question, hits)
+            hits = self._reranker.rerank(normalized_question, hits)
             rerank_ms = int((time.perf_counter() - rerank_start) * 1000)
 
         context_start = time.perf_counter()
@@ -440,7 +504,7 @@ class RagService:
         context_ms = int((time.perf_counter() - context_start) * 1000)
         if not context_result.hits or len(context_result.context.strip()) < min_context_chars:
             suggestions, next_steps = self._build_refusal_guidance(
-                question=question,
+                question=normalized_question,
                 refusal_reason="LOW_EVIDENCE",
                 hits=context_result.hits,
             )
@@ -463,23 +527,35 @@ class RagService:
                 threshold=resolved_threshold,
                 rerank_enabled=resolved_rerank_enabled,
                 hits_for_log=context_result.hits,
+                intent=intent_decision.intent,
+                slots=intent_decision.slots,
             )
 
         citations = self._build_citations(context_result.hits, debug)
         generate_start = time.perf_counter()
         if self._settings.vllm_enabled:
-            answer = self._llm_client.generate(question=question, context=context_result.context)
+            answer = self._llm_client.generate(
+                question=normalized_question,
+                context=context_result.context,
+            )
             answer = self._ensure_citations_in_answer(answer, citations)
         else:
             answer = self._build_answer(citations)
+        answer, suggestions, next_steps = self._apply_freshness_policy(
+            question=normalized_question,
+            answer=answer,
+            citations=citations,
+        )
         generate_ms = int((time.perf_counter() - generate_start) * 1000)
         total_ms = int((time.perf_counter() - total_start) * 1000)
+        slots = dict(intent_decision.slots)
+        slots.setdefault("dialog_turn", str(dialog_state.turn_count))
         return _ComputationResult(
             answer=answer,
             refusal=False,
             refusal_reason=None,
-            suggestions=[],
-            next_steps=[],
+            suggestions=suggestions,
+            next_steps=next_steps,
             citations=citations,
             timing={
                 "retrieve_ms": retrieve_ms,
@@ -492,6 +568,8 @@ class RagService:
             threshold=resolved_threshold,
             rerank_enabled=resolved_rerank_enabled,
             hits_for_log=context_result.hits,
+            intent=intent_decision.intent,
+            slots=slots,
         )
 
     def _resolve_qa_config(
@@ -533,6 +611,41 @@ class RagService:
                 status_code=404,
             )
         return kb
+
+    def _build_dialog_state(self, conversation_id: str) -> DialogState:
+        """读取会话历史并构建对话状态。"""
+
+        history_messages = self._conversation_service.list_messages(conversation_id)
+        return build_dialog_state(history_messages)
+
+    def _apply_freshness_policy(
+        self,
+        question: str,
+        answer: str,
+        citations: list[CitationDTO],
+    ) -> tuple[str, list[str], list[NextStepDTO]]:
+        """对时效敏感问题补充核验提示。"""
+
+        warning, source_uri = build_freshness_notice(
+            question=question,
+            citations=citations,
+            stale_days=self._settings.rag_stale_warning_days,
+        )
+        if warning is None:
+            return answer, [], []
+        suggestions = [
+            "问题涉及时效，请优先核验学校官网或业务部门最新通知。",
+        ]
+        next_steps = [
+            NextStepDTO(
+                action="check_official_source",
+                label="核验最新公告",
+                detail="请优先确认官方来源中的最新版本，避免使用过期制度。",
+                value=source_uri,
+            )
+        ]
+        answer_with_warning = f"{answer}\n\n提示：{warning}"
+        return answer_with_warning, suggestions, next_steps
 
     def _save_user_message(self, conversation_id: str, question: str) -> MessageRecord:
         """保存用户消息。"""
@@ -860,6 +973,8 @@ class RagService:
         total_ms: int,
         hits: list[VectorHit],
         refusal_reason: str | None,
+        intent: str,
+        slots: dict[str, str],
     ) -> None:
         """记录问答关键日志。"""
 
@@ -881,5 +996,7 @@ class RagService:
                 "hit_docs": len(doc_ids),
                 "hit_chunks": len(hits),
                 "refusal_reason": refusal_reason,
+                "intent": intent,
+                "slot_keys": ",".join(sorted(slots.keys())),
             },
         )

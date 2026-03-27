@@ -99,6 +99,10 @@ class Settings(BaseSettings):
     rag_min_evidence_chunks: int = Field(default=1, description="最少证据数")
     rag_min_context_chars: int = Field(default=20, description="最少上下文字符数")
     rag_min_keyword_coverage: float = Field(default=0.3, description="关键词覆盖率阈值")
+    rag_stale_warning_days: int = Field(
+        default=730,
+        description="证据发布日期超过该天数时触发时效核验提示",
+    )
     chunk_size: int = Field(default=500, description="分块大小（字符数）")
     chunk_overlap: int = Field(default=100, description="分块重叠（字符数）")
 

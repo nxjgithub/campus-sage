@@ -13,6 +13,7 @@ from app.api.v1.schemas.monitor import (
     QueueStatsResponse,
     RuntimeDatabaseInfo,
     RuntimeDiagnosticsResponse,
+    RuntimeRagMetricsInfo,
     RuntimeSecurityInfo,
     RuntimeServicesInfo,
     RuntimeUploadInfo,
@@ -22,11 +23,13 @@ from app.auth.permissions import Permission
 from app.core.settings import Settings, get_settings
 from app.db.database import get_database
 from app.db.migrations import get_current_schema_version
+from app.db.repos import RepositoryProvider
 from app.ingest.queue_monitor import (
     check_queue_alerts,
     get_queue_stats,
     move_failed_to_dead,
 )
+from app.rag.runtime_metrics import build_rag_runtime_metrics
 
 router = APIRouter(prefix="/monitor", tags=["Monitor"])
 
@@ -69,6 +72,9 @@ def get_runtime_diagnostics(
     """返回当前运行时配置摘要，便于排查环境和配置问题。"""
 
     database = get_database(settings)
+    provider = RepositoryProvider(database)
+    runtime_messages = provider.conversation().list_recent_assistant_messages(limit=200)
+    rag_metrics = build_rag_runtime_metrics(runtime_messages)
     parsed = urlparse(settings.database_url)
     target = parsed.path or parsed.netloc or settings.database_url
     if settings.database_backend == "sqlite" and target.startswith("/"):
@@ -95,6 +101,17 @@ def get_runtime_diagnostics(
         ),
         security=RuntimeSecurityInfo(
             jwt_default_secret=settings.jwt_secret_key == "CHANGE_ME",
+        ),
+        rag_metrics=RuntimeRagMetricsInfo(
+            sample_size=rag_metrics.sample_size,
+            refusal_count=rag_metrics.refusal_count,
+            clarification_count=rag_metrics.clarification_count,
+            freshness_warning_count=rag_metrics.freshness_warning_count,
+            citation_covered_count=rag_metrics.citation_covered_count,
+            refusal_rate=rag_metrics.refusal_rate,
+            clarification_rate=rag_metrics.clarification_rate,
+            freshness_warning_rate=rag_metrics.freshness_warning_rate,
+            citation_coverage_rate=rag_metrics.citation_coverage_rate,
         ),
         warnings=settings.runtime_warnings(),
         request_id=request.state.request_id,

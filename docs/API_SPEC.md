@@ -448,6 +448,8 @@ Content-Type：`multipart/form-data`
   - `threshold`（可选）：`0~1`
 - 参数不合法时返回 `400 + VALIDATION_FAILED`。
 - 兼容性：若知识库中存在历史非法配置值（如超范围或错误类型），服务端会自动回退到系统默认值继续执行。
+- 多轮策略：服务端会基于会话历史做基础意图分流与追问补全；若问题信息不足，会返回澄清型拒答（`refusal=true` + `next_steps`）。
+- 时效策略：当问题包含“最新/当前/今年”等时效诉求时，服务端会检查 `citations.published_at`，必要时在 `answer` 中追加“请核验最新公告”的提示，并通过 `next_steps` 引导到官方来源。
 
 ### 4.2 发起问答（流式 SSE）
 `POST /api/v1/kb/{kb_id}/ask/stream`  
@@ -1017,3 +1019,13 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 - `POST /api/v1/kb/{kb_id}/documents` 首批正式支持：`pdf`、`docx`、`html`、`htm`、`md`、`txt`。
 - 非支持后缀仍返回 `400 + FILE_TYPE_NOT_ALLOWED`。
 - 引用定位规则保持不变：`pdf` 优先页码，其余类型优先 `section_path + snippet`。
+
+## 监控补充（2026-03）
+`GET /api/v1/monitor/runtime` 新增 `rag_metrics` 字段，用于观测联调健康度。
+
+响应字段：
+- `sample_size`: 统计样本数量（最近助手消息）
+- `refusal_count` / `refusal_rate`: 拒答数量与占比
+- `clarification_count` / `clarification_rate`: 澄清型拒答数量与占比
+- `freshness_warning_count` / `freshness_warning_rate`: 时效提醒数量与占比
+- `citation_covered_count` / `citation_coverage_rate`: 带引用的非拒答数量与覆盖占比

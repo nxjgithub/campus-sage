@@ -9,8 +9,10 @@ import pytest
 import time
 
 from app.core.settings import get_settings
+from app.core.utils import new_id, utc_now_iso
 from app.db.database import get_database, reset_database
 from app.db.migrations import LATEST_SCHEMA_VERSION
+from app.db.models import ConversationRecord, MessageRecord
 from app.db.repos import RepositoryProvider
 from app.main import app
 from app.auth.service import UserService
@@ -569,8 +571,90 @@ def test_monitor_runtime_diagnostics() -> None:
     assert payload["database"]["backend"] == "sqlite"
     assert payload["services"]["vector_backend"] == get_settings().vector_backend
     assert payload["services"]["embedding_backend"] == get_settings().embedding_backend
+    assert payload["rag_metrics"]["sample_size"] >= 0
+    assert "clarification_rate" in payload["rag_metrics"]
+    assert "citation_coverage_rate" in payload["rag_metrics"]
     assert "pdf" in payload["upload"]["allowed_exts"]
     assert payload["security"]["jwt_default_secret"] is False
+
+
+def test_monitor_runtime_rag_metrics_reflect_recent_messages() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post(
+        "/api/v1/kb",
+        json={"name": "运行时指标知识库"},
+        headers=headers,
+    ).json()["kb_id"]
+
+    provider = RepositoryProvider(get_database(get_settings()))
+    conversation_id = new_id("conv")
+    created_at = utc_now_iso()
+    provider.conversation().create_conversation(
+        ConversationRecord(
+            conversation_id=conversation_id,
+            kb_id=kb_id,
+            user_id=None,
+            title="运行时指标会话",
+            created_at=created_at,
+            updated_at=created_at,
+            deleted=False,
+        )
+    )
+    messages = [
+        MessageRecord(
+            message_id=new_id("msg"),
+            conversation_id=conversation_id,
+            role="assistant",
+            content="请先补充学院和年级。",
+            refusal=True,
+            refusal_reason="LOW_COVERAGE",
+            timing=None,
+            next_steps=[{"action": "add_context"}],
+            citations=[],
+            created_at=utc_now_iso(),
+        ),
+        MessageRecord(
+            message_id=new_id("msg"),
+            conversation_id=conversation_id,
+            role="assistant",
+            content="回答正文\n\n提示：问题涉及时效，请核验官方通知。",
+            refusal=False,
+            refusal_reason=None,
+            timing=None,
+            next_steps=[{"action": "check_official_source"}],
+            citations=[{"citation_id": 1, "doc_id": "doc_demo"}],
+            created_at=utc_now_iso(),
+        ),
+        MessageRecord(
+            message_id=new_id("msg"),
+            conversation_id=conversation_id,
+            role="assistant",
+            content="这是一条无引用回答。",
+            refusal=False,
+            refusal_reason=None,
+            timing=None,
+            next_steps=[],
+            citations=[],
+            created_at=utc_now_iso(),
+        ),
+    ]
+    for item in messages:
+        provider.conversation().create_message(item)
+
+    response = client.get("/api/v1/monitor/runtime", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    metrics = payload["rag_metrics"]
+    assert metrics["sample_size"] == 3
+    assert metrics["refusal_count"] == 1
+    assert metrics["clarification_count"] == 1
+    assert metrics["freshness_warning_count"] == 1
+    assert metrics["citation_covered_count"] == 1
+    assert metrics["refusal_rate"] == 0.3333
+    assert metrics["clarification_rate"] == 0.3333
+    assert metrics["freshness_warning_rate"] == 0.3333
+    assert metrics["citation_coverage_rate"] == 0.3333
 
 
 def test_cancel_and_retry_job() -> None:

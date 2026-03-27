@@ -70,6 +70,7 @@
 - `RAG_MIN_EVIDENCE_CHUNKS`：默认 1（最少有效证据数）
 - `RAG_MIN_CONTEXT_CHARS`：默认 20（最少上下文字符数）
 - `RAG_MIN_KEYWORD_COVERAGE`：默认 0.3（关键词覆盖率阈值）
+- `RAG_STALE_WARNING_DAYS`：默认 730（时效问题下，证据发布日期超过该天数将追加“请核验最新公告”提示）
 - `CHUNK_SIZE`：默认 500（分块大小，字符数）
 - `CHUNK_OVERLAP`：默认 100（分块重叠，字符数）
 
@@ -128,3 +129,7 @@
 ## 上传类型补充（2026-03 第三轮）
 - `UPLOAD_ALLOWED_EXTS` 默认值调整为 `pdf,docx,html,htm,md,txt`。
 - 推荐首批启用文本可稳定提取的格式；`csv/xlsx/pptx/图片 OCR` 暂不纳入默认支持集。
+
+## 11. 运行时观测（2026-03）
+- `GET /api/v1/monitor/runtime` 会聚合最近助手消息形成 `rag_metrics`，用于观察拒答、澄清、时效提示和引用覆盖情况。
+- 当前样本窗口由服务端固定控制（最近 200 条助手消息），无需额外环境变量配置。

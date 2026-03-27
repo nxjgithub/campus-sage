@@ -454,3 +454,18 @@ python scripts/create_admin.py --email admin@example.com --password Admin1234
 - 前端无法登录
 - 检查前端是否从 `http://127.0.0.1:4174` 启动
 - 检查 Vite 代理目标是否仍是 `http://127.0.0.1:8000`
+
+## 14. 接口联调脚本（新增）
+建议在后端启动后执行以下命令做快速联调：
+
+```powershell
+.\.venv\Scripts\python.exe scripts/run_api_smoke.py --base-url http://127.0.0.1:8010 --create-admin-if-missing
+```
+
+如需按周产出“smoke + eval”统一报告：
+
+```powershell
+.\.venv\Scripts\python.exe scripts/run_weekly_regression.py --base-url http://127.0.0.1:8010 --kb-id <kb_id> --eval-file <eval_json> --topk 5
+```
+
+报告默认写入：`data/weekly_regression_<run_id>.json`

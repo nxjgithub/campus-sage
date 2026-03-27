@@ -406,6 +406,41 @@ class ConversationRepository:
             created_at=row["created_at"],
         )
 
+    def list_recent_assistant_messages(self, limit: int) -> list[MessageRecord]:
+        """按时间倒序读取最近的助手消息。"""
+
+        safe_limit = max(1, min(limit, 1000))
+        rows = self._db.fetch_all(
+            """
+            SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
+                   timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
+                   sequence_no, created_at
+            FROM message
+            WHERE role = 'assistant'
+            ORDER BY created_at DESC, COALESCE(sequence_no, 0) DESC
+            LIMIT ?;
+            """,
+            (safe_limit,),
+        )
+        return [
+            MessageRecord(
+                message_id=row["message_id"],
+                conversation_id=row["conversation_id"],
+                role=row["role"],
+                content=row["content"],
+                refusal=bool(row["refusal"]),
+                refusal_reason=row["refusal_reason"],
+                timing=self._loads(row["timing_json"]),
+                next_steps=self._loads(row["next_steps_json"]) or [],
+                citations=self._loads(row["citations_json"]) or [],
+                parent_message_id=row["parent_message_id"],
+                edited_from_message_id=row["edited_from_message_id"],
+                sequence_no=row["sequence_no"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
     def create_feedback(self, record: FeedbackRecord) -> FeedbackRecord:
         """创建反馈记录。"""
 

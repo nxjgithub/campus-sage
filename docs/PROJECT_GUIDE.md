@@ -35,6 +35,8 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 向量库默认后端已切换为 Qdrant，写入前执行 payload 契约校验。
 - 问答上下文已附证据编号，vLLM 提示词要求强制引用编号；缺引用时服务层自动补全。
 - 拒答策略已强化，增加关键词覆盖率阈值与最小上下文长度约束。
+- 问答已补充基础多轮策略：支持意图分流、追问 query 补全、信息不足时先澄清再回答。
+- 对“最新/当前/今年”等时效型问题，服务层会基于 `published_at` 追加核验提示并引导官方来源。
 - 已支持流式问答 SSE：`start/token/citation/refusal/done/error` 事件并携带 request_id。
 - 拒答响应已补充结构化 `next_steps`，便于前端渲染“下一步建议”而不只展示纯文本。
 - 会话历史中的助手消息也已持久化 `next_steps`，拒答引导可在历史回放中保持一致。
@@ -201,3 +203,8 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 新增 `scripts/bootstrap_demo_academic_kb.py` 与配套示例语料，可在空环境中快速构建第二阶段参数实验基线。
 - 新增 `scripts/crawl_suse_public_corpus.py`，可定向抓取四川轻化工大学公开栏目与附件，生成带 `source_uri` 的本地真实语料清单。
 - 新增 `scripts/bootstrap_suse_public_kb.py`，可对公开抓取结果做二次清洗、列表页详情补抓、可入库格式筛选，并自动创建知识库完成批量导入。
+
+## 联调新增（2026-03）
+- 新增 `docs/DEMO_SOP.md`，固化真实业务演示流程与验收口径。
+- 新增 `scripts/run_api_smoke.py`，用于接口冒烟联调与 CI 门禁。
+- 新增 `scripts/run_weekly_regression.py`，用于每周执行 smoke + eval 并输出统一报告。
