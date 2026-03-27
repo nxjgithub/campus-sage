@@ -1,0 +1,356 @@
+{
+  "name": "SUSE公开语料评测集v1",
+  "description": "面向SUSE公开语料的离线检索评测集，优先使用 gold_doc_name 对齐真实导入文档。",
+  "items": [
+    {
+      "question": "请概述《四川轻化工大学2025-2026学年食堂物资供货商遴选采购项目公开比选公告》的核心内容。",
+      "gold_doc_name": "四川轻化工大学2025-2026学年食堂物资供货商遴选采购项目公开比选公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《2016秋季硕士、博士研究生及博士、中高级人才供需见面会公告（成都站）》主要说明了什么？",
+      "gold_doc_name": "2016秋季硕士、博士研究生及博士、中高级人才供需见面会公告（成都站）",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请根据《四川理工学院党校第二期结业名单》总结关键信息。",
+      "gold_doc_name": "四川理工学院党校第二期结业名单",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《3月18日热门病毒信息公告及解决办法》里有哪些重点要求？",
+      "gold_doc_name": "3月18日热门病毒信息公告及解决办法",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "围绕《四川轻化工大学2025-2026学年食堂物资供货商遴选采购项目（第三次）公开比选公告》，请给出要点整理。",
+      "gold_doc_name": "四川轻化工大学2025-2026学年食堂物资供货商遴选采购项目（第三次）公开比选公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请概述《四川轻化工大学食堂制冷设施设备维修服务采购项目公开比选公告》的核心内容。",
+      "gold_doc_name": "四川轻化工大学食堂制冷设施设备维修服务采购项目公开比选公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川轻化工大学食堂制冷设施设备维修服务采购项目（第二次）公开比选公告》主要说明了什么？",
+      "gold_doc_name": "四川轻化工大学食堂制冷设施设备维修服务采购项目（第二次）公开比选公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请根据《四川轻化工大学食堂设施设备维修配件供应服务采购项目 公开比选公告》总结关键信息。",
+      "gold_doc_name": "四川轻化工大学食堂设施设备维修配件供应服务采购项目 公开比选公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川轻化工大学食堂设施设备维修配件供应服务采购项目（第三次）公开比选公告》里有哪些重点要求？",
+      "gold_doc_name": "四川轻化工大学食堂设施设备维修配件供应服务采购项目（第三次）公开比选公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "围绕《四川轻化工大学食堂设施设备维修配件供应服务采购项目（第二次）公开比选公告》，请给出要点整理。",
+      "gold_doc_name": "四川轻化工大学食堂设施设备维修配件供应服务采购项目（第二次）公开比选公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请概述《宜宾校区品正食府三楼闲置档口及器美食府4号门旁第2间门店技术合作项目（第二次）》的核心内容。",
+      "gold_doc_name": "宜宾校区品正食府三楼闲置档口及器美食府4号门旁第2间门店技术合作项目（第二次）",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《宜宾校区品正食府三楼闲置档口及器美食府4号门旁第2间门店技术合作项目（第三次）》主要说明了什么？",
+      "gold_doc_name": "宜宾校区品正食府三楼闲置档口及器美食府4号门旁第2间门店技术合作项目（第三次）",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请根据《宜宾校区品正食府三楼闲置档口技术合作的事宜》总结关键信息。",
+      "gold_doc_name": "宜宾校区品正食府三楼闲置档口技术合作的事宜",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川理工学院党校第4期结业名单》里有哪些重点要求？",
+      "gold_doc_name": "四川理工学院党校第4期结业名单",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "围绕《四川轻化工大学2025年研究生招生考试复试录取工作安排》，请给出要点整理。",
+      "gold_doc_name": "四川轻化工大学2025年研究生招生考试复试录取工作安排",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请概述《饮食中心宜宾、李白河校区特色餐厅技术合作项目（第二次）公开比选公告》的核心内容。",
+      "gold_doc_name": "饮食中心宜宾、李白河校区特色餐厅技术合作项目（第二次）公开比选公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川轻化工大学2021年硕士研究生复试录取工作安排》主要说明了什么？",
+      "gold_doc_name": "四川轻化工大学2021年硕士研究生复试录取工作安排",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请根据《四川轻化工大学2024年研究生招生考试复试录取工作安排》总结关键信息。",
+      "gold_doc_name": "四川轻化工大学2024年研究生招生考试复试录取工作安排",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川轻化工大学食堂灶具及抽排烟系统维修服务采购项目（第三次）询价公告》里有哪些重点要求？",
+      "gold_doc_name": "四川轻化工大学食堂灶具及抽排烟系统维修服务采购项目（第三次）询价公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "围绕《四川轻化工大学2022年研究生招生考试复试录取工作安排》，请给出要点整理。",
+      "gold_doc_name": "四川轻化工大学2022年研究生招生考试复试录取工作安排",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请概述《四川轻化工大学宜宾校区食品与酿酒工程学院（原生物工程学院）423会议室改造工程》的核心内容。",
+      "gold_doc_name": "四川轻化工大学宜宾校区食品与酿酒工程学院（原生物工程学院）423会议室改造工程",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川轻化工大学李白河校区财务处办公室改造工程挂网公告》主要说明了什么？",
+      "gold_doc_name": "四川轻化工大学李白河校区财务处办公室改造工程挂网公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请根据《四川轻化工大学食堂不锈钢厨具、机械设备维修服务采购项目询价公告》总结关键信息。",
+      "gold_doc_name": "四川轻化工大学食堂不锈钢厨具、机械设备维修服务采购项目询价公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川轻化工大学食堂不锈钢厨具、机械设备维修服务采购项目（第三次）询价公告》里有哪些重点要求？",
+      "gold_doc_name": "四川轻化工大学食堂不锈钢厨具、机械设备维修服务采购项目（第三次）询价公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "围绕《四川理工学院学生社团管理办法(试行)》，请给出要点整理。",
+      "gold_doc_name": "四川理工学院学生社团管理办法(试行)",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请概述《四川轻化工大学 宜宾校区器美食府5号门外档口引进特色餐饮技术合作服务项目》的核心内容。",
+      "gold_doc_name": "四川轻化工大学 宜宾校区器美食府5号门外档口引进特色餐饮技术合作服务项目",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川轻化工大学 汇东校区工程实践中心配电控制柜改造工程》主要说明了什么？",
+      "gold_doc_name": "四川轻化工大学 汇东校区工程实践中心配电控制柜改造工程",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请根据《四川轻化工大学2025-2026学年食堂物资供货商遴选采购项目（第四次）公开比选公告》总结关键信息。",
+      "gold_doc_name": "四川轻化工大学2025-2026学年食堂物资供货商遴选采购项目（第四次）公开比选公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《附件：2024年“校长特别奖”拟获得者情况.docx》里有哪些重点要求？",
+      "gold_doc_name": "附件：2024年“校长特别奖”拟获得者情况.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "围绕《2019年硕士研究生调剂公告(一)》，请给出要点整理。",
+      "gold_doc_name": "2019年硕士研究生调剂公告(一)",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请概述《四川理工学院2016年硕士研究生调剂信息》的核心内容。",
+      "gold_doc_name": "四川理工学院2016年硕士研究生调剂信息",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川理工学院2016年硕士研究生预调剂公告》主要说明了什么？",
+      "gold_doc_name": "四川理工学院2016年硕士研究生预调剂公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请根据《四川轻化工大学宜宾校区考点（5153）2025年网上确认公告》总结关键信息。",
+      "gold_doc_name": "四川轻化工大学宜宾校区考点（5153）2025年网上确认公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川轻化工大学自贡校区考点（5114）2025年网上确认公告》里有哪些重点要求？",
+      "gold_doc_name": "四川轻化工大学自贡校区考点（5114）2025年网上确认公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "围绕《2026年研招考试四川轻化工大学宜宾校区考点（5153）考试公告》，请给出要点整理。",
+      "gold_doc_name": "2026年研招考试四川轻化工大学宜宾校区考点（5153）考试公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请概述《硕士体检表.pdf》的核心内容。",
+      "gold_doc_name": "硕士体检表.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《2025年研招考试四川轻化工大学宜宾校区考点（5153）考试公告》主要说明了什么？",
+      "gold_doc_name": "2025年研招考试四川轻化工大学宜宾校区考点（5153）考试公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请根据《2025年研招考试四川轻化工大学自贡校区考点（5114）考试公告》总结关键信息。",
+      "gold_doc_name": "2025年研招考试四川轻化工大学自贡校区考点（5114）考试公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《2026年研招考试四川轻化工大学自贡校区考点（5114）考试公告》里有哪些重点要求？",
+      "gold_doc_name": "2026年研招考试四川轻化工大学自贡校区考点（5114）考试公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "围绕《四川理工学院2016年硕士研究生调剂信息（二）》，请给出要点整理。",
+      "gold_doc_name": "四川理工学院2016年硕士研究生调剂信息（二）",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请概述《四川轻化工大学宜宾校区（5153）报考点 2025年网报公告》的核心内容。",
+      "gold_doc_name": "四川轻化工大学宜宾校区（5153）报考点 2025年网报公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《学信网-考生操作手册.docx》主要说明了什么？",
+      "gold_doc_name": "学信网-考生操作手册.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请根据《播撒爱国强军种子 各地国防教育讲师队伍蓬勃发展新闻观察》总结关键信息。",
+      "gold_doc_name": "播撒爱国强军种子 各地国防教育讲师队伍蓬勃发展新闻观察",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《附件.四川轻化工大学2025-2026学年食堂物资相关格式要求.docx》里有哪些重点要求？",
+      "gold_doc_name": "附件.四川轻化工大学2025-2026学年食堂物资相关格式要求.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "围绕《关于研究生入学考试的通知》，请给出要点整理。",
+      "gold_doc_name": "关于研究生入学考试的通知",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请概述《四川理工学院报考点 （5114）2017年报考须知》的核心内容。",
+      "gold_doc_name": "四川理工学院报考点 （5114）2017年报考须知",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川轻化工大学 招待所床上用品清洗服务采购项目（第二次）》主要说明了什么？",
+      "gold_doc_name": "四川轻化工大学 招待所床上用品清洗服务采购项目（第二次）",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "请根据《四川轻化工大学宜宾校区报考点 （5153）2020年网报公告》总结关键信息。",
+      "gold_doc_name": "四川轻化工大学宜宾校区报考点 （5153）2020年网报公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "《四川轻化工大学宜宾校区（5153）报考点 2023年网报公告》里有哪些重点要求？",
+      "gold_doc_name": "四川轻化工大学宜宾校区（5153）报考点 2023年网报公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "围绕《四川轻化工大学报考点 （5114）2020年网报公告》，请给出要点整理。",
+      "gold_doc_name": "四川轻化工大学报考点 （5114）2020年网报公告",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    }
+  ]
+}
