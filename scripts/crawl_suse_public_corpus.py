@@ -142,6 +142,7 @@ class HtmlCorpusParser(HTMLParser):
 def main() -> None:
     """脚本入口：抓取四川轻化工大学公开语料。"""
 
+    configure_stdout()
     parser = argparse.ArgumentParser(description="抓取四川轻化工大学公开校园语料")
     parser.add_argument(
         "--output-dir",
@@ -213,6 +214,13 @@ def main() -> None:
         encoding="utf-8",
     )
     print(json.dumps({"output_dir": str(output_dir), **manifest}, ensure_ascii=False, indent=2))
+
+
+def configure_stdout() -> None:
+    """尽量把标准输出切到 UTF-8，避免 Windows 终端编码导致打印失败。"""
+
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def build_default_sites(*, max_pages: int, max_attachments: int) -> list[SeedSite]:

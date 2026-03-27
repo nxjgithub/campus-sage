@@ -70,6 +70,14 @@ def test_analyze_intent_prefers_policy_query_when_topic_is_clear() -> None:
     assert decision.slots["role"] == "本科生"
 
 
+def test_analyze_intent_prefers_policy_query_for_admission_notice() -> None:
+    state = build_dialog_state([])
+    decision = analyze_intent("四川轻化工大学宜宾校区5153报考点2025年网报公告有哪些信息？", state)
+    assert decision.intent == "policy_query"
+    assert decision.early_refusal is False
+    assert decision.slots["topic"] == "招生与报考"
+
+
 def test_extract_slots_from_question_and_history() -> None:
     slots = extract_slots(
         question="本科生补考流程是什么？",

@@ -8,13 +8,14 @@ import pytest
 
 import app.api.v1.ask as ask_api
 from app.auth.service import UserService
-from app.core.settings import get_settings
+from app.core.settings import get_settings, reset_settings
 from app.core.utils import utc_now_iso
 from app.db.database import get_database, reset_database
 from app.db.models import RoleRecord
 from app.db.repos import RepositoryProvider
 from app.main import app
 from app.rag.chat_run_service import ChatRunService
+from app.rag.llm_client import VllmClient
 from app.rag.next_steps import NEXT_STEP_ACTIONS
 from app.rag.service import RagService
 from tests.conftest import is_qdrant_available, is_qdrant_backend
@@ -505,6 +506,57 @@ def test_latest_question_adds_freshness_warning() -> None:
     assert "提示：问题涉及时效" in payload["answer"]
     assert payload["suggestions"]
     assert any(step["action"] == "check_official_source" for step in payload["next_steps"])
+
+
+def test_semantic_no_evidence_answer_switches_to_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """当模型文本显式说明“没有直接信息”且命中弱相关时，应转为拒答。"""
+
+    def _fake_generate(self, question: str, context: str) -> str:
+        del self, question, context
+        return "根据当前证据没有直接信息，无法确认该问题。"
+
+    monkeypatch.setenv("VLLM_ENABLED", "true")
+    monkeypatch.setattr(VllmClient, "generate", _fake_generate)
+    reset_settings()
+
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post(
+        "/api/v1/kb",
+        json={"name": "语义拒答知识库", "config": _kb_config(topk=1, threshold=0.0)},
+        headers=headers,
+    ).json()["kb_id"]
+    upload = client.post(
+        f"/api/v1/kb/{kb_id}/documents",
+        files={
+            "file": (
+                "semantic.pdf",
+                "办理流程详见教务系统公告，请按时提交申请材料。".encode("utf-8"),
+                "application/pdf",
+            )
+        },
+        headers=headers,
+    )
+    assert upload.status_code == 200
+    _wait_for_job(client, upload.json()["job"]["job_id"], headers)
+
+    response = client.post(
+        f"/api/v1/kb/{kb_id}/ask",
+        json={"question": "补考申请条件是什么？"},
+        headers=headers,
+    )
+    if is_qdrant_backend() and not is_qdrant_available():
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "VECTOR_SEARCH_FAILED"
+        return
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refusal"] is True
+    assert payload["refusal_reason"] == "LOW_EVIDENCE"
+    assert payload["citations"] == []
+    assert payload["next_steps"]
 
 
 def _collect_sse_events(response) -> list[tuple[str, dict[str, object]]]:

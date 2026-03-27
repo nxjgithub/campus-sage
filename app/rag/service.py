@@ -30,6 +30,15 @@ from app.rag.llm_client import VllmClient
 from app.rag.reranker import SimpleReranker
 from app.rag.vector_store import VectorHit, VectorStore, get_vector_store
 
+_NO_EVIDENCE_ANSWER_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(没有|未|无)(直接|明确)?(证据|依据|信息|内容)(表明|说明|提及)?"),
+    re.compile(r"(无法|不能|难以)(从|根据).{0,8}(证据|材料|内容).{0,8}(确认|判断|回答)"),
+    re.compile(r"(证据|信息).{0,8}(不足|有限).{0,8}(无法|不能|难以)"),
+    re.compile(r"(无法|不能|难以)(回答|确认|判断)"),
+    re.compile(r"(没有|未).{0,20}(关于).{0,20}(信息|说明|内容)"),
+    re.compile(r"(未提及|未说明|未包含|未涉及)"),
+)
+
 
 @dataclass(slots=True)
 class _ComputationResult:
@@ -547,6 +556,38 @@ class RagService:
             citations=citations,
         )
         generate_ms = int((time.perf_counter() - generate_start) * 1000)
+        semantic_refusal_reason = self._get_semantic_refusal_reason(
+            question=normalized_question,
+            answer=answer,
+        )
+        if semantic_refusal_reason is not None:
+            suggestions, next_steps = self._build_refusal_guidance(
+                question=normalized_question,
+                refusal_reason=semantic_refusal_reason,
+                hits=context_result.hits,
+            )
+            total_ms = int((time.perf_counter() - total_start) * 1000)
+            return _ComputationResult(
+                answer=self._build_refusal_answer(semantic_refusal_reason),
+                refusal=True,
+                refusal_reason=semantic_refusal_reason,
+                suggestions=suggestions,
+                next_steps=next_steps,
+                citations=[],
+                timing={
+                    "retrieve_ms": retrieve_ms,
+                    "rerank_ms": rerank_ms,
+                    "context_ms": context_ms,
+                    "generate_ms": generate_ms,
+                    "total_ms": total_ms,
+                },
+                topk=resolved_topk,
+                threshold=resolved_threshold,
+                rerank_enabled=resolved_rerank_enabled,
+                hits_for_log=context_result.hits,
+                intent=intent_decision.intent,
+                slots=intent_decision.slots,
+            )
         total_ms = int((time.perf_counter() - total_start) * 1000)
         slots = dict(intent_decision.slots)
         slots.setdefault("dialog_turn", str(dialog_state.turn_count))
@@ -891,6 +932,26 @@ class RagService:
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
         return None
+
+    def _get_semantic_refusal_reason(
+        self,
+        question: str,
+        answer: str,
+    ) -> str | None:
+        """在生成后补充语义拒答判定，避免“承认无信息”却返回成功态。"""
+
+        del question
+        if not self._looks_like_no_evidence_answer(answer):
+            return None
+        return "LOW_EVIDENCE"
+
+    def _looks_like_no_evidence_answer(self, answer: str) -> bool:
+        """判断回答是否显式表达“没有直接证据可回答”。"""
+
+        normalized = " ".join(answer.strip().split())
+        if not normalized:
+            return True
+        return any(pattern.search(normalized) for pattern in _NO_EVIDENCE_ANSWER_PATTERNS)
 
     def _keyword_coverage_ratio(self, question: str, hits: list[VectorHit]) -> float:
         """计算问题关键词在命中文本中的覆盖率。"""

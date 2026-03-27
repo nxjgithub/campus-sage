@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
 os.environ.setdefault("EMBEDDING_BACKEND", "simple")
 os.environ.setdefault("VECTOR_BACKEND", "memory")
 os.environ.setdefault("INGEST_QUEUE_ENABLED", "false")
+os.environ.setdefault("VLLM_ENABLED", "false")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret")
 
 
