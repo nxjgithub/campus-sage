@@ -1,4 +1,4 @@
-# LOCAL_DEV.md — 本地开发指南（Windows + PyCharm + Conda）
+# LOCAL_DEV.md — 本地开发指南（Windows + PyCharm + .venv）
 
 本文档用于指导开发者在本地快速启动 CSage。所有命令示例以 PowerShell 为主。
 
@@ -6,20 +6,19 @@
 ## 1. 环境要求
 - Windows 10/11
 - Python 3.10+（与当前依赖统一）
-- Conda
 - Docker Desktop（用于启动 Qdrant 等依赖）
 - PyCharm（建议开启 Ruff/pytest 集成）
 
 
-## 2. 创建并激活 Conda 环境
+## 2. 创建并激活本地 `.venv`
 ```powershell
-conda create -n campus-sage python=3.12 -y
-conda activate campus-sage
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-执行前建议核对当前解释器（必须指向 `campus-sage`）：
+执行前建议核对当前解释器（必须指向仓库内 `.venv`）：
 ```powershell
-python -c "import sys; print(sys.executable)"
+.\.venv\Scripts\python.exe -c "import sys; print(sys.executable)"
 ```
 
 
@@ -28,67 +27,63 @@ python -c "import sys; print(sys.executable)"
 
 方案一（requirements）：
 ```powershell
-python -m pip install -U pip
-python -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -U pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 方案二（pyproject）：
 ```powershell
-python -m pip install -e .
+.\.venv\Scripts\python.exe -m pip install -e .
 ```
 
 补充：PDF 解析依赖 `pypdf`，若解析失败请确认已安装：
 ```powershell
-python -m pip install pypdf
+.\.venv\Scripts\python.exe -m pip install pypdf
 ```
 
 ## 3.1 重要提示：禁止 pip 安装到用户目录（强制）
 有些环境的 pip 被配置为默认 `--user`，会把依赖装到：
 `C:\Users\用户名\AppData\Roaming\Python\Python312\site-packages`
-而不是 conda 环境目录，导致 PyCharm 报“未解析的引用”，或者运行时混用包路径。
+而不是仓库本地 `.venv`，导致 PyCharm 报“未解析的引用”，或者运行时混用包路径。
 
 **建议做法（强制）**：
 ```powershell
-conda activate campus-sage
-python -m pip config set global.user false
-python -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip config set global.user false
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 **禁止行为（强制）**：
 - 禁止执行 `pip install --user ...`
 - 禁止让 Codex / 其他 AI 工具安装到 `C:\Users\用户名\AppData\Roaming\Python\...`
-- 环境异常时必须先修复 Conda 环境，不得以用户级安装“临时通过”
+- 环境异常时必须先修复仓库本地 `.venv`，不得以用户级安装“临时通过”
 
-**核对路径**（必须确保在 conda 环境内）：
+**核对路径**（必须确保在仓库本地 `.venv` 内）：
 ```powershell
-python -c "import fastapi, uvicorn; print(fastapi.__file__); print(uvicorn.__file__)"
+.\.venv\Scripts\python.exe -c "import fastapi, uvicorn; print(fastapi.__file__); print(uvicorn.__file__)"
 ```
 期望输出路径类似：
-`D:\Anaconda3\envs\campus-sage\Lib\site-packages\...`
+`D:\myproject\campus-sage\.venv\Lib\site-packages\...`
 
 **强制隔离 user-site（推荐立即执行）**：
 ```powershell
-conda activate campus-sage
-conda env config vars set PYTHONNOUSERSITE=1
-conda deactivate
-conda activate campus-sage
+$env:PYTHONNOUSERSITE="1"
 ```
-可用下面命令确认 `rq/redis` 已从 conda 环境加载：
+可用下面命令确认 `rq/redis` 已从 `.venv` 加载：
 ```powershell
-python -c "import rq, redis; print(rq.__file__); print(redis.__file__)"
+.\.venv\Scripts\python.exe -c "import rq, redis; print(rq.__file__); print(redis.__file__)"
 ```
 期望输出路径均位于：
-`D:\Anaconda3\envs\campus-sage\Lib\site-packages\...`
+`D:\myproject\campus-sage\.venv\Lib\site-packages\...`
 
 如果发现依赖装到了用户目录，先卸载再重装：
 ```powershell
-python -m pip uninstall -y fastapi uvicorn
-python -m pip install --no-user -r requirements.txt
+.\.venv\Scripts\python.exe -m pip uninstall -y fastapi uvicorn
+.\.venv\Scripts\python.exe -m pip install --no-user -r requirements.txt
 ```
 
 如需清理用户目录中的历史污染包，可按需执行：
 ```powershell
-python -m pip uninstall -y fastapi starlette rq rq-dashboard
+.\.venv\Scripts\python.exe -m pip uninstall -y fastapi starlette rq rq-dashboard
 ```
 
 ## 3.2 依赖冲突提示的处理方式
@@ -97,8 +92,8 @@ python -m pip uninstall -y fastapi starlette rq rq-dashboard
 说明环境里存在无关包残留。当前项目代码不依赖这些包，建议直接卸载以保持环境干净：
 
 ```powershell
-python -m pip uninstall -y python-docx python-pptx sqlalchemy
-python -m pip check
+.\.venv\Scripts\python.exe -m pip uninstall -y python-docx python-pptx sqlalchemy
+.\.venv\Scripts\python.exe -m pip check
 ```
 如未来确实需要这些库，再按需安装缺失依赖即可。
 
@@ -127,12 +122,12 @@ INGEST_QUEUE_NAME=ingest
 ```
 3) 启动 RQ Worker（跨平台推荐命令，已内置 Windows 兼容超时机制）：
 ```powershell
-python -m app.ingest.worker_runner --queue ingest
+.\.venv\Scripts\python.exe -m app.ingest.worker_runner --queue ingest
 ```
 
 如需执行一次后退出（排障常用）：
 ```powershell
-python -m app.ingest.worker_runner --queue ingest --burst
+.\.venv\Scripts\python.exe -m app.ingest.worker_runner --queue ingest --burst
 ```
 
 ## 5.2 启用队列监控面板（可选）
@@ -142,8 +137,8 @@ python -m app.ingest.worker_runner --queue ingest --burst
 
 也可以安装并启动 RQ Dashboard（需安装额外依赖）：
 ```powershell
-pip install rq-dashboard
-rq-dashboard -b 0.0.0.0:9181 -u redis://127.0.0.1:6379/0
+.\.venv\Scripts\python.exe -m pip install rq-dashboard
+.\.venv\Scripts\rq-dashboard.exe -b 0.0.0.0:9181 -u redis://127.0.0.1:6379/0
 ```
 
 或直接挂载到 API 服务（需要设置环境变量）：
@@ -156,7 +151,7 @@ INGEST_QUEUE_DASHBOARD_ENABLED=true
 
 ## 6. 启动 FastAPI
 ```powershell
-uvicorn app.main:app --reload
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
 打开：
@@ -165,14 +160,14 @@ uvicorn app.main:app --reload
 ## 6.1 创建管理员账号
 首次使用需创建管理员账号：
 ```powershell
-python scripts/create_admin.py --email admin@example.com --password Admin1234
+.\.venv\Scripts\python.exe scripts/create_admin.py --email admin@example.com --password Admin1234
 ```
 
 
 ## 7. 运行质量门禁
 ```powershell
-ruff check .
-pytest -q
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
 ## 7.1 SQLite 迁移排查
@@ -180,7 +175,7 @@ pytest -q
 - 若你本地保留了较早阶段的 `csage.db`，启动后应自动生成 `schema_migration` 表并补齐缺失列。
 - 可用以下命令快速检查迁移状态：
 ```powershell
-python -c "import sqlite3; conn=sqlite3.connect('./data/csage.db'); print(conn.execute('SELECT version, name FROM schema_migration ORDER BY version').fetchall())"
+.\.venv\Scripts\python.exe -c "import sqlite3; conn=sqlite3.connect('./data/csage.db'); print(conn.execute('SELECT version, name FROM schema_migration ORDER BY version').fetchall())"
 ```
 - 若数据库文件已损坏或历史结构异常，优先备份后删除本地 SQLite 文件，再重启服务让系统重建；不要手工跳过迁移记录。
 - 若你怀疑服务实际加载的配置与 `.env` 不一致，可登录后访问 `GET /api/v1/monitor/runtime` 检查当前 schema 版本、上传配置和关键开关。
@@ -198,12 +193,12 @@ python -c "import sqlite3; conn=sqlite3.connect('./data/csage.db'); print(conn.e
 
 执行评测：
 ```powershell
-python scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --topk 5
+.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --topk 5
 ```
 
 执行参数对比实验：
 ```powershell
-python scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true
+.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true
 ```
 说明：
 - `--threshold` 与 `--rerank-enabled` 现在也可用于单次评测。
@@ -217,7 +212,7 @@ python scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --com
 
 若你还没有对齐好的评测集，可先导出知识库中的文档清单：
 ```powershell
-python scripts/export_eval_inventory.py --kb-id kb_123
+.\.venv\Scripts\python.exe scripts/export_eval_inventory.py --kb-id kb_123
 ```
 补充说明：
 - 该脚本会直接读取 Qdrant payload，输出 `doc_name / doc_id / page_start_min / page_end_max / section_path_examples`。
@@ -225,7 +220,7 @@ python scripts/export_eval_inventory.py --kb-id kb_123
 
 若你想直接搭一套可复现的实验基线，可执行：
 ```powershell
-python scripts/bootstrap_demo_academic_kb.py
+.\.venv\Scripts\python.exe scripts/bootstrap_demo_academic_kb.py
 ```
 补充说明：
 - 该脚本会调用本地 API，登录默认管理员 `admin@example.com / Admin1234`，创建“高校教务示例知识库”并上传 `docs/examples/academic_demo_corpus/` 中的示例文档。
@@ -233,16 +228,24 @@ python scripts/bootstrap_demo_academic_kb.py
 
 若你希望先从学校官网抓取公开真实语料，再人工筛选入库，可执行：
 ```powershell
-python scripts/crawl_suse_public_corpus.py
+.\.venv\Scripts\python.exe scripts/crawl_suse_public_corpus.py
 ```
 补充说明：
 - 当前脚本默认抓取四川轻化工大学主站通知公告、教务处、学生工作部、研究生院、后勤保障部等公开栏目。
 - 抓取结果默认写入 `data/crawl/suse_public_<时间戳>/`，页面保存为 Markdown，附件原样下载，并在 `manifest.json` 中记录 `source_uri`。
 - 该脚本只抓公开页面与公开附件，不会尝试登录或进入校内权限系统。
 
+若你想减少对主站公告的依赖，优先构建更适合 RAG 的专题语料集，可执行：
+```powershell
+.\.venv\Scripts\python.exe scripts/crawl_suse_public_corpus.py --profile rag_topics --site-codes jwc,xsc,yjs
+```
+补充说明：
+- `rag_topics` 会提高 `jwc/xsc/yjs` 的抓取配额，并压低主站公告与后勤站点的默认配额。
+- `--site-codes jwc,xsc,yjs` 会只抓教务处、学生工作部、研究生院三个专题站点，适合做教务/学工/研究生问答知识库。
+
 若你已经抓到官网公开语料，希望直接做“二次清洗 + 列表页详情补抓 + 自动入库”，可执行：
 ```powershell
-python scripts/bootstrap_suse_public_kb.py --crawl-dir data\crawl\suse_public_<时间戳> --kb-name 四川轻化工大学真实官网语料知识库
+.\.venv\Scripts\python.exe scripts/bootstrap_suse_public_kb.py --crawl-dir data\crawl\suse_public_<时间戳> --kb-name 四川轻化工大学真实官网语料知识库
 ```
 补充说明：
 - 该脚本会自动过滤空页、重复页、不可入库格式和超大附件，只保留当前后端支持的 `PDF/DOCX/HTML/Markdown/TXT`。
@@ -309,7 +312,7 @@ LOCAL_EMBEDDING_NORMALIZE=true
 ## 10. 启用 Qdrant 向量库
 1. 安装依赖：
 ```powershell
-pip install qdrant-client
+.\.venv\Scripts\python.exe -m pip install qdrant-client
 ```
 2. 设置环境变量：
 ```
@@ -421,8 +424,7 @@ npm run dev -- --host 127.0.0.1 --port 4174
 ```
 若本地数据库为空，可执行：
 ```powershell
-conda activate campus-sage
-python scripts/create_admin.py --email admin@example.com --password Admin1234
+.\.venv\Scripts\python.exe scripts/create_admin.py --email admin@example.com --password Admin1234
 ```
 
 ### 13.5 演示流程

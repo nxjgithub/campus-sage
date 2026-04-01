@@ -42,6 +42,7 @@ BLOCKED_KEYWORDS = ("login", "slogin", "search", "javascript:", "mailto:", "tel:
 DEFAULT_HEADERS = {
     "User-Agent": "CampusSageCrawler/1.0 (+https://www.suse.edu.cn/)",
 }
+SUPPORTED_PROFILES = ("balanced", "rag_topics")
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +151,17 @@ def main() -> None:
         help="输出目录，默认写入 data/crawl/suse_public_<时间戳>",
     )
     parser.add_argument(
+        "--profile",
+        choices=SUPPORTED_PROFILES,
+        default="balanced",
+        help="抓取配置档位：balanced 为通用抓取，rag_topics 为专题语料优先",
+    )
+    parser.add_argument(
+        "--site-codes",
+        default=None,
+        help="仅抓取指定站点，使用逗号分隔，例如 jwc,xsc,yjs",
+    )
+    parser.add_argument(
         "--max-pages-per-site",
         type=int,
         default=16,
@@ -185,7 +197,11 @@ def main() -> None:
     sites = build_default_sites(
         max_pages=max(1, args.max_pages_per_site),
         max_attachments=max(0, args.max_attachments_per_site),
+        profile=args.profile,
+        site_codes=parse_site_codes(args.site_codes),
     )
+    if not sites:
+        raise SystemExit("未匹配到任何抓取站点，请检查 --site-codes 参数")
     all_documents: list[CrawlDocument] = []
     with httpx.Client(
         timeout=max(3.0, args.timeout_s),
@@ -223,71 +239,218 @@ def configure_stdout() -> None:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
-def build_default_sites(*, max_pages: int, max_attachments: int) -> list[SeedSite]:
+def build_default_sites(
+    *,
+    max_pages: int,
+    max_attachments: int,
+    profile: str = "balanced",
+    site_codes: set[str] | None = None,
+) -> list[SeedSite]:
     """构建默认抓取站点配置。"""
 
-    return [
-        SeedSite(
-            name="学校主站通知公告",
-            site_code="main_notice",
-            allowed_host="www.suse.edu.cn",
-            seeds=[
+    normalized_profile = normalize_profile(profile)
+    selected_codes = site_codes or set()
+    specs = [
+        (
+            "学校主站通知公告",
+            "main_notice",
+            "www.suse.edu.cn",
+            [
                 "https://www.suse.edu.cn/61/list.htm",
             ],
-            max_pages=max_pages,
-            max_attachments=max_attachments,
-        ),
-        SeedSite(
-            name="教务处",
-            site_code="jwc",
-            allowed_host="jwc.suse.edu.cn",
-            seeds=[
-                "http://jwc.suse.edu.cn/3404/list.htm",
-                "http://jwc.suse.edu.cn/3408/list.htm",
-                "http://jwc.suse.edu.cn/3410/list.htm",
-                "http://jwc.suse.edu.cn/tzgg/list.htm",
+            [
+                "https://www.suse.edu.cn/61/list.htm",
             ],
-            max_pages=max_pages,
-            max_attachments=max_attachments,
         ),
-        SeedSite(
-            name="党委学生工作部",
-            site_code="xsc",
-            allowed_host="xsc.suse.edu.cn",
-            seeds=[
-                "http://xsc.suse.edu.cn/tzgg/list.htm",
-                "http://xsc.suse.edu.cn/wzgz/list.htm",
-                "http://xsc.suse.edu.cn/sxjy/list.htm",
+        (
+            "教务处",
+            "jwc",
+            "jwc.suse.edu.cn",
+            [
+                "https://jwc.suse.edu.cn/tzgg/list.htm",
+                "https://jwc.suse.edu.cn/jwgg/list.htm",
+                "https://jwc.suse.edu.cn/gzzz/list.htm",
+                "https://jwc.suse.edu.cn/jcgl/list.htm",
+                "https://jwc.suse.edu.cn/jxcg/list.htm",
+                "https://jwc.suse.edu.cn/kssz/list.htm",
+                "https://jwc.suse.edu.cn/zysz/list.htm",
+                "https://jwc.suse.edu.cn/tszy/list.htm",
+                "https://jwc.suse.edu.cn/gjzcfg_3548/list.htm",
+                "https://jwc.suse.edu.cn/rclc/list.htm",
+                "https://jwc.suse.edu.cn/cjzs/list.htm",
+                "https://jwc.suse.edu.cn/xl/list.htm",
+                "https://jwc.suse.edu.cn/zxsj/list.htm",
+                "https://jwc.suse.edu.cn/jwxw/list.htm",
             ],
-            max_pages=max_pages,
-            max_attachments=max_attachments,
+            [
+                "https://jwc.suse.edu.cn/tzgg/list.htm",
+                "https://jwc.suse.edu.cn/jwgg/list.htm",
+                "https://jwc.suse.edu.cn/gzzz/list.htm",
+                "https://jwc.suse.edu.cn/jcgl/list.htm",
+                "https://jwc.suse.edu.cn/jxcg/list.htm",
+                "https://jwc.suse.edu.cn/kssz/list.htm",
+                "https://jwc.suse.edu.cn/zysz/list.htm",
+                "https://jwc.suse.edu.cn/tszy/list.htm",
+                "https://jwc.suse.edu.cn/gjzcfg_3548/list.htm",
+                "https://jwc.suse.edu.cn/rclc/list.htm",
+                "https://jwc.suse.edu.cn/cjzs/list.htm",
+                "https://jwc.suse.edu.cn/xl/list.htm",
+                "https://jwc.suse.edu.cn/zxsj/list.htm",
+            ],
         ),
-        SeedSite(
-            name="研究生院",
-            site_code="yjs",
-            allowed_host="yjs.suse.edu.cn",
-            seeds=[
+        (
+            "党委学生工作部",
+            "xsc",
+            "xsc.suse.edu.cn",
+            [
+                "https://xsc.suse.edu.cn/tzgg/list.htm",
+                "https://xsc.suse.edu.cn/tzgg_5198/list.htm",
+                "https://xsc.suse.edu.cn/wzgz/list.htm",
+                "https://xsc.suse.edu.cn/zzgl/list.htm",
+                "https://xsc.suse.edu.cn/zzzc/list.htm",
+                "https://xsc.suse.edu.cn/xldt/list.htm",
+                "https://xsc.suse.edu.cn/xlyz/list.htm",
+                "https://xsc.suse.edu.cn/xlzx/list.htm",
+                "https://xsc.suse.edu.cn/yjsgl/list.htm",
+                "https://xsc.suse.edu.cn/zdwj/list.htm",
+                "https://xsc.suse.edu.cn/zlxz/list.htm",
+                "https://xsc.suse.edu.cn/xzzx/list.htm",
+                "https://xsc.suse.edu.cn/872/list.htm",
+                "https://xsc.suse.edu.cn/859/list.htm",
+                "https://xsc.suse.edu.cn/sxjy/list.htm",
+            ],
+            [
+                "https://xsc.suse.edu.cn/tzgg/list.htm",
+                "https://xsc.suse.edu.cn/tzgg_5198/list.htm",
+                "https://xsc.suse.edu.cn/wzgz/list.htm",
+                "https://xsc.suse.edu.cn/zzgl/list.htm",
+                "https://xsc.suse.edu.cn/zzzc/list.htm",
+                "https://xsc.suse.edu.cn/xlyz/list.htm",
+                "https://xsc.suse.edu.cn/xlzx/list.htm",
+                "https://xsc.suse.edu.cn/yjsgl/list.htm",
+                "https://xsc.suse.edu.cn/zdwj/list.htm",
+                "https://xsc.suse.edu.cn/zlxz/list.htm",
+                "https://xsc.suse.edu.cn/xzzx/list.htm",
+                "https://xsc.suse.edu.cn/872/list.htm",
+                "https://xsc.suse.edu.cn/859/list.htm",
+                "https://xsc.suse.edu.cn/sxjy/list.htm",
+            ],
+        ),
+        (
+            "研究生院",
+            "yjs",
+            "yjs.suse.edu.cn",
+            [
                 "https://yjs.suse.edu.cn/gsgg/list.htm",
-                "https://yjs.suse.edu.cn/bszn/list.htm",
-                "https://yjs.suse.edu.cn/gzzd/list.htm",
+                "https://yjs.suse.edu.cn/zsjz/list.htm",
                 "https://yjs.suse.edu.cn/zcfg/list.htm",
+                "https://yjs.suse.edu.cn/pygl/list.htm",
+                "https://yjs.suse.edu.cn/xxgg/list.htm",
+                "https://yjs.suse.edu.cn/dsgz/list.htm",
+                "https://yjs.suse.edu.cn/gzzd/list.htm",
+                "https://yjs.suse.edu.cn/bszn/list.htm",
+                "https://yjs.suse.edu.cn/zsgz_2402/list.htm",
+                "https://yjs.suse.edu.cn/pygl_2403/list.htm",
+                "https://yjs.suse.edu.cn/xwgl_2404/list.htm",
+                "https://yjs.suse.edu.cn/xwdt/list.htm",
+                "https://yjs.suse.edu.cn/zxgg/list.htm",
             ],
-            max_pages=max_pages,
-            max_attachments=max_attachments,
+            [
+                "https://yjs.suse.edu.cn/gsgg/list.htm",
+                "https://yjs.suse.edu.cn/zsjz/list.htm",
+                "https://yjs.suse.edu.cn/zcfg/list.htm",
+                "https://yjs.suse.edu.cn/pygl/list.htm",
+                "https://yjs.suse.edu.cn/xxgg/list.htm",
+                "https://yjs.suse.edu.cn/dsgz/list.htm",
+                "https://yjs.suse.edu.cn/gzzd/list.htm",
+                "https://yjs.suse.edu.cn/bszn/list.htm",
+                "https://yjs.suse.edu.cn/zsgz_2402/list.htm",
+                "https://yjs.suse.edu.cn/pygl_2403/list.htm",
+                "https://yjs.suse.edu.cn/xwgl_2404/list.htm",
+                "https://yjs.suse.edu.cn/zxgg/list.htm",
+            ],
         ),
-        SeedSite(
-            name="后勤保障部",
-            site_code="hgc",
-            allowed_host="hgc.suse.edu.cn",
-            seeds=[
-                "http://hgc.suse.edu.cn/1027/list.htm",
-                "http://hgc.suse.edu.cn/1033/list.htm",
-                "http://hgc.suse.edu.cn/1034/list.htm",
+        (
+            "后勤保障部",
+            "hgc",
+            "hgc.suse.edu.cn",
+            [
+                "https://hgc.suse.edu.cn/1027/list.htm",
+                "https://hgc.suse.edu.cn/1033/list.htm",
+                "https://hgc.suse.edu.cn/1034/list.htm",
             ],
-            max_pages=max_pages,
-            max_attachments=max_attachments,
+            [
+                "https://hgc.suse.edu.cn/1027/list.htm",
+                "https://hgc.suse.edu.cn/1033/list.htm",
+                "https://hgc.suse.edu.cn/1034/list.htm",
+            ],
         ),
     ]
+
+    sites: list[SeedSite] = []
+    for name, site_code, allowed_host, balanced_seeds, topic_seeds in specs:
+        if selected_codes and site_code not in selected_codes:
+            continue
+        resolved_pages, resolved_attachments = resolve_site_limits(
+            profile=normalized_profile,
+            site_code=site_code,
+            max_pages=max_pages,
+            max_attachments=max_attachments,
+        )
+        seeds = topic_seeds if normalized_profile == "rag_topics" else balanced_seeds
+        sites.append(
+            SeedSite(
+                name=name,
+                site_code=site_code,
+                allowed_host=allowed_host,
+                seeds=seeds,
+                max_pages=resolved_pages,
+                max_attachments=resolved_attachments,
+            )
+        )
+    return sites
+
+
+def normalize_profile(raw_profile: str) -> str:
+    """规范化抓取配置档位。"""
+
+    candidate = (raw_profile or "balanced").strip().lower()
+    if candidate not in SUPPORTED_PROFILES:
+        return "balanced"
+    return candidate
+
+
+def parse_site_codes(raw_site_codes: str | None) -> set[str] | None:
+    """解析命令行传入的站点白名单。"""
+
+    if raw_site_codes is None:
+        return None
+    items = {
+        item.strip().lower()
+        for item in raw_site_codes.split(",")
+        if item.strip()
+    }
+    return items or None
+
+
+def resolve_site_limits(
+    *,
+    profile: str,
+    site_code: str,
+    max_pages: int,
+    max_attachments: int,
+) -> tuple[int, int]:
+    """根据抓取档位为不同站点分配页面与附件上限。"""
+
+    if profile != "rag_topics":
+        return max_pages, max_attachments
+    if site_code in {"jwc", "xsc", "yjs"}:
+        return max_pages, max_attachments
+    if site_code == "main_notice":
+        return max(20, min(max_pages // 4, 60)), max(0, min(max_attachments // 4, 12))
+    if site_code == "hgc":
+        return max(10, min(max_pages // 5, 40)), max(0, min(max_attachments // 5, 8))
+    return max_pages, max_attachments
 
 
 def crawl_site(

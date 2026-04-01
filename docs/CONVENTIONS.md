@@ -159,8 +159,8 @@ API 层统一捕获并映射 HTTP 状态码
 2. 必须提供 .env.example（不含密钥）。
 3. 禁止硬编码：Qdrant/vLLM 地址、模型名、TopK、阈值、上下文 token 上限等都要可配置。
 4. 依赖版本要可复现（pyproject/requirements 固定范围），升级依赖需写变更说明。
-5. Python 依赖安装与测试命令必须在 Conda 环境 `campus-sage` 内执行，禁止使用系统 Python 混跑。
-6. 严禁用户级安装（`pip install --user`）；若环境权限不足，应先修复 Conda 环境而不是回退到用户目录安装。
+5. Python 依赖安装与测试命令必须在仓库本地 `.venv` 内执行，禁止使用系统 Python 混跑。
+6. 严禁用户级安装（`pip install --user`）；若环境权限不足，应先修复 `.venv` 或其依赖，而不是回退到用户目录安装。
 
 ## 11. Git 与提交规范（强制）
 1. 禁止提交：.idea/、.env、.venv/、__pycache__/、日志、权重、大数据文件。

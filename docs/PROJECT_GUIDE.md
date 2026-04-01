@@ -61,7 +61,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - `tests/`：后端测试
 - `docs/`：全局文档
 - `docs/frontend/`：前端规范文档
-- `frontend/`：前端工程目录（后续创建）
+- `frontend/`：前端工程目录
 - `docker-compose.yml`：依赖服务编排
 
 
@@ -88,28 +88,29 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 
 ## 5. 开发命令参考
 ### 5.1 后端
-- 安装依赖：`conda run -n campus-sage pip install -r requirements.txt`
+- 安装依赖：`.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
 - 启动依赖：`docker compose up -d`
 - 容器化启动后端 + Worker：`docker compose up -d api worker qdrant redis`
-- 启动 API：`conda run -n campus-sage uvicorn app.main:app --reload`
-- 代码检查：`conda run -n campus-sage ruff check .`
-- 单元测试：`conda run -n campus-sage pytest -q`
-- 运行评测：`conda run -n campus-sage python scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --topk 5`
-- 运行参数对比实验：`conda run -n campus-sage python scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true`
-- 评测前导出知识库文档清单：`conda run -n campus-sage python scripts/export_eval_inventory.py --kb-id <kb_id>`
-- 一键导入示例校园语料：`conda run -n campus-sage python scripts/bootstrap_demo_academic_kb.py`
-- 抓取学校官网公开语料：`conda run -n campus-sage python scripts/crawl_suse_public_corpus.py`
-- 清洗公开抓取结果并自动导入知识库：`conda run -n campus-sage python scripts/bootstrap_suse_public_kb.py --crawl-dir data/crawl/suse_public_<时间戳> --kb-name 四川轻化工大学真实官网语料知识库`
+- 启动 API：`.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
+- 代码检查：`.\.venv\Scripts\python.exe -m ruff check .`
+- 单元测试：`.\.venv\Scripts\python.exe -m pytest -q`
+- 运行评测：`.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --topk 5`
+- 运行参数对比实验：`.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true`
+- 评测前导出知识库文档清单：`.\.venv\Scripts\python.exe scripts/export_eval_inventory.py --kb-id <kb_id>`
+- 一键导入示例校园语料：`.\.venv\Scripts\python.exe scripts/bootstrap_demo_academic_kb.py`
+- 抓取学校官网公开语料：`.\.venv\Scripts\python.exe scripts/crawl_suse_public_corpus.py`
+- 抓取更适合 RAG 的专题语料集：`.\.venv\Scripts\python.exe scripts/crawl_suse_public_corpus.py --profile rag_topics --site-codes jwc,xsc,yjs`
+- 清洗公开抓取结果并自动导入知识库：`.\.venv\Scripts\python.exe scripts/bootstrap_suse_public_kb.py --crawl-dir data/crawl/suse_public_<时间戳> --kb-name 四川轻化工大学真实官网语料知识库`
 - 样例评测集：`docs/examples/eval_set_academic_affairs_v1.json`
 - 示例 Markdown 语料：`docs/examples/academic_demo_corpus/`
 - 配套 Markdown 评测集：`docs/examples/eval_set_academic_affairs_demo_md.json`
 
 说明：
 - 若未启动 Qdrant/Redis，相关集成测试可能被跳过或返回依赖不可用错误，这属于可预期行为。
-- 所有 Python 命令默认在 Conda 环境 `campus-sage` 执行；禁止 `pip --user` 用户级安装。
+- 所有 Python 命令默认使用仓库本地 `.venv` 执行；禁止 `pip --user` 用户级安装。
 - 开发环境必须禁用 user-site（`PYTHONNOUSERSITE=1`），避免从 `AppData\Roaming\Python\...` 混入用户级包。
 
-### 5.2 前端（工程创建后）
+### 5.2 前端
 - 安装依赖：`pnpm install`
 - 本地开发：`pnpm dev`
 - 代码检查：`pnpm lint`

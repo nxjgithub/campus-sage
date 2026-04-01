@@ -1,7 +1,7 @@
 # AGENTS.md — 给 Codex / AI Agent 的仓库级工作约束（必须遵守）
 
 本项目：CampusSage（CSage）— Evidence-grounded University Knowledge Assistant（RAG）  
-当前技术栈：FastAPI + VectorDB(Qdrant 默认) + vLLM + OpenAI 兼容 Embedding（后端）+ React 前端规划文档（待实现）
+当前技术栈：FastAPI + VectorDB(Qdrant 默认) + vLLM + OpenAI 兼容 Embedding（后端）+ React 前端（已落地）
 
 > 目标：让 AI Agent 产出的代码“能跑、可测、可维护、可追溯”，并可用于毕业设计答辩演示。
 
@@ -14,7 +14,7 @@
 5. 严禁提交 IDE 文件与本地机密：`.idea/`、`.env`、模型权重、大体积数据、日志。
 6. 任何 RAG 回答必须有证据引用；证据不足必须拒答，不允许编造。
 7. 修改行为必须同步文档，禁止“代码变了但文档没变”。
-8. Python 相关操作（`python/pip/ruff/pytest`）必须在 Conda 虚拟环境 `campus-sage` 中执行，禁止在系统解释器执行。
+8. Python 相关操作（`python/pip/ruff/pytest`）必须使用仓库本地虚拟环境 `.venv` 执行，禁止在系统解释器执行。
 9. 严禁安装用户级 Python 包（禁止 `pip install --user` 或写入 `AppData\Roaming\Python\...`）；包括 Codex 在内的所有 AI 工具都不得绕过此约束。
 
 
@@ -31,7 +31,7 @@
 - `tests/`：后端 pytest 测试
 - `docs/`：设计与规范文档
 - `docs/frontend/`：前端规范文档
-- `frontend/`：前端工程（后续创建）
+- `frontend/`：前端工程
 - `scripts/`：一次性脚本
 
 约束：
@@ -42,15 +42,15 @@
 
 ## 2. 开发与验证命令（按改动范围执行）
 后端改动必须执行：
-- `ruff check .`
-- `pytest -q`
-- 评测相关改动附加执行：`python scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --topk 5`
+- `.\.venv\Scripts\python.exe -m ruff check .`
+- `.\.venv\Scripts\python.exe -m pytest -q`
+- 评测相关改动附加执行：`.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --topk 5`
 
 环境约束（强制）：
-- 执行以上命令前必须确保已激活 `conda activate campus-sage`（或使用 `conda run -n campus-sage ...`）。
-- 若环境不可用，必须先报错说明，不得退化为 `pip --user` 安装依赖。
+- 执行以上命令前必须确保当前命令使用仓库本地 `.venv\Scripts\python.exe`（或先激活 `.\.venv\Scripts\Activate.ps1`）。
+- 若 `.venv` 不可用，必须先报错说明或修复 `.venv`，不得退化为系统 Python 或 `pip --user` 安装依赖。
 
-前端改动（`frontend/` 建立后）必须执行：
+前端改动必须执行：
 - `pnpm lint`
 - `pnpm typecheck`
 - `pnpm test`
