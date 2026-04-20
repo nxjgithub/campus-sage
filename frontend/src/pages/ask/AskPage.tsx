@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DeleteOutlined, EditOutlined, HistoryOutlined, LoginOutlined, LogoutOutlined, MessageOutlined, PlusOutlined, SearchOutlined, SendOutlined, StopOutlined } from "@ant-design/icons";
 import {
   Alert,
@@ -90,6 +90,18 @@ const COMPOSER_STATUS_COLOR: Record<ComposerStatus, string> = {
   stopping: "warning",
   failed: "error"
 };
+
+const QUESTION_STARTERS = [
+  "研究生复试需要准备哪些材料？",
+  "补考申请有哪些条件和流程？",
+  "奖学金评定通常参考哪些要求？"
+];
+
+const QUALITY_PROMISES = [
+  { label: "证据定位", value: "文档名、页码或章节、片段" },
+  { label: "拒答边界", value: "证据不足时给出下一步建议" },
+  { label: "过程回放", value: "会话、引用、反馈可追踪" }
+];
 
 function toThreadMessage(item: ConversationMessage): ThreadMessage {
   return {
@@ -1040,15 +1052,29 @@ export function AskPage() {
             }
           >
             <div className="brand-block chat-sidebar-brand">
-              <Typography.Title level={4} className="brand-title">
-                CampusSage
-              </Typography.Title>
-              <Typography.Text className="brand-subtitle">用户端</Typography.Text>
+              <div className="brand-lockup">
+                <span className="brand-mark" aria-hidden="true">CS</span>
+                <div className="brand-copy">
+                  <Typography.Title level={4} className="brand-title">
+                    CampusSage
+                  </Typography.Title>
+                  <Typography.Text className="brand-description">证据问答工作台</Typography.Text>
+                </div>
+              </div>
+              <div className="chat-sidebar-brand__status">
+                <span>引用优先</span>
+                <span>拒答可追踪</span>
+              </div>
             </div>
           </Tooltip>
-          <Typography.Title level={5} className="chat-sidebar-section-title">
-            你的聊天
-          </Typography.Title>
+          <div className="chat-sidebar-section-head">
+            <Typography.Title level={5} className="chat-sidebar-section-title">
+              你的聊天
+            </Typography.Title>
+            <span className="chat-sidebar-count">
+              {hasAccessToken ? conversationItems.length : 0}
+            </span>
+          </div>
 
           <div className="chat-sidebar-controls">
             <Select
@@ -1080,31 +1106,34 @@ export function AskPage() {
               <Tooltip title="新建会话">
                 <Button
                   type="primary"
-                  shape="circle"
                   icon={<PlusOutlined />}
                   aria-label="新建会话"
                   onClick={() => void startNewChat()}
                   disabled={isBusy || !kbId}
-                />
+                >
+                  新建
+                </Button>
               </Tooltip>
               <Tooltip title="重命名会话">
                 <Button
-                  shape="circle"
                   icon={<EditOutlined />}
                   aria-label="重命名会话"
                   onClick={openRenameDialog}
                   disabled={!activeConversationId || isBusy}
-                />
+                >
+                  改名
+                </Button>
               </Tooltip>
               <Tooltip title="删除会话">
                 <Button
                   danger
-                  shape="circle"
                   icon={<DeleteOutlined />}
                   aria-label="删除会话"
                   onClick={handleDeleteConversation}
                   disabled={!activeConversationId || isBusy}
-                />
+                >
+                  删除
+                </Button>
               </Tooltip>
             </div>
           </div>
@@ -1199,7 +1228,20 @@ export function AskPage() {
         </div>
       </Card>
 
-      <Card className="chat-thread-card" title={<Space size={8}><MessageOutlined /><span>智能问答</span></Space>}>
+      <Card
+        className="chat-thread-card"
+        title={
+          <div className="chat-thread-card-title">
+            <Space size={8}>
+              <MessageOutlined />
+              <span>智能问答</span>
+            </Space>
+            <Typography.Text className="chat-thread-card-title__desc">
+              基于知识库证据生成回答，证据不足时给出拒答建议。
+            </Typography.Text>
+          </div>
+        }
+      >
         <div className="chat-thread-head">
           <div className="chat-thread-titlebar">
             <Space wrap>
@@ -1209,6 +1251,11 @@ export function AskPage() {
             <Typography.Text className="chat-thread-kicker">
               点回答看引用
             </Typography.Text>
+          </div>
+          <div className="chat-thread-highlights" aria-label="问答能力">
+            <span>证据引用</span>
+            <span>拒答建议</span>
+            <span>反馈回收</span>
           </div>
         </div>
 
@@ -1278,10 +1325,41 @@ export function AskPage() {
           {threadStatus === "loading" ? <Skeleton active paragraph={{ rows: 7 }} /> : null}
           {threadStatus === "error" ? <Alert type="error" showIcon message="消息加载失败" /> : null}
           {threadStatus === "empty" ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={activeConversationId ? "当前会话暂无消息" : "开始提问，生成第一条消息"}
-            />
+            <div className="chat-empty-panel">
+              <div className="chat-empty-panel__main">
+                <div className="chat-empty-panel__mark" aria-hidden="true">
+                  <MessageOutlined />
+                </div>
+                <Typography.Title level={3} className="chat-empty-panel__title">
+                  {activeConversationId ? "当前会话暂无消息" : "开始一次有证据的校园问答"}
+                </Typography.Title>
+                <Typography.Paragraph className="chat-empty-panel__desc">
+                  选择知识库后输入问题，回答会保留引用编号；证据不足时会给出下一步建议。
+                </Typography.Paragraph>
+                <div className="chat-empty-panel__prompts">
+                  {QUESTION_STARTERS.map((question) => (
+                    <button
+                      key={question}
+                      type="button"
+                      className="chat-empty-prompt"
+                      onClick={() => {
+                        setComposerText(question);
+                      }}
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="chat-empty-panel__assurance" aria-label="证据问答约束">
+                {QUALITY_PROMISES.map((item) => (
+                  <div key={item.label} className="chat-empty-assurance-item">
+                    <span className="chat-empty-assurance-item__label">{item.label}</span>
+                    <span className="chat-empty-assurance-item__value">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : null}
 
           {threadStatus === "success"
@@ -1403,7 +1481,12 @@ export function AskPage() {
               }}
             />
             <div className="chat-composer-actions">
-              <Typography.Text type="secondary">引用编号会保留在回答里。</Typography.Text>
+              <div className="chat-composer-meta">
+                <Typography.Text type="secondary">引用编号会保留在回答里。</Typography.Text>
+                {selectedKbName ? (
+                  <span className="chat-composer-meta__kb">{selectedKbName}</span>
+                ) : null}
+              </div>
               <Space>
                 <Button
                   type="primary"

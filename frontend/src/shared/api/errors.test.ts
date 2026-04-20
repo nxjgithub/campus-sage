@@ -51,6 +51,24 @@ describe("normalizeApiError", () => {
     const result = normalizeApiError(error);
     expect(result.request_id).toBe("req_header_2");
   });
+
+  it("应将缺少统一错误体的 500 响应归一为服务内部异常", () => {
+    const error = {
+      isAxiosError: true,
+      code: "ERR_BAD_RESPONSE",
+      message: "Request failed with status code 500",
+      response: {
+        status: 500,
+        data: {},
+        headers: AxiosHeaders.from({ "x-request-id": "req_header_500" })
+      }
+    } as AxiosError;
+
+    const result = normalizeApiError(error);
+    expect(result.code).toBe("UNEXPECTED_ERROR");
+    expect(resolveApiErrorDisplay(result).summary).toBe("服务内部异常，请稍后重试。");
+    expect(result.request_id).toBe("req_header_500");
+  });
 });
 
 describe("resolveApiErrorDisplay", () => {

@@ -116,18 +116,25 @@ export function PortalLayout({
             }
           >
             <div className="brand-block">
-              <Space size={8} wrap>
+              <div className="brand-lockup">
+                <span className="brand-mark" aria-hidden="true">CS</span>
+                <div className="brand-copy">
+                  <Typography.Title level={4} className="brand-title">
+                    CampusSage
+                  </Typography.Title>
+                  <Typography.Text className="brand-description">{panelDescription}</Typography.Text>
+                </div>
+              </div>
+              <Space size={8} wrap className="brand-meta-row">
                 <Typography.Text className="brand-kicker">{panelLabel}</Typography.Text>
                 <Tag bordered={false} color={panelRole === "admin" ? "processing" : "cyan"}>
                   {resolvePortalTone(activePortal)}
                 </Tag>
               </Space>
-              <Typography.Title level={4} className="brand-title">
-                CampusSage
-              </Typography.Title>
             </div>
           </Tooltip>
 
+          <div className="nav-section-label">工作台</div>
           <Menu
             mode="inline"
             selectedKeys={[resolveSelectedKey(location.pathname, navItems)]}
@@ -143,6 +150,7 @@ export function PortalLayout({
                     <span className="nav-menu-icon">{NAV_ICONS[item.iconKey]}</span>
                     <span className="nav-menu-copy">
                       <span className="nav-menu-label__title">{item.label}</span>
+                      <span className="nav-menu-label__desc">{item.description}</span>
                     </span>
                   </span>
                 </Tooltip>
@@ -154,6 +162,7 @@ export function PortalLayout({
           />
 
           <div className="menu-footer menu-footer--user">
+            <Typography.Text className="menu-footer-label">当前身份</Typography.Text>
             <Typography.Text className="menu-footer-value">
               {isAuthenticated ? user?.email ?? "已登录用户" : "匿名访问"}
             </Typography.Text>
@@ -167,6 +176,7 @@ export function PortalLayout({
                 </span>
               </Tooltip>
             </div>
+            <Typography.Text className="menu-footer-route">{routeTitle}</Typography.Text>
             <div className="menu-footer-actions">
               {canSwitchPortal ? (
                 <PortalSwitch

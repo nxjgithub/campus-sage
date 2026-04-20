@@ -192,6 +192,29 @@ function resolveRequestIdFromHeaders(error: AxiosError): string | null {
 }
 
 export function normalizeApiError(error: unknown): ApiErrorShape {
+  if (axios.isAxiosError(error)) {
+    const axiosError = error as AxiosError<{
+      error?: { code?: string; message?: string; detail?: unknown };
+      request_id?: string | null;
+    }>;
+    const payload = axiosError.response?.data;
+    const status = axiosError.response?.status;
+    const fallbackCode = axiosError.response
+      ? status && status >= 500
+        ? "UNEXPECTED_ERROR"
+        : "UNKNOWN_ERROR"
+      : "NETWORK_ERROR";
+    const fallbackMessage =
+      fallbackCode === "NETWORK_ERROR" ? "网络连接失败" : "请求处理失败";
+    const code = payload?.error?.code ?? fallbackCode;
+    const message = payload?.error?.message ?? fallbackMessage;
+    return {
+      code,
+      message,
+      detail: payload?.error?.detail,
+      request_id: payload?.request_id ?? resolveRequestIdFromHeaders(axiosError)
+    };
+  }
   if (
     error &&
     typeof error === "object" &&
@@ -211,21 +234,6 @@ export function normalizeApiError(error: unknown): ApiErrorShape {
       message: record.message,
       detail: record.detail,
       request_id: record.request_id ?? null
-    };
-  }
-  if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{
-      error?: { code?: string; message?: string; detail?: unknown };
-      request_id?: string | null;
-    }>;
-    const payload = axiosError.response?.data;
-    const code = payload?.error?.code ?? "NETWORK_ERROR";
-    const message = payload?.error?.message ?? axiosError.message ?? "请求失败";
-    return {
-      code,
-      message,
-      detail: payload?.error?.detail,
-      request_id: payload?.request_id ?? resolveRequestIdFromHeaders(axiosError)
     };
   }
   if (error instanceof Error) {
