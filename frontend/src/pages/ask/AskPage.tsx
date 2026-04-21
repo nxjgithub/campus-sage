@@ -97,12 +97,6 @@ const QUESTION_STARTERS = [
   "奖学金评定通常参考哪些要求？"
 ];
 
-const COMPOSER_SHORTCUTS = [
-  { label: "复试材料", value: QUESTION_STARTERS[0] },
-  { label: "补考流程", value: QUESTION_STARTERS[1] },
-  { label: "奖学金要求", value: QUESTION_STARTERS[2] }
-];
-
 const QUALITY_PROMISES = [
   { label: "证据定位", value: "文档名、页码或章节、片段" },
   { label: "拒答边界", value: "证据不足时给出下一步建议" },
@@ -299,11 +293,6 @@ export function AskPage() {
     () => conversationQuery.data?.items ?? [],
     [conversationQuery.data?.items]
   );
-  const activeConversation = useMemo(
-    () =>
-      conversationItems.find((item) => item.conversation_id === activeConversationId) ?? null,
-    [activeConversationId, conversationItems]
-  );
 
   useEffect(() => {
     if (kbId || !kbQuery.data?.items.length) {
@@ -365,39 +354,6 @@ export function AskPage() {
     const matched = assistantMessages.find((item) => messageKey(item) === activeAssistantKey);
     return matched ?? assistantMessages[assistantMessages.length - 1];
   }, [activeAssistantKey, assistantMessages]);
-  const selectedAssistantCitationCount = selectedAssistant?.citations.length ?? 0;
-
-  const answeredCount = useMemo(
-    () => assistantMessages.filter((item) => !item.refusal && !item.pending).length,
-    [assistantMessages]
-  );
-
-  const refusedCount = useMemo(
-    () => assistantMessages.filter((item) => Boolean(item.refusal)).length,
-    [assistantMessages]
-  );
-
-  const pendingCount = useMemo(
-    () => assistantMessages.filter((item) => item.pending).length,
-    [assistantMessages]
-  );
-
-  const citedAnswerCount = useMemo(
-    () => assistantMessages.filter((item) => item.citations.length > 0).length,
-    [assistantMessages]
-  );
-
-  const totalCitationCount = useMemo(
-    () => assistantMessages.reduce((sum, item) => sum + item.citations.length, 0),
-    [assistantMessages]
-  );
-
-  const citationCoverage = useMemo(() => {
-    if (!assistantMessages.length) {
-      return 0;
-    }
-    return Math.round((citedAnswerCount / assistantMessages.length) * 100);
-  }, [assistantMessages.length, citedAnswerCount]);
 
   const latestAssistantContent = assistantMessages[assistantMessages.length - 1]?.content ?? "";
 
@@ -1045,7 +1001,6 @@ export function AskPage() {
     const items = kbQuery.data?.items ?? [];
     return items.find((item) => item.kb_id === kbId)?.name ?? null;
   }, [kbId, kbQuery.data?.items]);
-  const kbCount = kbQuery.data?.items.length ?? 0;
 
   return (
     <div className="chat-shell">
@@ -1078,26 +1033,6 @@ export function AskPage() {
                 <span>引用优先</span>
                 <span>拒答可追踪</span>
               </div>
-              <div className="chat-sidebar-brand__overview">
-                <div className="chat-sidebar-brand__overview-item">
-                  <span className="chat-sidebar-brand__overview-label">知识库</span>
-                  <span className="chat-sidebar-brand__overview-value">
-                    {selectedKbName ?? `${kbCount} 个可选`}
-                  </span>
-                </div>
-                <div className="chat-sidebar-brand__overview-item">
-                  <span className="chat-sidebar-brand__overview-label">会话模式</span>
-                  <span className="chat-sidebar-brand__overview-value">
-                    {hasAccessToken ? "可追踪回放" : "游客即时问答"}
-                  </span>
-                </div>
-                <div className="chat-sidebar-brand__overview-item">
-                  <span className="chat-sidebar-brand__overview-label">当前上下文</span>
-                  <span className="chat-sidebar-brand__overview-value">
-                    {activeConversation ? "接续已有会话" : "准备新问题"}
-                  </span>
-                </div>
-              </div>
             </div>
           </Tooltip>
           <div className="chat-sidebar-section-head">
@@ -1110,15 +1045,6 @@ export function AskPage() {
           </div>
 
           <div className="chat-sidebar-controls">
-            <div className="chat-sidebar-controls__head">
-              <div className="chat-sidebar-controls__copy">
-                <span className="chat-sidebar-controls__eyebrow">工作上下文</span>
-                <Typography.Text strong>先选知识库，再继续会话</Typography.Text>
-              </div>
-              <Tag bordered={false} color={selectedKbName ? "geekblue" : "default"}>
-                {selectedKbName ? "已绑定知识库" : "待选择"}
-              </Tag>
-            </div>
             <Select
               showSearch
               allowClear
@@ -1212,21 +1138,11 @@ export function AskPage() {
                       setThreadError(null);
                     }}
                   >
-                    <div className="chat-sidebar-item__head">
-                      <span className="chat-sidebar-item__title">{item.title || "未命名会话"}</span>
-                      <span className="chat-sidebar-item__badge">
-                        {activeConversationId === item.conversation_id ? "当前" : "历史"}
-                      </span>
-                    </div>
+                    <span className="chat-sidebar-item__title">{item.title || "未命名会话"}</span>
                     <span className="chat-sidebar-item__preview">{summarizeConversation(item)}</span>
-                    <div className="chat-sidebar-item__footer">
-                      <span className="chat-sidebar-item__time">
-                        {compactTime(item.last_message_at ?? item.updated_at)}
-                      </span>
-                      <span className="chat-sidebar-item__hint">
-                        {activeConversationId === item.conversation_id ? "查看中" : "继续查看"}
-                      </span>
-                    </div>
+                    <span className="chat-sidebar-item__time">
+                      {compactTime(item.last_message_at ?? item.updated_at)}
+                    </span>
                   </button>
                 ))
               : null}
@@ -1295,89 +1211,18 @@ export function AskPage() {
         }
       >
         <div className="chat-thread-head">
-          <div className="chat-thread-intro">
-            <div className="chat-thread-titlebar">
-              <Space wrap>
-                {selectedKbName ? <Tag color="geekblue">知识库：{selectedKbName}</Tag> : null}
-                <Tag color={COMPOSER_STATUS_COLOR[composerStatus]} className="chat-status-tag">
-                  状态：{COMPOSER_STATUS_LABEL[composerStatus]}
-                </Tag>
-              </Space>
-              <Typography.Text className="chat-thread-kicker">
-                点回答看引用
-              </Typography.Text>
-            </div>
-            <Typography.Paragraph className="chat-thread-summary">
-              {selectedKbName
-                ? `当前围绕「${selectedKbName}」进行证据问答，回答会优先保留引用编号与定位信息。`
-                : "先选择知识库，再发起问题；系统会优先返回带证据编号的答案与拒答建议。"}
-            </Typography.Paragraph>
-          </div>
-          <div className="chat-thread-highlights" aria-label="问答能力">
-            <span>证据引用</span>
-            <span>拒答建议</span>
-            <span>反馈回收</span>
-          </div>
-          <div className="chat-thread-kpis" aria-label="问答概览">
-            <div className="chat-thread-kpi">
-              <span className="chat-thread-kpi__label">会话状态</span>
-              <span className="chat-thread-kpi__value">
-                {activeConversation ? "已接续" : "新会话"}
-              </span>
-            </div>
-            <div className="chat-thread-kpi">
-              <span className="chat-thread-kpi__label">可用知识库</span>
-              <span className="chat-thread-kpi__value">{kbCount}</span>
-            </div>
-            <div className="chat-thread-kpi">
-              <span className="chat-thread-kpi__label">当前引用</span>
-              <span className="chat-thread-kpi__value">{selectedAssistantCitationCount}</span>
-            </div>
+          <div className="chat-thread-titlebar">
+            <Space wrap>
+              {selectedKbName ? <Tag color="geekblue">知识库：{selectedKbName}</Tag> : null}
+              <Tag color={COMPOSER_STATUS_COLOR[composerStatus]} className="chat-status-tag">
+                {COMPOSER_STATUS_LABEL[composerStatus]}
+              </Tag>
+            </Space>
+            <Typography.Text className="chat-thread-kicker">
+              引用编号可打开证据面板
+            </Typography.Text>
           </div>
         </div>
-
-        {threadStatus === "success" && threadMessages.length ? (
-          <div className="chat-insight-strip">
-            <div className="chat-insight-strip__items">
-              <div className="chat-insight-pill">
-                <span className="chat-insight-pill__label">消息</span>
-                <span className="chat-insight-pill__value">{threadMessages.length}</span>
-              </div>
-              <div className="chat-insight-pill">
-                <span className="chat-insight-pill__label">回答 / 拒答</span>
-                <span className="chat-insight-pill__value">
-                  {answeredCount} / {refusedCount}
-                </span>
-              </div>
-              <div className="chat-insight-pill">
-                <span className="chat-insight-pill__label">证据覆盖</span>
-                <span className="chat-insight-pill__value">{citationCoverage}%</span>
-              </div>
-              <div className="chat-insight-pill">
-                <span className="chat-insight-pill__label">引用总数</span>
-                <span className="chat-insight-pill__value">{totalCitationCount}</span>
-              </div>
-              {pendingCount ? (
-                <div className="chat-insight-pill">
-                  <span className="chat-insight-pill__label">生成中</span>
-                  <span className="chat-insight-pill__value">{pendingCount}</span>
-                </div>
-              ) : null}
-            </div>
-            <div className="chat-insight-strip__coverage">
-              <div className="chat-insight-strip__coverage-meta">
-                <span>有引用回答 {citedAnswerCount}</span>
-                <span>覆盖率 {citationCoverage}%</span>
-              </div>
-              <div className="chat-insight-strip__coverage-track" aria-hidden="true">
-                <div
-                  className="chat-insight-strip__coverage-fill"
-                  style={{ width: `${citationCoverage}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        ) : null}
 
         {threadError ? <RequestErrorAlert error={threadError} /> : null}
         {messagesError ? <RequestErrorAlert error={messagesError} /> : null}
@@ -1433,12 +1278,6 @@ export function AskPage() {
                 </div>
               </div>
               <div className="chat-empty-panel__assurance" aria-label="证据问答约束">
-                <div className="chat-empty-panel__assurance-head">
-                  <span className="chat-empty-panel__assurance-title">可信回答约束</span>
-                  <span className="chat-empty-panel__assurance-state">
-                    {selectedKbName ? "已绑定知识库" : "待选择知识库"}
-                  </span>
-                </div>
                 {QUALITY_PROMISES.map((item) => (
                   <div key={item.label} className="chat-empty-assurance-item">
                     <span className="chat-empty-assurance-item__label">{item.label}</span>
@@ -1485,22 +1324,6 @@ export function AskPage() {
                       </Space>
                       <Typography.Text type="secondary">{compactTime(item.created_at)}</Typography.Text>
                     </header>
-                    <div className="chat-bubble__meta">
-                      {item.role === "assistant" ? (
-                        <>
-                          <span>
-                            {item.citations.length
-                              ? `引用 ${item.citations.length} 条`
-                              : item.refusal
-                                ? "证据不足已拒答"
-                                : "等待引用写回"}
-                          </span>
-                          <span>{item.refusal ? "已生成下一步建议" : "点击消息查看证据面板"}</span>
-                        </>
-                      ) : (
-                        <span>{selectedKbName ? `已提交到 ${selectedKbName}` : "问题已提交"}</span>
-                      )}
-                    </div>
                     <Typography.Paragraph className="chat-bubble__content">
                       {item.role === "assistant"
                         ? renderWithMarkers(item.content, (citationId) => {
@@ -1565,15 +1388,6 @@ export function AskPage() {
 
         <div className="chat-composer-shell">
           <div className="chat-composer">
-            <div className="chat-composer__header">
-              <div className="chat-composer__copy">
-                <span className="chat-composer__eyebrow">提问区</span>
-                <Typography.Text strong>围绕单一事务提问，答案会保留引用编号。</Typography.Text>
-              </div>
-              <Tag bordered={false} color={selectedKbName ? "geekblue" : "default"}>
-                {selectedKbName ? "已选知识库" : "请先选择知识库"}
-              </Tag>
-            </div>
             <Input.TextArea
               value={composerText}
               autoSize={{ minRows: 3, maxRows: 8 }}
@@ -1592,20 +1406,6 @@ export function AskPage() {
                 void handleSend();
               }}
             />
-            <div className="chat-composer-quick-actions" aria-label="示例问题快捷填充">
-              {COMPOSER_SHORTCUTS.map((shortcut) => (
-                <button
-                  key={shortcut.label}
-                  type="button"
-                  className="chat-composer-quick-action"
-                  onClick={() => {
-                    setComposerText(shortcut.value);
-                  }}
-                >
-                  {shortcut.label}
-                </button>
-              ))}
-            </div>
             <div className="chat-composer-actions">
               <div className="chat-composer-meta">
                 <Typography.Text type="secondary">引用编号会保留在回答里。</Typography.Text>

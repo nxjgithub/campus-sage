@@ -567,7 +567,7 @@ export function UsersPage() {
             <Select mode="multiple" options={roleOptions} />
           </Form.Item>
           <Form.Item name="password" label="重置密码（可选）">
-            <Input.Password placeholder="留空表示不修改" />
+            <Input.Password placeholder="留空表示不修改" autoComplete="new-password" />
           </Form.Item>
         </Form>
       </Modal>

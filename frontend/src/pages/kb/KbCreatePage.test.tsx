@@ -22,7 +22,10 @@ function renderWithProviders(node: ReactNode) {
   });
 
   return render(
-    <MemoryRouter initialEntries={["/admin/kb/create"]}>
+    <MemoryRouter
+      initialEntries={["/admin/kb/create"]}
+      future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+    >
       <QueryClientProvider client={queryClient}>
         <AntdApp>{node}</AntdApp>
       </QueryClientProvider>

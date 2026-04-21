@@ -43,10 +43,13 @@ vi.mock("../../shared/auth/auth", () => ({
 }));
 
 function renderWithRouter(initialEntries: string[], routes: Parameters<typeof createMemoryRouter>[0]) {
-  const router = createMemoryRouter(routes, { initialEntries });
+  const router = createMemoryRouter(routes, {
+    initialEntries,
+    future: { v7_relativeSplatPath: true }
+  });
   return render(
     <AntdApp>
-      <RouterProvider router={router} />
+      <RouterProvider router={router} future={{ v7_startTransition: true }} />
     </AntdApp>
   );
 }

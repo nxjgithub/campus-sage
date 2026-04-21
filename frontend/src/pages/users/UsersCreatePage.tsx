@@ -163,14 +163,14 @@ export function UsersCreatePage() {
                     { type: "email", message: "邮箱格式不正确" }
                   ]}
                 >
-                  <Input placeholder="user@example.com" />
+                  <Input placeholder="user@example.com" autoComplete="email" />
                 </Form.Item>
                 <Form.Item
                   name="password"
                   label="初始密码"
                   rules={[{ required: true, message: "请输入初始密码" }]}
                 >
-                  <Input.Password placeholder="建议包含字母和数字" />
+                  <Input.Password placeholder="建议包含字母和数字" autoComplete="new-password" />
                 </Form.Item>
                 <Form.Item
                   name="roles"

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Card, Col, Form, Input, Row, Space, Typography, message } from "antd";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
@@ -71,6 +71,20 @@ export function LoginPage() {
                   评测与监控闭环，便于持续优化质量
                 </Typography.Text>
               </Space>
+              <div className="login-proof-grid" aria-label="产品能力概览">
+                <div className="login-proof-item">
+                  <span className="login-proof-item__value">RAG</span>
+                  <span className="login-proof-item__label">证据问答</span>
+                </div>
+                <div className="login-proof-item">
+                  <span className="login-proof-item__value">RBAC</span>
+                  <span className="login-proof-item__label">权限治理</span>
+                </div>
+                <div className="login-proof-item">
+                  <span className="login-proof-item__value">Eval</span>
+                  <span className="login-proof-item__label">质量评测</span>
+                </div>
+              </div>
             </Space>
           </Card>
         </Col>
@@ -145,6 +159,10 @@ export function LoginPage() {
                 开发环境提示：若登录失败，请确认后端已启动且本地代理配置正确。
               </Typography.Text>
             ) : null}
+            <div className="login-security-strip" aria-label="登录安全提示">
+              <span>登录后按角色进入对应工作台</span>
+              <span>错误信息会保留可追踪 request_id</span>
+            </div>
           </Card>
         </Col>
       </Row>

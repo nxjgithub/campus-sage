@@ -1,6 +1,6 @@
 import { PropsWithChildren } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { App as AntdApp } from "antd";
+import AntdApp from "antd/es/app";
 import { queryClient } from "../../shared/api/queryClient";
 import { AuthProvider } from "../../shared/auth/auth";
 

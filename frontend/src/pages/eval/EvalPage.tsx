@@ -37,6 +37,9 @@ export function EvalPage() {
   const [fetchRunForm] = Form.useForm<FetchRunFormValues>();
   const [recentSets] = useState<RecentEvalSetOption[]>(() => readRecentEvalSets());
   const [recentRuns, setRecentRuns] = useState<RecentEvalRunOption[]>(() => readRecentEvalRuns());
+  const [selectedRunId, setSelectedRunId] = useState<string | undefined>(
+    () => searchParams.get("runId") ?? undefined
+  );
   const [runDetail, setRunDetail] = useState<EvalRunResponse | null>(null);
   const [tableDensity, setTableDensity] = useState<TableDensity>("small");
 
@@ -57,6 +60,7 @@ export function EvalPage() {
   useEffect(() => {
     if (prefilledRunId) {
       fetchRunForm.setFieldValue("run_id", prefilledRunId);
+      setSelectedRunId(prefilledRunId);
     }
   }, [fetchRunForm, prefilledRunId]);
 
@@ -85,6 +89,7 @@ export function EvalPage() {
       });
       setRecentRuns(nextRecentRuns);
       fetchRunForm.setFieldValue("run_id", data.run_id);
+      setSelectedRunId(data.run_id);
       updateSearchParams({
         evalSetId: data.eval_set_id,
         runId: data.run_id
@@ -108,6 +113,7 @@ export function EvalPage() {
         created_at: data.created_at
       });
       setRecentRuns(nextRecentRuns);
+      setSelectedRunId(data.run_id);
       updateSearchParams({
         evalSetId: data.eval_set_id,
         runId: data.run_id
@@ -359,12 +365,11 @@ export function EvalPage() {
                   shape="circle"
                   icon={<ReloadOutlined />}
                   onClick={() => {
-                    const runId = fetchRunForm.getFieldValue("run_id");
-                    if (runId) {
-                      fetchRunMutation.mutate(runId);
+                    if (selectedRunId) {
+                      fetchRunMutation.mutate(selectedRunId);
                     }
                   }}
-                  disabled={!fetchRunForm.getFieldValue("run_id")}
+                  disabled={!selectedRunId}
                   loading={fetchRunMutation.isPending}
                   aria-label="刷新当前评测结果"
                 />
@@ -375,6 +380,9 @@ export function EvalPage() {
             <Form<FetchRunFormValues>
               form={fetchRunForm}
               layout="inline"
+              onValuesChange={(_, values) => {
+                setSelectedRunId(values.run_id);
+              }}
               onFinish={(values) => {
                 fetchRunMutation.mutate(values.run_id);
               }}

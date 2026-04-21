@@ -1,5 +1,11 @@
 # STATE_AND_INTERACTION.md
 
+## 0. 通用状态视觉补充
+- `loading` 使用统一加载壳层和骨架内容，避免只显示单个默认 spinner。
+- `empty` 需要说明当前无数据的原因和下一步产生数据的方式。
+- `error` 需要保留用户可读摘要、下一步建议、错误码和可复制 `request_id`。
+- 通用状态只解释当前状态，不新增业务提交入口。
+
 ## 1. 通用状态模型
 每个页面或模块必须至少处理以下四态：
 - `loading`
@@ -137,3 +143,9 @@
   - `/admin/users` 与 `/admin/users/create` 拆分
   - `/admin/documents` 与 `/admin/documents/upload` 拆分
   - `/admin/eval` 与 `/admin/eval/create` 拆分
+
+## 13. 认证路由补充（2026-04 浏览器检查轮）
+- 受保护路由必须在 `auth_loading` 完成前保持统一加载壳层，不得提前重定向到登录页。
+- 管理端子路由需要保留用户直接访问的目标路径；未登录时跳转登录页必须携带 `next`，登录成功后回到原目标。
+- 已登录用户访问 `/login` 时可以按角色回到默认工作台，但不得影响直接打开 `/admin/users`、`/admin/documents` 等子页面。
+- 路由加载态必须使用项目统一 `route-loading` 壳层，避免组件库开发期警告暴露在控制台。

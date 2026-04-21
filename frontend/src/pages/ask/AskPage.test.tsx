@@ -1,4 +1,4 @@
-﻿import { ReactNode } from "react";
+import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -63,7 +63,7 @@ function renderWithProviders(node: ReactNode) {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
         <AntdApp>{node}</AntdApp>
       </MemoryRouter>
     </QueryClientProvider>
@@ -312,10 +312,10 @@ describe("AskPage 聊天交互", () => {
     );
   });
 
-  it("底部快捷问题应可直接回填输入框", async () => {
+  it("空态示例问题应可直接回填输入框", async () => {
     renderWithProviders(<AskPage />);
 
-    await userEvent.click(await screen.findByRole("button", { name: "复试材料" }));
+    await userEvent.click(await screen.findByRole("button", { name: "研究生复试需要准备哪些材料？" }));
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/请输入你的问题|请输入问题/)).toHaveValue(

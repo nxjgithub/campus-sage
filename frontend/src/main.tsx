@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { ConfigProvider } from "antd";
+import ConfigProvider from "antd/es/config-provider";
 import { AppProviders } from "./app/providers/AppProviders";
 import { AppRouter } from "./app/router";
 import "./shared/styles/tokens.css";

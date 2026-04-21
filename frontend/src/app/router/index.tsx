@@ -1,14 +1,19 @@
-﻿import { lazy, Suspense } from "react";
-import { Spin } from "antd";
+import { lazy, Suspense } from "react";
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
 import { useAuth } from "../../shared/auth/auth";
 import { getRoleHomePath } from "../../shared/auth/role";
-import { AdminLayout } from "../layouts/AdminLayout";
-import { UserLayout } from "../layouts/UserLayout";
 import { RequireAuth } from "./RequireAuth";
 import { RequireRole } from "./RequireRole";
-import { LoginPage } from "../../pages/auth/LoginPage";
 
+const AdminLayout = lazy(async () =>
+  import("../layouts/AdminLayout").then((mod) => ({ default: mod.AdminLayout }))
+);
+const UserLayout = lazy(async () =>
+  import("../layouts/UserLayout").then((mod) => ({ default: mod.UserLayout }))
+);
+const LoginPage = lazy(async () =>
+  import("../../pages/auth/LoginPage").then((mod) => ({ default: mod.LoginPage }))
+);
 const KbPage = lazy(async () =>
   import("../../pages/kb/KbPage").then((mod) => ({ default: mod.KbPage }))
 );
@@ -47,34 +52,23 @@ const MonitorPage = lazy(async () =>
   import("../../pages/monitor/MonitorPage").then((mod) => ({ default: mod.MonitorPage }))
 );
 
-const ASK_LAYOUT_HANDLE = {
-  layout: {
-    hideGlobalSider: true
-  }
-} as const;
+function RouteFallback({ label }: { label: string }) {
+  return (
+    <div className="route-loading" role="status" aria-live="polite">
+      <span className="route-loading__indicator" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  );
+}
 
 function withSuspense(element: JSX.Element) {
-  return (
-    <Suspense
-      fallback={
-        <div style={{ display: "grid", placeItems: "center", minHeight: 260 }}>
-          <Spin size="large" tip="页面加载中" />
-        </div>
-      }
-    >
-      {element}
-    </Suspense>
-  );
+  return <Suspense fallback={<RouteFallback label="页面加载中" />}>{element}</Suspense>;
 }
 
 function HomeRedirect() {
   const { status, isAuthenticated, role } = useAuth();
   if (status === "loading") {
-    return (
-      <div style={{ display: "grid", placeItems: "center", minHeight: 260 }}>
-        <Spin size="large" tip="认证状态加载中" />
-      </div>
-    );
+    return <RouteFallback label="认证状态加载中" />;
   }
   if (isAuthenticated) {
     return <Navigate to={getRoleHomePath(role)} replace />;
@@ -82,57 +76,67 @@ function HomeRedirect() {
   return <Navigate to="/app/ask" replace />;
 }
 
-const router = createBrowserRouter([
+const router = createBrowserRouter(
+  [
+    {
+      path: "/",
+      element: <HomeRedirect />
+    },
+    {
+      path: "/login",
+      element: withSuspense(<LoginPage />)
+    },
+    {
+      path: "/app/ask",
+      element: withSuspense(<AskPage />)
+    },
+    {
+      path: "/admin",
+      element: (
+        <RequireRole allow="admin">
+          {withSuspense(<AdminLayout />)}
+        </RequireRole>
+      ),
+      children: [
+        { index: true, element: <Navigate to="/admin/kb" replace /> },
+        { path: "kb", element: withSuspense(<KbPage />) },
+        { path: "kb/create", element: withSuspense(<KbCreatePage />) },
+        { path: "users", element: withSuspense(<UsersPage />) },
+        { path: "users/create", element: withSuspense(<UsersCreatePage />) },
+        { path: "documents", element: withSuspense(<DocumentsPage />) },
+        { path: "documents/upload", element: withSuspense(<DocumentsUploadPage />) },
+        { path: "eval", element: withSuspense(<EvalPage />) },
+        { path: "eval/create", element: withSuspense(<EvalCreatePage />) },
+        { path: "monitor", element: withSuspense(<MonitorPage />) }
+      ]
+    },
+    {
+      path: "/app",
+      element: withSuspense(<UserLayout />),
+      children: [
+        { index: true, element: <Navigate to="/app/ask" replace /> },
+        {
+          path: "conversations",
+          element: (
+            <RequireAuth>
+              {withSuspense(<ConversationsPage />)}
+            </RequireAuth>
+          )
+        }
+      ]
+    },
+    {
+      path: "*",
+      element: <Navigate to="/" replace />
+    }
+  ],
   {
-    path: "/",
-    element: <HomeRedirect />
-  },
-  {
-    path: "/login",
-    element: <LoginPage />
-  },
-  {
-    path: "/admin",
-    element: (
-      <RequireRole allow="admin">
-        <AdminLayout />
-      </RequireRole>
-    ),
-    children: [
-      { index: true, element: <Navigate to="/admin/kb" replace /> },
-      { path: "kb", element: withSuspense(<KbPage />) },
-      { path: "kb/create", element: withSuspense(<KbCreatePage />) },
-      { path: "users", element: withSuspense(<UsersPage />) },
-      { path: "users/create", element: withSuspense(<UsersCreatePage />) },
-      { path: "documents", element: withSuspense(<DocumentsPage />) },
-      { path: "documents/upload", element: withSuspense(<DocumentsUploadPage />) },
-      { path: "eval", element: withSuspense(<EvalPage />) },
-      { path: "eval/create", element: withSuspense(<EvalCreatePage />) },
-      { path: "monitor", element: withSuspense(<MonitorPage />) }
-    ]
-  },
-  {
-    path: "/app",
-    element: <UserLayout />,
-    children: [
-      { index: true, element: <Navigate to="/app/ask" replace /> },
-      { path: "ask", element: withSuspense(<AskPage />), handle: ASK_LAYOUT_HANDLE },
-      {
-        path: "conversations",
-        element: (
-          <RequireAuth>
-            {withSuspense(<ConversationsPage />)}
-          </RequireAuth>
-        )
-      }
-    ]
-  },
-  {
-    path: "*",
-    element: <Navigate to="/" replace />
+    future: {
+      v7_relativeSplatPath: true
+    }
   }
-]);
+);
 
 export function AppRouter() {
-  return <RouterProvider router={router} />;
+  return <RouterProvider router={router} future={{ v7_startTransition: true }} />;
 }

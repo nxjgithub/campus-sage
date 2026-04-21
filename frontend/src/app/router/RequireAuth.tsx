@@ -1,5 +1,4 @@
 ﻿import { Navigate, useLocation } from "react-router-dom";
-import { Spin } from "antd";
 import { useAuth } from "../../shared/auth/auth";
 
 interface RequireAuthProps {
@@ -12,8 +11,9 @@ export function RequireAuth({ children }: RequireAuthProps) {
 
   if (status === "loading") {
     return (
-      <div style={{ display: "grid", placeItems: "center", minHeight: 240 }}>
-        <Spin size="large" tip="认证状态加载中" />
+      <div className="route-loading" role="status" aria-live="polite">
+        <span className="route-loading__indicator" aria-hidden="true" />
+        <span>认证状态加载中</span>
       </div>
     );
   }
