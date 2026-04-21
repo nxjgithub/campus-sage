@@ -311,4 +311,16 @@ describe("AskPage 聊天交互", () => {
       "noopener,noreferrer"
     );
   });
+
+  it("底部快捷问题应可直接回填输入框", async () => {
+    renderWithProviders(<AskPage />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "复试材料" }));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/请输入你的问题|请输入问题/)).toHaveValue(
+        "研究生复试需要准备哪些材料？"
+      );
+    });
+  });
 });

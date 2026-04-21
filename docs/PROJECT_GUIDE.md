@@ -96,6 +96,9 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 单元测试：`.\.venv\Scripts\python.exe -m pytest -q`
 - 运行评测：`.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --topk 5`
 - 运行参数对比实验：`.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true`
+- 若需要逐题排查召回、阈值与排序问题，可为 `run_eval.py` 追加 `--show-items` 输出明细。
+- `run_eval.py` 输出中现附带 `diagnostics` 摘要，可快速判断是否存在阈值误杀与重排收益。
+- 若评测环境与当前 API 运行参数不同，可为 `run_eval.py` 显式追加 `--embedding-backend`、`--embedding-base-url`、`--vector-backend`、`--qdrant-url` 覆盖项，避免脚本直接沿用 `.env` 导致联调错位。
 - 评测前导出知识库文档清单：`.\.venv\Scripts\python.exe scripts/export_eval_inventory.py --kb-id <kb_id>`
 - 一键导入示例校园语料：`.\.venv\Scripts\python.exe scripts/bootstrap_demo_academic_kb.py`
 - 抓取学校官网公开语料：`.\.venv\Scripts\python.exe scripts/crawl_suse_public_corpus.py`
@@ -186,6 +189,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 前端错误归一化已修正 Axios 500 误识别问题，缺少统一错误体的服务端异常也会展示中文主提示，并保留错误码与请求 ID 作为排障信息。
 - 业务工作台风格已升级：侧栏导航显示模块说明，品牌区改为紧凑产品标识，问答空态提供示例问题和证据链说明，关键会话操作改为文字按钮，整体更贴近主流 SaaS 后台场景。
 - 前端高级质感继续增强：问答首屏补充证据约束与拒答策略说明，输入区增加当前知识库上下文，侧栏、表格、按钮和键盘焦点态统一为轻量企业级反馈。
+- 问答页现进一步补齐“侧栏上下文概览 + 主线程摘要 KPI + 底部快捷问题胶囊”三段式结构，首屏更易说明知识库范围、证据路径和当前会话状态，视觉层级也更接近正式产品工作台。
 
 ## 后端近期更新（2026-03 数据层）
 - SQLite 初始化已重构为显式版本迁移，迁移入口位于 `app/db/migrations.py`，启动时自动执行。
@@ -206,6 +210,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 ## 后端近期更新（2026-03 检索优化）
 - `SimpleReranker` 已改为融合正文短语命中、文档标题命中与章节路径命中的启发式重排，适合高校教务类中文问句。
 - 重排仍以向量分数作为并列排序兜底，避免仅靠词面命中把明显无关的候选抬到前面。
+- 开启 `rerank_enabled` 时，检索层现会先放大候选池，再执行重排并截回最终 `topk`，避免重排没有足够候选可排。
 - 已补充 `tests/test_reranker.py`，覆盖“正文精确命中优先”“标题/章节命中优先”“空问题不改序”三类回归场景。
 - 新增 `scripts/export_eval_inventory.py`，可从 Qdrant 直接导出知识库中的文档名、页码范围与章节路径样本，降低离线评测集对齐成本。
 - 新增 `scripts/bootstrap_demo_academic_kb.py` 与配套示例语料，可在空环境中快速构建第二阶段参数实验基线。

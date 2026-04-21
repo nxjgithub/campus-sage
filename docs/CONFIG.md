@@ -70,6 +70,8 @@
 - `RAG_MIN_EVIDENCE_CHUNKS`：默认 1（最少有效证据数）
 - `RAG_MIN_CONTEXT_CHARS`：默认 20（最少上下文字符数）
 - `RAG_MIN_KEYWORD_COVERAGE`：默认 0.3（关键词覆盖率阈值）
+- `RAG_RERANK_CANDIDATE_MULTIPLIER`：默认 4（启用重排时的候选池放大倍数）
+- `RAG_RERANK_CANDIDATE_CAP`：默认 40（启用重排时的候选池上限）
 - `RAG_STALE_WARNING_DAYS`：默认 730（时效问题下，证据发布日期超过该天数将追加“请核验最新公告”提示）
 - `CHUNK_SIZE`：默认 500（分块大小，字符数）
 - `CHUNK_OVERLAP`：默认 100（分块重叠，字符数）
@@ -81,6 +83,10 @@
 - `min_evidence_chunks`：`>=1` 且不能大于 `topk`
 - `min_context_chars`：`>=1`
 - `min_keyword_coverage`：`0~1`
+
+说明：
+- 当 `rerank_enabled=true` 时，系统会先按 `RAG_RERANK_CANDIDATE_MULTIPLIER` 放大检索候选池，再执行启发式重排，最后截回最终 `topk`。
+- 若本地 Embedding 质量一般，可适度提高该候选池；但过大也会带来额外延迟。
 
 
 ## 6. 上传与存储

@@ -27,6 +27,7 @@ from app.rag.dialog_policy import (
 from app.rag.dto import AskResult, CitationDTO, NextStepDTO
 from app.rag.embedding import Embedder, get_embedder
 from app.rag.llm_client import VllmClient
+from app.rag.retrieval_policy import resolve_search_topk
 from app.rag.reranker import SimpleReranker
 from app.rag.vector_store import VectorHit, VectorStore, get_vector_store
 
@@ -458,14 +459,28 @@ class RagService:
                 slots=intent_decision.slots,
             )
         query_vector = self._embedder.embed_query(question)
+        search_topk = resolve_search_topk(
+            final_topk=resolved_topk,
+            rerank_enabled=resolved_rerank_enabled,
+            rerank_candidate_multiplier=self._settings.rag_rerank_candidate_multiplier,
+            rerank_candidate_cap=self._settings.rag_rerank_candidate_cap,
+        )
         retrieve_start = time.perf_counter()
         hits = self._vector_store.search(
             kb_id=kb.kb_id,
             query_vector=query_vector,
-            topk=resolved_topk,
+            topk=search_topk,
             filters=filters,
         )
         retrieve_ms = int((time.perf_counter() - retrieve_start) * 1000)
+
+        rerank_ms = 0
+        if resolved_rerank_enabled:
+            rerank_start = time.perf_counter()
+            hits = self._reranker.rerank(normalized_question, hits)
+            rerank_ms = int((time.perf_counter() - rerank_start) * 1000)
+        hits = hits[:resolved_topk]
+
         refusal_reason = self._get_refusal_reason(
             normalized_question,
             hits,
@@ -489,7 +504,7 @@ class RagService:
                 citations=[],
                 timing={
                     "retrieve_ms": retrieve_ms,
-                    "rerank_ms": 0,
+                    "rerank_ms": rerank_ms,
                     "context_ms": 0,
                     "generate_ms": 0,
                     "total_ms": total_ms,
@@ -501,12 +516,6 @@ class RagService:
                 intent=intent_decision.intent,
                 slots=intent_decision.slots,
             )
-
-        rerank_ms = 0
-        if resolved_rerank_enabled:
-            rerank_start = time.perf_counter()
-            hits = self._reranker.rerank(normalized_question, hits)
-            rerank_ms = int((time.perf_counter() - rerank_start) * 1000)
 
         context_start = time.perf_counter()
         context_result = self._context_builder.build(hits)

@@ -125,6 +125,16 @@ export function PortalLayout({
                   <Typography.Text className="brand-description">{panelDescription}</Typography.Text>
                 </div>
               </div>
+              <div className="brand-overview">
+                <div className="brand-overview__item">
+                  <span className="brand-overview__label">当前视角</span>
+                  <span className="brand-overview__value">{resolvePortalTone(activePortal)}</span>
+                </div>
+                <div className="brand-overview__item">
+                  <span className="brand-overview__label">导航模块</span>
+                  <span className="brand-overview__value">{navItems.length} 项</span>
+                </div>
+              </div>
               <Space size={8} wrap className="brand-meta-row">
                 <Typography.Text className="brand-kicker">{panelLabel}</Typography.Text>
                 <Tag bordered={false} color={panelRole === "admin" ? "processing" : "cyan"}>

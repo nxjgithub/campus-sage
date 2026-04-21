@@ -12,9 +12,11 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from app.core.error_codes import ErrorCode
+from app.core.errors import AppError
 from app.core.settings import get_settings
-from app.eval.dto import EvalItem, EvalResult, EvalSet
-from app.eval.runner import run_eval
+from app.eval.dto import EvalItem, EvalItemResult, EvalResult, EvalSet
+from app.eval.runner import run_eval_with_details
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +62,38 @@ def main() -> None:
         default=None,
         help="逗号分隔的 rerank 开关列表，例如 false,true",
     )
+    parser.add_argument(
+        "--embedding-backend",
+        choices=("http", "simple", "local"),
+        default=None,
+        help="覆盖当前评测脚本使用的 Embedding 后端",
+    )
+    parser.add_argument(
+        "--embedding-base-url",
+        default=None,
+        help="覆盖当前评测脚本使用的 Embedding 服务地址",
+    )
+    parser.add_argument(
+        "--embedding-api-path",
+        default=None,
+        help="覆盖当前评测脚本使用的 Embedding 接口路径",
+    )
+    parser.add_argument(
+        "--vector-backend",
+        choices=("memory", "qdrant"),
+        default=None,
+        help="覆盖当前评测脚本使用的向量后端",
+    )
+    parser.add_argument(
+        "--qdrant-url",
+        default=None,
+        help="覆盖当前评测脚本使用的 Qdrant 地址",
+    )
+    parser.add_argument(
+        "--show-items",
+        action="store_true",
+        help="输出逐题评测明细，便于定位阈值与排序问题",
+    )
     args = parser.parse_args()
 
     try:
@@ -75,13 +109,23 @@ def main() -> None:
         parser.error(str(exc))
 
     eval_set = load_eval_set(Path(args.eval_file))
-    settings = get_settings()
-    experiment_results = run_experiments(
-        kb_id=args.kb_id,
-        eval_set=eval_set,
-        configs=experiment_configs,
-        settings=settings,
+    settings = build_effective_settings(
+        base_settings=get_settings(),
+        embedding_backend=args.embedding_backend,
+        embedding_base_url=args.embedding_base_url,
+        embedding_api_path=args.embedding_api_path,
+        vector_backend=args.vector_backend,
+        qdrant_url=args.qdrant_url,
     )
+    try:
+        experiment_results = run_experiments(
+            kb_id=args.kb_id,
+            eval_set=eval_set,
+            configs=experiment_configs,
+            settings=settings,
+        )
+    except AppError as exc:
+        raise SystemExit(format_eval_runtime_error(exc, settings)) from exc
 
     if len(experiment_results) == 1:
         output = _single_result_payload(
@@ -89,12 +133,14 @@ def main() -> None:
             kb_id=args.kb_id,
             config=experiment_results[0].config,
             result=experiment_results[0].result,
+            items=experiment_results[0].item_results if args.show_items else None,
         )
     else:
         output = _compare_result_payload(
             eval_set_name=eval_set.name,
             kb_id=args.kb_id,
             experiments=experiment_results,
+            show_items=args.show_items,
         )
     print(json.dumps(output, ensure_ascii=False, indent=2))
 
@@ -105,6 +151,63 @@ class EvalExperimentResult:
 
     config: EvalExperimentConfig
     result: EvalResult
+    item_results: list[EvalItemResult]
+
+
+def build_effective_settings(
+    *,
+    base_settings,
+    embedding_backend: str | None,
+    embedding_base_url: str | None,
+    embedding_api_path: str | None,
+    vector_backend: str | None,
+    qdrant_url: str | None,
+):
+    """基于命令行参数生成当前评测使用的配置副本。"""
+
+    overrides: dict[str, object] = {}
+    if embedding_backend is not None:
+        overrides["embedding_backend"] = embedding_backend
+    if embedding_base_url is not None:
+        overrides["embedding_base_url"] = embedding_base_url
+    if embedding_api_path is not None:
+        overrides["embedding_api_path"] = embedding_api_path
+    if vector_backend is not None:
+        overrides["vector_backend"] = vector_backend
+    if qdrant_url is not None:
+        overrides["qdrant_url"] = qdrant_url
+    if not overrides:
+        return base_settings
+    return base_settings.model_copy(update=overrides)
+
+
+def format_eval_runtime_error(error: AppError, settings) -> str:
+    """生成更适合命令行排障的中文错误提示。"""
+
+    lines = [f"评测执行失败：{error}"]
+    if error.code == ErrorCode.EMBEDDING_FAILED:
+        lines.append(
+            f"当前 Embedding 配置：backend={settings.embedding_backend}, "
+            f"base_url={settings.embedding_base_url}, api_path={settings.embedding_api_path}"
+        )
+        if settings.embedding_backend == "http":
+            lines.append("排查建议：")
+            lines.append("1. 确认 Embedding 服务已启动且地址可达。")
+            lines.append(
+                "2. 若本地 API 是用 simple/local embedding 跑通的，"
+                "请给 run_eval.py 传入相同覆盖参数。"
+            )
+            lines.append(
+                "3. 例如：--embedding-backend simple，或补充 "
+                "--embedding-base-url 与 --embedding-api-path。"
+            )
+    elif error.code == ErrorCode.VECTOR_SEARCH_FAILED:
+        lines.append(
+            f"当前向量检索配置：backend={settings.vector_backend}, qdrant_url={settings.qdrant_url}"
+        )
+        if settings.vector_backend == "qdrant":
+            lines.append("排查建议：确认 Qdrant 已启动，且知识库数据已成功写入该实例。")
+    return "\n".join(lines)
 
 
 def build_experiment_configs(
@@ -173,7 +276,7 @@ def run_experiments(
 
     results: list[EvalExperimentResult] = []
     for config in configs:
-        result = run_eval(
+        result, item_results = run_eval_with_details(
             kb_id=kb_id,
             eval_set=eval_set,
             topk=config.topk,
@@ -181,7 +284,13 @@ def run_experiments(
             rerank_enabled=config.rerank_enabled,
             settings=settings,
         )
-        results.append(EvalExperimentResult(config=config, result=result))
+        results.append(
+            EvalExperimentResult(
+                config=config,
+                result=result,
+                item_results=item_results,
+            )
+        )
     return results
 
 
@@ -211,10 +320,11 @@ def _single_result_payload(
     kb_id: str,
     config: EvalExperimentConfig,
     result: EvalResult,
+    items: list[EvalItemResult] | None,
 ) -> dict[str, object]:
     """构建单次评测输出。"""
 
-    return {
+    payload = {
         "eval_set": eval_set_name,
         "kb_id": kb_id,
         "topk": config.topk,
@@ -225,7 +335,11 @@ def _single_result_payload(
         "mrr": result.mrr,
         "avg_ms": result.avg_ms,
         "p95_ms": result.p95_ms,
+        "diagnostics": _build_item_diagnostics(items or []),
     }
+    if items is not None:
+        payload["items"] = [_item_result_payload(item) for item in items]
+    return payload
 
 
 def _compare_result_payload(
@@ -233,6 +347,7 @@ def _compare_result_payload(
     eval_set_name: str,
     kb_id: str,
     experiments: list[EvalExperimentResult],
+    show_items: bool,
 ) -> dict[str, object]:
     """构建多组参数对比输出。"""
 
@@ -251,22 +366,73 @@ def _compare_result_payload(
         "kb_id": kb_id,
         "experiment_count": len(experiments),
         "summary": {
-            "best_overall": _experiment_payload(ranked[0]),
-            "fastest": _experiment_payload(fastest),
+            "best_overall": _experiment_payload(ranked[0], show_items=show_items),
+            "fastest": _experiment_payload(fastest, show_items=show_items),
         },
-        "experiments": [_experiment_payload(item) for item in ranked],
+        "experiments": [_experiment_payload(item, show_items=show_items) for item in ranked],
     }
 
 
-def _experiment_payload(item: EvalExperimentResult) -> dict[str, object]:
+def _experiment_payload(
+    item: EvalExperimentResult,
+    *,
+    show_items: bool,
+) -> dict[str, object]:
     """将实验结果格式化为可序列化输出。"""
 
-    return {
+    payload = {
         "name": item.config.name,
         "topk": item.config.topk,
         "threshold": item.config.threshold,
         "rerank_enabled": item.config.rerank_enabled,
         **asdict(item.result),
+        "diagnostics": _build_item_diagnostics(item.item_results),
+    }
+    if show_items:
+        payload["items"] = [_item_result_payload(detail) for detail in item.item_results]
+    return payload
+
+
+def _item_result_payload(item: EvalItemResult) -> dict[str, object]:
+    """格式化单题评测明细。"""
+
+    return asdict(item)
+
+
+def _build_item_diagnostics(items: list[EvalItemResult]) -> dict[str, int]:
+    """聚合逐题明细，输出阈值与重排诊断摘要。"""
+
+    raw_match_count = sum(1 for item in items if item.raw_rank is not None)
+    threshold_match_count = sum(1 for item in items if item.threshold_rank is not None)
+    final_match_count = sum(1 for item in items if item.rank is not None)
+    threshold_filtered_relevant_count = sum(
+        1
+        for item in items
+        if item.raw_rank is not None and item.threshold_rank is None
+    )
+    rerank_promoted_count = sum(
+        1
+        for item in items
+        if item.threshold_rank is not None
+        and item.rank is not None
+        and item.rank < item.threshold_rank
+    )
+    rerank_demoted_count = sum(
+        1
+        for item in items
+        if item.threshold_rank is not None
+        and item.rank is not None
+        and item.rank > item.threshold_rank
+    )
+    top1_hit_count = sum(1 for item in items if item.rank == 1)
+    return {
+        "raw_match_count": raw_match_count,
+        "threshold_match_count": threshold_match_count,
+        "final_match_count": final_match_count,
+        "threshold_filtered_relevant_count": threshold_filtered_relevant_count,
+        "rerank_promoted_count": rerank_promoted_count,
+        "rerank_demoted_count": rerank_demoted_count,
+        "top1_hit_count": top1_hit_count,
     }
 
 

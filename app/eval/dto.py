@@ -34,8 +34,28 @@ class EvalResult:
 
 
 @dataclass(slots=True)
+class EvalCandidatePreview:
+    """评测明细中的候选摘要。"""
+
+    rank: int
+    doc_id: str | None
+    doc_name: str | None
+    score: float | None
+    matched: bool
+
+
+@dataclass(slots=True)
 class EvalItemResult:
     """评测单条结果。"""
 
+    question: str
+    gold_doc_id: str | None
+    gold_doc_name: str | None
     rank: int | None
+    raw_rank: int | None
+    threshold_rank: int | None
     retrieve_ms: int
+    raw_hit_count: int
+    threshold_hit_count: int
+    final_hit_count: int
+    top_candidates: list[EvalCandidatePreview]

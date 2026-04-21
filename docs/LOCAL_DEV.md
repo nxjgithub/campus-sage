@@ -200,10 +200,35 @@ INGEST_QUEUE_DASHBOARD_ENABLED=true
 ```powershell
 .\.venv\Scripts\python.exe scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true
 ```
+如需逐题查看“原始命中/阈值后命中/最终排名”，可追加：
+```powershell
+.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --topk 5 --rerank-enabled --show-items
+```
 说明：
 - `--threshold` 与 `--rerank-enabled` 现在也可用于单次评测。
 - `--compare-*` 任一参数出现时，脚本会生成参数矩阵并输出排序后的实验结果。
 - `--compare-threshold` 中可使用 `none` 表示不额外做分数阈值过滤。
+- `--show-items` 会输出逐题明细，重点字段包括：
+  - `raw_rank`：阈值与重排前的原始命中排名
+  - `threshold_rank`：分数阈值过滤后的命中排名
+  - `rank`：最终截回 `topk` 后的命中排名
+  - `top_candidates`：原始检索前几个候选文档及分数
+- 评测输出现在还会附带 `diagnostics` 摘要，重点可看：
+  - `threshold_filtered_relevant_count`：原始已命中但被阈值过滤掉的题数
+  - `rerank_promoted_count`：重排后排名上升的题数
+  - `top1_hit_count`：最终命中排在第 1 位的题数
+- `run_eval.py` 直接读取本地 `.env` / 环境变量，不会自动继承你已启动 API 进程的运行参数。
+- 如果你的 API 是用 `EMBEDDING_BACKEND=simple` 或其他临时覆盖参数跑通的，评测脚本也必须显式传入同样的覆盖参数。
+- 若你正在调优启发式重排，可同时关注 `RAG_RERANK_CANDIDATE_MULTIPLIER` 与 `RAG_RERANK_CANDIDATE_CAP`；系统会先放大候选池，再重排后截回最终 `topk`。
+- 常见排障：
+  - 若报 `Embedding 服务不可用`，先检查当前是否仍在使用 `.env` 里的 `EMBEDDING_BACKEND=http` 与 `EMBEDDING_BASE_URL=http://127.0.0.1:8001/v1`。
+  - 若你只是想复现本地 demo 基线，可直接追加 `--embedding-backend simple`。
+- 常用覆盖参数：
+  - `--embedding-backend http|simple|local`
+  - `--embedding-base-url <url>`
+  - `--embedding-api-path <path>`
+  - `--vector-backend memory|qdrant`
+  - `--qdrant-url <url>`
 - 仓库已提供可复用样例：`docs/examples/eval_set_academic_affairs_v1.json`
 - 若你需要一套可直接导入的校园示例语料，可使用：`docs/examples/academic_demo_corpus/`
 - 与示例语料配套的 Markdown 评测集：`docs/examples/eval_set_academic_affairs_demo_md.json`
@@ -225,6 +250,18 @@ INGEST_QUEUE_DASHBOARD_ENABLED=true
 补充说明：
 - 该脚本会调用本地 API，登录默认管理员 `admin@example.com / Admin1234`，创建“高校教务示例知识库”并上传 `docs/examples/academic_demo_corpus/` 中的示例文档。
 - 导入完成后，可直接配合 `docs/examples/eval_set_academic_affairs_demo_md.json` 运行 `run_eval.py`。
+- 若当前本地 API 是按轻量基线方式启动，例如：
+```powershell
+$env:EMBEDDING_BACKEND="simple"
+$env:VECTOR_BACKEND="qdrant"
+$env:QDRANT_URL="http://127.0.0.1:6333"
+$env:VLLM_ENABLED="false"
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8010
+```
+  则建议评测脚本也使用同一套覆盖参数：
+```powershell
+.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id <kb_id> --eval-file docs/examples/eval_set_academic_affairs_demo_md.json --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true --embedding-backend simple --vector-backend qdrant --qdrant-url http://127.0.0.1:6333
+```
 
 若你希望先从学校官网抓取公开真实语料，再人工筛选入库，可执行：
 ```powershell
