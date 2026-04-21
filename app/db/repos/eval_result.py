@@ -20,7 +20,7 @@ class EvalResultRepository:
                 """
                 INSERT INTO eval_result (
                     run_result_id, run_id, eval_item_id, hit,
-                    rank, retrieve_ms, notes, created_at
+                    `rank`, retrieve_ms, notes, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
@@ -41,7 +41,7 @@ class EvalResultRepository:
         rows = self._db.fetch_all(
             """
             SELECT run_result_id, run_id, eval_item_id, hit,
-                   rank, retrieve_ms, notes, created_at
+                   `rank` AS rank, retrieve_ms, notes, created_at
             FROM eval_result
             WHERE run_id = ?
             ORDER BY created_at ASC;

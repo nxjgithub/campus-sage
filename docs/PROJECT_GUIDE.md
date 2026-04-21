@@ -38,7 +38,8 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 ## 2.1 最新能力快照（已落地）
 - 真实 Embedding 已支持 OpenAI 兼容 HTTP 接入，并可通过配置开关切换后端。
 - 生成模型已支持 OpenAI 兼容 HTTP 接入，可直接切换到 DeepSeek 等外部服务。
-- 向量库默认后端已切换为 Qdrant，写入前执行 payload 契约校验。
+- 向量库默认后端已切换为真实 Qdrant，写入前执行 payload 契约校验。
+- 关系型数据库现已支持真实 MySQL，Docker Compose 默认以 MySQL 作为 API/Worker 的关系库存储。
 - 问答上下文已附证据编号，vLLM 提示词要求强制引用编号；缺引用时服务层自动补全。
 - 拒答策略已强化，增加关键词覆盖率阈值、最小上下文长度约束与“语义无证据”生成后兜底判定。
 - 问答已补充基础多轮策略：支持意图分流、追问 query 补全、信息不足时先澄清再回答。
@@ -95,8 +96,8 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 ## 5. 开发命令参考
 ### 5.1 后端
 - 安装依赖：`.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
-- 启动依赖：`docker compose up -d`
-- 容器化启动后端 + Worker：`docker compose up -d api worker qdrant redis`
+- 启动依赖：`docker compose up -d mysql qdrant redis`
+- 容器化启动后端 + Worker：`docker compose up -d api worker mysql qdrant redis`
 - 启动 API：`.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
 - 代码检查：`.\.venv\Scripts\python.exe -m ruff check .`
 - 单元测试：`.\.venv\Scripts\python.exe -m pytest -q`
@@ -110,6 +111,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 抓取学校官网公开语料：`.\.venv\Scripts\python.exe scripts/crawl_suse_public_corpus.py`
 - 抓取更适合 RAG 的专题语料集：`.\.venv\Scripts\python.exe scripts/crawl_suse_public_corpus.py --profile rag_topics --site-codes jwc,xsc,yjs`
 - 清洗公开抓取结果并自动导入知识库：`.\.venv\Scripts\python.exe scripts/bootstrap_suse_public_kb.py --crawl-dir data/crawl/suse_public_<时间戳> --kb-name 四川轻化工大学真实官网语料知识库`
+- 直接导入 `data/prepared/` 中已精炼好的真实语料：`.\.venv\Scripts\python.exe scripts/bootstrap_suse_public_kb.py --import-prepared-dir data/prepared/suse_public_20260327_155314_kb_demo_final --kb-name 四川轻化工大学精炼真实语料知识库`
 - 样例评测集：`docs/examples/eval_set_academic_affairs_v1.json`
 - 示例 Markdown 语料：`docs/examples/academic_demo_corpus/`
 - 配套 Markdown 评测集：`docs/examples/eval_set_academic_affairs_demo_md.json`
@@ -145,7 +147,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 
 
 ## 8. 当前阶段建议
-- 后端已具备主流程能力，建议优先推进前端工程落地。
+- 后端已具备 MySQL + Qdrant 的真实演示闭环，后续可继续把前端演示数据默认对齐到精炼真实语料库。
 - 前端实现时严格按 `docs/frontend/` 文档执行，避免与后端接口错位。
 - 每周固定一次文档一致性检查，防止“代码领先文档”。
 
@@ -199,10 +201,11 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 前端性能已优化：登录页、门户布局和管理端页面改为路由懒加载，`/app/ask` 直接加载聊天工作台；Vite 构建过滤 HTML 入口预加载依赖，避免把低频管理端 Ant Design 组件提前压到首屏。
 - 问答页已按主流 AI Chat 模式重新收敛：撤掉会话 KPI、上下文概览和底部常驻快捷胶囊，保留左侧轻会话栏、中央单列消息流、底部聚焦输入框和引用弹窗。
 
-## 后端近期更新（2026-03 数据层）
+## 后端近期更新（2026-04 数据层）
 - SQLite 初始化已重构为显式版本迁移，迁移入口位于 `app/db/migrations.py`，启动时自动执行。
 - 迁移历史落表到 `schema_migration`，后续 schema 变更应新增迁移版本，而不是继续在初始化逻辑里堆积兼容补丁。
 - 已补充空库初始化、旧库升级、默认角色补种测试，保证数据库层改动具备最小回归保护。
+- 数据库连接层现已支持 `SQLite/MySQL` 双后端；MySQL 走空库 schema 初始化，便于本地与答辩环境直接切换到真实关系库。
 
 ## 后端近期更新（2026-03 配置与观测）
 - 上传后缀配置已收口到 `Settings` 层统一归一化，避免文档上传链路各处重复解析。

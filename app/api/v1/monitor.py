@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
-
 from fastapi import APIRouter, Depends, Request
 
 from app.api.v1.deps import require_permission
@@ -75,10 +73,6 @@ def get_runtime_diagnostics(
     provider = RepositoryProvider(database)
     runtime_messages = provider.conversation().list_recent_assistant_messages(limit=200)
     rag_metrics = build_rag_runtime_metrics(runtime_messages)
-    parsed = urlparse(settings.database_url)
-    target = parsed.path or parsed.netloc or settings.database_url
-    if settings.database_backend == "sqlite" and target.startswith("/"):
-        target = target.lstrip("/")
     return RuntimeDiagnosticsResponse(
         app_env=settings.app_env,
         log_level=settings.log_level,
@@ -86,7 +80,7 @@ def get_runtime_diagnostics(
         enable_swagger=settings.enable_swagger,
         database=RuntimeDatabaseInfo(
             backend=settings.database_backend,
-            target=target,
+            target=settings.database_target,
             schema_version=get_current_schema_version(database),
         ),
         services=RuntimeServicesInfo(

@@ -130,6 +130,11 @@ def main() -> None:
         help="清洗后的语料输出目录，默认写入 data/prepared/<crawl_dir_name>_kb_ready",
     )
     parser.add_argument(
+        "--import-prepared-dir",
+        default=None,
+        help="直接导入已清洗/精炼完成的 prepared 目录，优先读取 final_import_summary.json",
+    )
+    parser.add_argument(
         "--base-url",
         default="http://127.0.0.1:8000",
         help="CampusSage API 地址",
@@ -198,38 +203,47 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    crawl_dir = resolve_crawl_dir(args.crawl_dir)
-    prepared_dir = (
-        Path(args.prepared_dir)
-        if args.prepared_dir
-        else ROOT_DIR / "data" / "prepared" / f"{crawl_dir.name}_kb_ready"
-    )
-    if not prepared_dir.is_absolute():
-        prepared_dir = ROOT_DIR / prepared_dir
-    prepared_dir.mkdir(parents=True, exist_ok=True)
-
-    records = load_crawl_manifest(crawl_dir)
-    with httpx.Client(
-        timeout=max(3.0, args.timeout_s),
-        trust_env=False,
-        follow_redirects=True,
-        headers=DEFAULT_HEADERS,
-    ) as client:
-        prepared_documents, skipped = prepare_corpus(
-            client=client,
-            records=records,
+    if args.import_prepared_dir:
+        prepared_dir = resolve_prepared_dir(args.import_prepared_dir)
+        prepared_documents, manifest_path = load_prepared_documents(prepared_dir)
+        report = build_existing_prepared_report(
             prepared_dir=prepared_dir,
-            delay_ms=max(0, args.delay_ms),
-            max_detail_pages_per_list=max(1, args.max_detail_pages_per_list),
-            max_upload_bytes=max(1, args.max_upload_mb) * 1024 * 1024,
+            prepared_documents=prepared_documents,
+            manifest_path=manifest_path,
         )
+    else:
+        crawl_dir = resolve_crawl_dir(args.crawl_dir)
+        prepared_dir = (
+            Path(args.prepared_dir)
+            if args.prepared_dir
+            else ROOT_DIR / "data" / "prepared" / f"{crawl_dir.name}_kb_ready"
+        )
+        if not prepared_dir.is_absolute():
+            prepared_dir = ROOT_DIR / prepared_dir
+        prepared_dir.mkdir(parents=True, exist_ok=True)
 
-    report = build_prepare_report(
-        crawl_dir=crawl_dir,
-        prepared_dir=prepared_dir,
-        prepared_documents=prepared_documents,
-        skipped=skipped,
-    )
+        records = load_crawl_manifest(crawl_dir)
+        with httpx.Client(
+            timeout=max(3.0, args.timeout_s),
+            trust_env=False,
+            follow_redirects=True,
+            headers=DEFAULT_HEADERS,
+        ) as client:
+            prepared_documents, skipped = prepare_corpus(
+                client=client,
+                records=records,
+                prepared_dir=prepared_dir,
+                delay_ms=max(0, args.delay_ms),
+                max_detail_pages_per_list=max(1, args.max_detail_pages_per_list),
+                max_upload_bytes=max(1, args.max_upload_mb) * 1024 * 1024,
+            )
+
+        report = build_prepare_report(
+            crawl_dir=crawl_dir,
+            prepared_dir=prepared_dir,
+            prepared_documents=prepared_documents,
+            skipped=skipped,
+        )
 
     if args.skip_import:
         print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -295,6 +309,53 @@ def resolve_crawl_dir(raw_path: str | None) -> Path:
     if not candidates:
         raise SystemExit("未找到任何 suse_public_* 抓取目录")
     return candidates[-1]
+
+
+def resolve_prepared_dir(raw_path: str) -> Path:
+    """解析用于直接导入的 prepared 目录。"""
+
+    target = Path(raw_path)
+    if not target.is_absolute():
+        target = ROOT_DIR / raw_path
+    if not target.exists():
+        raise SystemExit(f"prepared 目录不存在：{target}")
+    return target
+
+
+def load_prepared_documents(prepared_dir: Path) -> tuple[list[PreparedCorpusDocument], Path]:
+    """读取已清洗/精炼目录中的文档清单。"""
+
+    manifest_candidates = (
+        prepared_dir / "final_import_summary.json",
+        prepared_dir / "refine_report.json",
+        prepared_dir / "prepare_report.json",
+        prepared_dir / "import_report.json",
+    )
+    for manifest_path in manifest_candidates:
+        if not manifest_path.exists():
+            continue
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        items = payload.get("kept_documents") or payload.get("prepared_documents") or []
+        documents = [
+            PreparedCorpusDocument(
+                kind=str(item["kind"]),
+                site_code=str(item["site_code"]),
+                doc_name=str(item["doc_name"]),
+                source_uri=str(item["source_uri"]),
+                local_path=str(item["local_path"]),
+                origin=str(item.get("origin") or "prepared_import"),
+                published_at=item.get("published_at"),
+                text_length=item.get("text_length"),
+            )
+            for item in items
+            if (ROOT_DIR / str(item["local_path"])).exists()
+        ]
+        if documents:
+            documents.sort(key=lambda item: (item.site_code, item.doc_name, item.local_path))
+            return documents, manifest_path
+    raise SystemExit(
+        "未在 prepared 目录中找到可导入清单；请确认存在 final_import_summary.json 或 prepare_report.json。"
+    )
 
 
 def load_crawl_manifest(crawl_dir: Path) -> list[CrawledRecord]:
@@ -948,6 +1009,30 @@ def build_prepare_report(
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     (prepared_dir / "prepare_report.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return report
+
+
+def build_existing_prepared_report(
+    *,
+    prepared_dir: Path,
+    prepared_documents: list[PreparedCorpusDocument],
+    manifest_path: Path,
+) -> dict[str, Any]:
+    """构建直接导入现成 prepared 目录时的报告。"""
+
+    report = {
+        "prepared_dir": str(prepared_dir),
+        "prepared_count": len(prepared_documents),
+        "page_count": sum(1 for item in prepared_documents if item.kind == "page"),
+        "attachment_count": sum(1 for item in prepared_documents if item.kind == "attachment"),
+        "prepared_documents": [asdict(item) for item in prepared_documents],
+        "manifest_path": str(manifest_path),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    (prepared_dir / "prepare_report.import.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )

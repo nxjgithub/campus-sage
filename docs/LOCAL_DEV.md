@@ -6,7 +6,7 @@
 ## 1. 环境要求
 - Windows 10/11
 - Python 3.10+（与当前依赖统一）
-- Docker Desktop（用于启动 Qdrant 等依赖）
+- Docker Desktop（用于启动 MySQL / Qdrant / Redis / TEI 等依赖）
 - PyCharm（建议开启 Ruff/pytest 集成）
 
 
@@ -100,11 +100,11 @@ $env:PYTHONNOUSERSITE="1"
 
 ## 4. 配置环境变量
 1. 复制 `.env.example` 为 `.env`
-2. 按本地情况修改配置（Qdrant、vLLM 地址等）
+2. 按本地情况修改配置（MySQL、Qdrant、vLLM 地址等）
 3. `.env` 不要提交，必须被 `.gitignore` 忽略
 
 
-## 5. 启动依赖服务（Qdrant）
+## 5. 启动依赖服务（MySQL + Qdrant）
 ```powershell
 docker compose up -d
 docker compose ps
@@ -170,14 +170,19 @@ INGEST_QUEUE_DASHBOARD_ENABLED=true
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-## 7.1 SQLite 迁移排查
-- `uvicorn app.main:app --reload` 启动时会自动执行 SQLite schema 迁移，无需手工建表。
-- 若你本地保留了较早阶段的 `csage.db`，启动后应自动生成 `schema_migration` 表并补齐缺失列。
+## 7.1 数据库 schema 排查
+- `uvicorn app.main:app --reload` 启动时会自动初始化数据库 schema；SQLite 走增量迁移，MySQL 走空库初始化。
+- 若你本地仍保留旧的 `csage.db`，SQLite 启动后应自动生成 `schema_migration` 表并补齐缺失列。
 - 可用以下命令快速检查迁移状态：
 ```powershell
 .\.venv\Scripts\python.exe -c "import sqlite3; conn=sqlite3.connect('./data/csage.db'); print(conn.execute('SELECT version, name FROM schema_migration ORDER BY version').fetchall())"
 ```
-- 若数据库文件已损坏或历史结构异常，优先备份后删除本地 SQLite 文件，再重启服务让系统重建；不要手工跳过迁移记录。
+- 若你当前使用 MySQL，可改用：
+```powershell
+docker compose exec mysql mysql -ucsage -pcsage123 -D csage -e "SELECT version, name FROM schema_migration ORDER BY version;"
+```
+- 若 SQLite 数据库文件已损坏或历史结构异常，优先备份后删除本地 SQLite 文件，再重启服务让系统重建；不要手工跳过迁移记录。
+- 若 MySQL schema 已被手工改坏，优先新建空数据库实例重新初始化，不要在半迁移旧库上继续叠补丁。
 - 若你怀疑服务实际加载的配置与 `.env` 不一致，可登录后访问 `GET /api/v1/monitor/runtime` 检查当前 schema 版本、上传配置和关键开关。
 
 ## 8. 运行评测脚本
@@ -290,6 +295,14 @@ $env:VLLM_ENABLED="false"
 - 清洗结果默认写入 `data/prepared/<crawl_dir_name>_kb_ready/`，并生成 `prepare_report.json` 与 `import_report.json` 便于追踪。
 - 若你只想先检查清洗结果、不立即导入，可追加 `--skip-import`。
 
+若你想直接导入 `data/prepared/` 中已经精炼好的真实语料，可执行：
+```powershell
+.\.venv\Scripts\python.exe scripts/bootstrap_suse_public_kb.py --import-prepared-dir data\prepared\suse_public_20260327_155314_kb_demo_final --kb-name 四川轻化工大学精炼真实语料知识库
+```
+补充说明：
+- 该目录已在仓库内完成二次精炼，保留 381 条较适合答辩演示的真实校园语料。
+- 脚本会优先读取 `final_import_summary.json`，直接批量上传到当前 API 对应的 MySQL + Qdrant 环境。
+
 
 ## 9. vLLM 启动说明（可选）
 - 本机有 GPU：可本机启动 vLLM
@@ -346,17 +359,18 @@ LOCAL_EMBEDDING_NORMALIZE=true
 - 未安装依赖时，服务会返回明确错误提示，便于后续按需落地。
 
 
-## 10. 启用 Qdrant 向量库
-1. 安装依赖：
+## 10. 启用 MySQL 与 Qdrant
+1. 安装 MySQL 客户端依赖：
 ```powershell
-.\.venv\Scripts\python.exe -m pip install qdrant-client
+.\.venv\Scripts\python.exe -m pip install pymysql qdrant-client
 ```
 2. 设置环境变量：
 ```
+DATABASE_URL=mysql+pymysql://csage:csage123@127.0.0.1:3307/csage?charset=utf8mb4
 VECTOR_BACKEND=qdrant
 QDRANT_URL=http://127.0.0.1:6333
 ```
-3. 重启服务后即可使用 Qdrant 作为向量库后端。
+3. 重启服务后即可使用 MySQL 作为关系库、Qdrant 作为向量库。
 
 
 ## 11. 常见问题
@@ -392,6 +406,8 @@ docker compose down
 ```
 
 说明：
+- Compose 中 `api/worker` 默认使用容器内 MySQL 地址：`mysql+pymysql://csage:<password>@mysql:3306/<db>?charset=utf8mb4`。
+- 宿主机默认通过 `127.0.0.1:3307` 访问容器内 MySQL，可避免与本机已安装的 MySQL 争抢 3306 端口。
 - Compose 中 `api/worker` 已强制使用容器内地址：`QDRANT_URL=http://qdrant:6333`、`REDIS_URL=redis://redis:6379/0`。
 - Compose 中 `api/worker` 默认使用容器内 Embedding 地址：`EMBEDDING_BASE_URL=http://tei:80/v1`、`EMBEDDING_API_PATH=/embeddings`，避免容器内误连 `127.0.0.1`。
 - 如需自定义容器内 Embedding 地址，可设置 `EMBEDDING_BASE_URL_INTERNAL` 与 `EMBEDDING_API_PATH_INTERNAL`。
@@ -417,6 +433,7 @@ EMBEDDING_API_PATH=/embeddings
 EMBEDDING_MODEL_NAME=BAAI/bge-small-zh-v1.5
 VECTOR_DIM=512
 
+DATABASE_URL=mysql+pymysql://csage:csage123@127.0.0.1:3307/csage?charset=utf8mb4
 INGEST_QUEUE_ENABLED=true
 REDIS_URL=redis://127.0.0.1:6379/0
 QDRANT_URL=http://127.0.0.1:6333
@@ -429,13 +446,14 @@ QDRANT_URL=http://127.0.0.1:6333
 ### 13.2 启动服务
 1. 启动容器：
 ```powershell
-docker compose up -d qdrant redis tei api worker
+docker compose up -d mysql qdrant redis tei api worker
 ```
 2. 确认服务状态：
 ```powershell
 docker ps
 ```
 期望看到：
+- `campus-sage-mysql-1`
 - `campus-sage-api-1`
 - `campus-sage-worker-1`
 - `campus-sage-tei-1`

@@ -11,10 +11,15 @@
 - `LOG_LEVEL`：INFO/DEBUG，默认 INFO
 
 
-## 2. 数据库（SQLite 起步 / MySQL 后期）
+## 2. 数据库（MySQL 默认 / SQLite 兼容）
+- `MYSQL_DATABASE`：MySQL 数据库名（Docker Compose 默认 `csage`）
+- `MYSQL_USER`：MySQL 业务用户（Docker Compose 默认 `csage`）
+- `MYSQL_PASSWORD`：MySQL 业务用户密码
+- `MYSQL_ROOT_PASSWORD`：MySQL root 密码（仅本地容器初始化使用）
+- `MYSQL_HOST_PORT`：MySQL 暴露到宿主机的端口，默认 `3307`
 - `DATABASE_URL`
-    - SQLite 示例：`sqlite:///./data/csage.db`
-    - MySQL 示例：`mysql+pymysql://user:pass@127.0.0.1:3306/csage?charset=utf8mb4`
+    - MySQL 示例：`mysql+pymysql://user:pass@127.0.0.1:3307/csage?charset=utf8mb4`
+    - SQLite 兼容示例：`sqlite:///./data/csage.db`
 > 数据库字符集必须 utf8mb4（中文与表情符号更稳）。
 
 
@@ -114,15 +119,16 @@
 - `DEBUG_MODE`：true/false
 - `ENABLE_SWAGGER`：true/false（prod 可关闭）
 
-## 9. SQLite schema 迁移说明（2026-03）
-- 后端启动时会自动执行 SQLite schema 迁移，不再依赖 `init_database()` 内部的隐式 `ALTER TABLE` 补列。
-- 迁移历史保存在 `schema_migration` 表，当前版本按代码内置迁移序列递增。
-- 已存在的旧库在启动时会按版本顺序补齐缺失表、列与索引；全新数据库会直接初始化到最新版本。
-- 迁移机制当前仅覆盖 SQLite。若后续切换 MySQL，需要单独设计迁移实现，不应复用 SQLite DDL。
+## 9. Schema 初始化与迁移说明（2026-04）
+- SQLite：后端启动时会自动执行增量 schema 迁移，不再依赖 `init_database()` 内部的隐式 `ALTER TABLE` 补列。
+- MySQL：后端启动时会自动执行空库初始化，直接建到当前最新 schema，并写入 `schema_migration`。
+- 迁移历史统一保存在 `schema_migration` 表，当前版本按代码内置迁移序列递增。
+- 已存在的旧 SQLite 库会按版本顺序补齐缺失表、列与索引；全新 SQLite/MySQL 数据库会直接初始化到最新版本。
+- 当前 MySQL 不支持“半迁移旧库”增量补丁；切换到 MySQL 时应使用全新的数据库实例。
 - 开发与测试时如果怀疑 schema 未升级，可检查：
   - `SELECT version, name, applied_at FROM schema_migration ORDER BY version;`
-  - `PRAGMA table_info(document);`
-  - `PRAGMA table_info(message);`
+  - SQLite：`PRAGMA table_info(document);`
+  - MySQL：`SHOW COLUMNS FROM document;`
 
 ## 10. 配置归一化与诊断补充（2026-03）
 - `UPLOAD_ALLOWED_EXTS` 会在运行时自动执行：

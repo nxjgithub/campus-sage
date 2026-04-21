@@ -168,7 +168,29 @@ class Settings(BaseSettings):
         """提取数据库后端名称，便于诊断接口展示。"""
 
         parsed = urlparse(self.database_url)
-        return parsed.scheme or "unknown"
+        scheme = parsed.scheme or "unknown"
+        if scheme.startswith("mysql"):
+            return "mysql"
+        return scheme
+
+    @property
+    def database_target(self) -> str:
+        """返回脱敏后的数据库目标描述，便于运行时诊断。"""
+
+        parsed = urlparse(self.database_url)
+        if self.database_backend == "sqlite":
+            target = parsed.path or parsed.netloc or self.database_url
+            if target.startswith("/"):
+                return target.lstrip("/")
+            return target
+        if self.database_backend == "mysql":
+            host = parsed.hostname or "127.0.0.1"
+            port = parsed.port or 3306
+            database_name = parsed.path.lstrip("/")
+            if database_name:
+                return f"{host}:{port}/{database_name}"
+            return f"{host}:{port}"
+        return parsed.path or parsed.netloc or self.database_url
 
     def runtime_warnings(self) -> list[str]:
         """汇总当前运行配置下需要额外关注的告警信息。"""

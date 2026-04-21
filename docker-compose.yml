@@ -6,23 +6,27 @@ services:
     env_file:
       - .env
     environment:
+      DATABASE_URL: ${DATABASE_URL_INTERNAL:-mysql+pymysql://csage:${MYSQL_PASSWORD:-csage123}@mysql:3306/${MYSQL_DATABASE:-csage}?charset=utf8mb4}
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379/0
       INGEST_QUEUE_ENABLED: "true"
       EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-simple}
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL_INTERNAL:-http://tei:80/v1}
       EMBEDDING_API_PATH: ${EMBEDDING_API_PATH_INTERNAL:-/embeddings}
-      NO_PROXY: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
-      no_proxy: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
+      NO_PROXY: ${NO_PROXY_INTERNAL:-mysql,qdrant,tei,redis,localhost,127.0.0.1}
+      no_proxy: ${NO_PROXY_INTERNAL:-mysql,qdrant,tei,redis,localhost,127.0.0.1}
     command: [ "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000" ]
     ports:
       - "8010:8000"
     volumes:
       - ./data:/app/data
     depends_on:
-      - qdrant
-      - redis
-      - tei
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_started
   worker:
     build:
       context: .
@@ -30,21 +34,45 @@ services:
     env_file:
       - .env
     environment:
+      DATABASE_URL: ${DATABASE_URL_INTERNAL:-mysql+pymysql://csage:${MYSQL_PASSWORD:-csage123}@mysql:3306/${MYSQL_DATABASE:-csage}?charset=utf8mb4}
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379/0
       INGEST_QUEUE_ENABLED: "true"
       EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-simple}
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL_INTERNAL:-http://tei:80/v1}
       EMBEDDING_API_PATH: ${EMBEDDING_API_PATH_INTERNAL:-/embeddings}
-      NO_PROXY: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
-      no_proxy: ${NO_PROXY_INTERNAL:-qdrant,tei,redis,localhost,127.0.0.1}
+      NO_PROXY: ${NO_PROXY_INTERNAL:-mysql,qdrant,tei,redis,localhost,127.0.0.1}
+      no_proxy: ${NO_PROXY_INTERNAL:-mysql,qdrant,tei,redis,localhost,127.0.0.1}
     command: [ "python", "-m", "app.ingest.worker_runner", "--queue", "ingest" ]
     volumes:
       - ./data:/app/data
     depends_on:
-      - qdrant
-      - redis
-      - tei
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_started
+  mysql:
+    image: mysql:8.4
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-csage}
+      MYSQL_USER: ${MYSQL_USER:-csage}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-csage123}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-csage_root}
+    ports:
+      - "${MYSQL_HOST_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-csage_root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
   qdrant:
     image: qdrant/qdrant:v1.9.5
     ports:
@@ -79,6 +107,7 @@ services:
       - "${TEI_MAX_CONCURRENT_REQUESTS:-64}"
 
 volumes:
+  mysql_data:
   qdrant_data:
   redis_data:
   tei_data:

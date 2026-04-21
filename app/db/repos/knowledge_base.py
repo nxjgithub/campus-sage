@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
@@ -39,7 +38,9 @@ class KnowledgeBaseRepository:
                     int(record.deleted),
                 ),
             )
-        except sqlite3.IntegrityError as exc:
+        except Exception as exc:
+            if not self._db.is_integrity_error(exc):
+                raise
             raise AppError(
                 code=ErrorCode.KB_ALREADY_EXISTS,
                 message="知识库名称已存在",
