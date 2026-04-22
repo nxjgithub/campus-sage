@@ -24,6 +24,24 @@ _SMALLTALK_KEYWORDS = (
 
 _AMBIGUOUS_REFERENCES = ("这个", "那个", "它", "这项", "该项", "上述", "上面")
 
+_FOLLOWUP_DETAIL_KEYWORDS = (
+    "时间",
+    "材料",
+    "条件",
+    "流程",
+    "步骤",
+    "要求",
+    "入口",
+    "网址",
+    "地点",
+    "对象",
+    "范围",
+    "多久",
+    "哪天",
+    "哪里",
+    "截止",
+)
+
 _POLICY_INTENT_KEYWORDS = (
     "流程",
     "步骤",
@@ -173,6 +191,7 @@ def analyze_intent(question: str, state: DialogState) -> IntentDecision:
     """识别意图并给出路由决策。"""
 
     normalized = _normalize(question)
+    current_slots = extract_slots(normalized, "")
     slots = extract_slots(normalized, state.history_text)
     if not normalized:
         return _clarification_decision(
@@ -183,11 +202,18 @@ def analyze_intent(question: str, state: DialogState) -> IntentDecision:
     if _is_smalltalk(normalized):
         return _smalltalk_decision(normalized_question=normalized, slots=slots)
 
-    scored = _score_intents(normalized, slots, state)
+    if _is_underspecified_followup(normalized, current_slots, state):
+        return _clarification_decision(
+            normalized_question=normalized,
+            slots=slots,
+            detail_value="学院/年级/身份/业务事项",
+        )
+
+    scored = _score_intents(normalized, current_slots, state)
     intent = _pick_intent(scored)
     if intent == "smalltalk":
         return _smalltalk_decision(normalized_question=normalized, slots=slots)
-    if intent == "clarification" or _need_clarification(normalized, slots, state):
+    if intent == "clarification" or _need_clarification(normalized, current_slots, slots, state):
         return _clarification_decision(
             normalized_question=normalized,
             slots=slots,
@@ -394,17 +420,26 @@ def _is_smalltalk(text: str) -> bool:
     return False
 
 
-def _need_clarification(text: str, slots: dict[str, str], state: DialogState) -> bool:
+def _need_clarification(
+    text: str,
+    current_slots: dict[str, str],
+    slots: dict[str, str],
+    state: DialogState,
+) -> bool:
     """判断是否需要先澄清。"""
 
     if len(text) <= 2:
         return True
-    has_topic = "topic" in slots
+    has_topic = "topic" in current_slots
+    has_history_topic = "topic" in slots
     mentions_policy = any(keyword in text for keyword in _POLICY_INTENT_KEYWORDS)
     has_ambiguous_reference = any(keyword in text for keyword in _AMBIGUOUS_REFERENCES)
+    has_followup_detail = _has_followup_detail(text, current_slots)
     if has_ambiguous_reference and not has_topic and not state.last_user_question:
         return True
-    if mentions_policy and not has_topic:
+    if has_ambiguous_reference and not has_topic and not has_followup_detail:
+        return True
+    if mentions_policy and not has_topic and not (has_history_topic and has_followup_detail):
         return True
     if state.pending_clarification and not has_topic and len(text) < 16:
         return True
@@ -423,6 +458,31 @@ def _rewrite_followup_query(text: str, state: DialogState) -> str:
     if text == state.last_user_question:
         return text
     return f"{state.last_user_question}；补充问题：{text}"
+
+
+def _is_underspecified_followup(
+    text: str,
+    current_slots: dict[str, str],
+    state: DialogState,
+) -> bool:
+    """识别“只有指代、没有新增约束”的追问，避免误把上一轮答案直接复述。"""
+
+    if not state.last_user_question:
+        return False
+    has_ambiguous_reference = any(keyword in text for keyword in _AMBIGUOUS_REFERENCES)
+    if not has_ambiguous_reference:
+        return False
+    if "topic" in current_slots:
+        return False
+    return not _has_followup_detail(text, current_slots)
+
+
+def _has_followup_detail(text: str, current_slots: dict[str, str]) -> bool:
+    """判断追问里是否补充了新的约束线索。"""
+
+    if any(key in current_slots for key in ("topic", "role", "time_hint")):
+        return True
+    return any(keyword in text for keyword in _FOLLOWUP_DETAIL_KEYWORDS)
 
 
 def _extract_topic(text: str) -> str | None:

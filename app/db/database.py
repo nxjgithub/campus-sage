@@ -201,18 +201,20 @@ def reset_database(settings: Settings) -> None:
     database.execute("DELETE FROM eval_item;")
     database.execute("DELETE FROM eval_set;")
     database.execute("DELETE FROM citation;")
+    database.execute("DELETE FROM feedback;")
+    # chat_run 同时引用 user/conversation/message/knowledge_base，
+    # 必须先于这些父表删除，避免 MySQL 外键约束阻断测试重置。
+    database.execute("DELETE FROM chat_run;")
     database.execute("DELETE FROM refresh_token;")
     database.execute("DELETE FROM kb_access;")
     database.execute("DELETE FROM user_role;")
-    database.execute("DELETE FROM role;")
-    database.execute("DELETE FROM user;")
-    database.execute("DELETE FROM chat_run;")
-    database.execute("DELETE FROM feedback;")
     database.execute("DELETE FROM message;")
     database.execute("DELETE FROM conversation;")
     database.execute("DELETE FROM ingest_job;")
     database.execute("DELETE FROM document;")
     database.execute("DELETE FROM knowledge_base;")
+    database.execute("DELETE FROM user;")
+    database.execute("DELETE FROM role;")
     _seed_default_roles(database)
 
 

@@ -637,15 +637,17 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
       "citations": [],
       "refusal": false,
       "refusal_reason": null,
+      "suggestions": [],
       "next_steps": [],
       "timing": {"retrieve_ms": 45, "rerank_ms": 0, "context_ms": 12, "generate_ms": 380, "total_ms": 450},
-      "created_at": "2026-02-07T10:10:02Z"
+      "created_at": "2026-02-07T10:10:02Z",
+      "request_id": "req_xxx"
     }
   ],
   "request_id": "req_xxx"
 }
 ```
-说明：`assistant` 消息包含 `citations/refusal/refusal_reason/next_steps/timing` 字段，`user` 消息这些字段为 `null` 或省略。
+说明：`assistant` 消息包含 `citations/refusal/refusal_reason/suggestions/next_steps/timing/request_id` 字段，`user` 消息这些字段为 `null` 或省略。
 
 ### 5.4 重命名会话
 `PATCH /api/v1/conversations/{conversation_id}`
@@ -694,9 +696,11 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
       "citations": [],
       "refusal": false,
       "refusal_reason": null,
+      "suggestions": [],
       "next_steps": [],
       "timing": {"retrieve_ms": 40, "rerank_ms": 0, "context_ms": 9, "generate_ms": 210, "total_ms": 259},
-      "created_at": "2026-02-07T10:08:02Z"
+      "created_at": "2026-02-07T10:08:02Z",
+      "request_id": "req_xxx"
     }
   ],
   "has_more": true,
@@ -972,6 +976,8 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 说明：
 - 仅返回排障所需的配置摘要，不返回密钥原文。
 - 该接口用于确认当前服务实际加载的数据库 schema 版本、关键开关和上传配置。
+- `database.backend` 会返回当前实际启用的数据库后端（如 `sqlite` 或 `mysql`）。
+- `database.target` 会返回脱敏后的数据库目标描述，用于排查实际连到哪套库，但不会暴露账号口令。
 
 响应示例：
 ```json
@@ -981,8 +987,8 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
   "debug_mode": false,
   "enable_swagger": true,
   "database": {
-    "backend": "sqlite",
-    "target": "./data/csage.db",
+    "backend": "mysql",
+    "target": "127.0.0.1:3307/csage",
     "schema_version": 4
   },
   "services": {
@@ -997,6 +1003,17 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
   },
   "security": {
     "jwt_default_secret": false
+  },
+  "rag_metrics": {
+    "sample_size": 18,
+    "refusal_count": 4,
+    "clarification_count": 1,
+    "freshness_warning_count": 2,
+    "citation_covered_count": 11,
+    "refusal_rate": 0.2222,
+    "clarification_rate": 0.0556,
+    "freshness_warning_rate": 0.1111,
+    "citation_coverage_rate": 0.7857
   },
   "warnings": [],
   "request_id": "req_xxx"

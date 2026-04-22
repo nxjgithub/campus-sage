@@ -106,9 +106,11 @@ def message_to_item(record: MessageRecord) -> MessageItem:
         citations=record.citations or None,
         refusal=record.refusal if record.role == "assistant" else None,
         refusal_reason=record.refusal_reason if record.role == "assistant" else None,
+        suggestions=record.suggestions if record.role == "assistant" else None,
         next_steps=record.next_steps if record.role == "assistant" else None,
         timing=record.timing if record.role == "assistant" else None,
         created_at=record.created_at,
+        request_id=record.request_id,
     )
 
 

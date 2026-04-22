@@ -12,14 +12,17 @@
 
 
 ## 2. 数据库（MySQL 默认 / SQLite 兼容）
-- `MYSQL_DATABASE`：MySQL 数据库名（Docker Compose 默认 `csage`）
-- `MYSQL_USER`：MySQL 业务用户（Docker Compose 默认 `csage`）
-- `MYSQL_PASSWORD`：MySQL 业务用户密码
-- `MYSQL_ROOT_PASSWORD`：MySQL root 密码（仅本地容器初始化使用）
-- `MYSQL_HOST_PORT`：MySQL 暴露到宿主机的端口，默认 `3307`
 - `DATABASE_URL`
     - MySQL 示例：`mysql+pymysql://user:pass@127.0.0.1:3307/csage?charset=utf8mb4`
     - SQLite 兼容示例：`sqlite:///./data/csage.db`
+- `CSAGE_DATABASE_URL_INTERNAL`
+    - Docker Compose 内 `api/worker` 访问 MySQL 的内部连接串
+    - 示例：`mysql+pymysql://csage:csage123@mysql:3306/csage?charset=utf8mb4`
+- `CSAGE_MYSQL_DATABASE`：Docker Compose 中 MySQL 容器初始化数据库名，默认 `csage`
+- `CSAGE_MYSQL_USER`：Docker Compose 中 MySQL 业务用户名，默认 `csage`
+- `CSAGE_MYSQL_PASSWORD`：Docker Compose 中 MySQL 业务用户密码，默认 `csage123`
+- `CSAGE_MYSQL_ROOT_PASSWORD`：Docker Compose 中 MySQL root 密码，默认 `csage_root`
+- `CSAGE_MYSQL_HOST_PORT`：Docker Compose 暴露到宿主机的 MySQL 端口，默认 `3307`
 > 数据库字符集必须 utf8mb4（中文与表情符号更稳）。
 
 

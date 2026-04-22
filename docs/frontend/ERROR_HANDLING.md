@@ -36,6 +36,13 @@
   - 就地标红表单项，提示用户修正输入
 - `KB_NOT_FOUND` / `DOCUMENT_NOT_FOUND` / `INGEST_JOB_NOT_FOUND`
   - 跳转列表页并提示资源不存在
+- 问答页遇到 `KB_NOT_FOUND` / `KB_ACCESS_DENIED`
+  - 自动刷新知识库列表
+  - 若当前知识库已失效，则切换到首个仍可用知识库
+  - 清理失效会话上下文，并尽量保留用户刚输入的问题文本
+- 问答页遇到 `CONVERSATION_NOT_FOUND`
+  - 自动刷新当前知识库的会话列表
+  - 清理失效会话上下文，避免继续向已删除会话发送请求
 - `FILE_TYPE_NOT_ALLOWED`
   - 上传控件前置校验并提示仅支持 PDF
 - `FILE_TOO_LARGE`
@@ -58,8 +65,9 @@
 - 当 `refusal=true`：
   - 不显示红色错误条
   - 显示中性提示卡片：
-    - `refusal_reason`
+    - 映射后的中文 `refusal_reason`
     - `suggestions[]`
+    - 可复制的 `request_id`（放在次级信息区）
   - 若有弱相关引用，可照常展示
 
 ## 7.1 流式取消处理（非错误）

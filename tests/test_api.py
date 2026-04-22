@@ -185,8 +185,10 @@ def test_conversation_detail_persists_refusal_next_steps() -> None:
     assistant_message = assistant_messages[-1]
     assert assistant_message["refusal"] is True
     assert assistant_message["refusal_reason"] == payload["refusal_reason"]
+    assert assistant_message["suggestions"] == payload["suggestions"]
     assert assistant_message["next_steps"]
     assert assistant_message["next_steps"][0]["action"] in NEXT_STEP_ACTIONS
+    assert assistant_message["request_id"] == payload["request_id"]
 
     page_response = client.get(
         f"/api/v1/conversations/{payload['conversation_id']}/messages?limit=10",
@@ -196,7 +198,9 @@ def test_conversation_detail_persists_refusal_next_steps() -> None:
     page_payload = page_response.json()
     paged_assistant = [item for item in page_payload["items"] if item["role"] == "assistant"]
     assert paged_assistant
+    assert paged_assistant[-1]["suggestions"] == payload["suggestions"]
     assert paged_assistant[-1]["next_steps"]
+    assert paged_assistant[-1]["request_id"] == payload["request_id"]
 
 
 def test_ask_with_legacy_invalid_kb_config_fallback() -> None:
@@ -566,11 +570,13 @@ def test_monitor_runtime_diagnostics() -> None:
     response = client.get("/api/v1/monitor/runtime", headers=headers)
     assert response.status_code == 200
     payload = response.json()
+    settings = get_settings()
     assert payload["request_id"]
     assert payload["database"]["schema_version"] == LATEST_SCHEMA_VERSION
-    assert payload["database"]["backend"] == "sqlite"
-    assert payload["services"]["vector_backend"] == get_settings().vector_backend
-    assert payload["services"]["embedding_backend"] == get_settings().embedding_backend
+    assert payload["database"]["backend"] == settings.database_backend
+    assert payload["database"]["target"] == settings.database_target
+    assert payload["services"]["vector_backend"] == settings.vector_backend
+    assert payload["services"]["embedding_backend"] == settings.embedding_backend
     assert payload["rag_metrics"]["sample_size"] >= 0
     assert "clarification_rate" in payload["rag_metrics"]
     assert "citation_coverage_rate" in payload["rag_metrics"]
@@ -610,6 +616,7 @@ def test_monitor_runtime_rag_metrics_reflect_recent_messages() -> None:
             refusal=True,
             refusal_reason="LOW_COVERAGE",
             timing=None,
+            suggestions=["建议补充学院和年级信息"],
             next_steps=[{"action": "add_context"}],
             citations=[],
             created_at=utc_now_iso(),
@@ -622,6 +629,7 @@ def test_monitor_runtime_rag_metrics_reflect_recent_messages() -> None:
             refusal=False,
             refusal_reason=None,
             timing=None,
+            suggestions=[],
             next_steps=[{"action": "check_official_source"}],
             citations=[{"citation_id": 1, "doc_id": "doc_demo"}],
             created_at=utc_now_iso(),
@@ -634,6 +642,7 @@ def test_monitor_runtime_rag_metrics_reflect_recent_messages() -> None:
             refusal=False,
             refusal_reason=None,
             timing=None,
+            suggestions=[],
             next_steps=[],
             citations=[],
             created_at=utc_now_iso(),

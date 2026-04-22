@@ -2343,6 +2343,50 @@ body {
   line-height: 1.72;
 }
 
+.chat-thread-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.92), rgba(255, 255, 255, 0.98));
+}
+
+.chat-thread-summary__main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-thread-summary__title {
+  color: var(--text-primary);
+}
+
+.chat-thread-summary__detail {
+  line-height: 1.6;
+}
+
+.chat-thread-summary__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chat-thread-summary__request-id {
+  max-width: 320px;
+  text-align: right;
+}
+
+.chat-thread-summary__link {
+  padding-inline: 0 !important;
+}
+
 .chat-bubble-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2420,6 +2464,35 @@ body {
   box-shadow:
     0 22px 50px rgba(15, 23, 42, 0.08),
     0 6px 14px rgba(15, 23, 42, 0.05);
+}
+
+.chat-composer-guidance {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.chat-composer-guidance__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-composer-guidance__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-composer-guidance__actions .ant-btn {
+  border-radius: 999px;
+  border-color: rgba(37, 99, 235, 0.16);
+  background: rgba(239, 246, 255, 0.78);
 }
 
 .chat-composer .ant-input-textarea {
@@ -2632,6 +2705,7 @@ body {
 .chat-sidebar-item,
 .conversation-list-item,
 .conversation-message,
+.chat-thread-summary,
 .summary-item,
 .kb-overview__summary,
 .kb-overview-summary-item,
@@ -2660,6 +2734,7 @@ body {
 .chat-sidebar-brand,
 .chat-sidebar-user,
 .chat-sidebar-item--active,
+.chat-thread-summary,
 .chat-composer,
 .chat-bubble {
   background: #ffffff;
@@ -4320,6 +4395,51 @@ body {
   margin: 0 auto 22px;
 }
 
+.chat-thread-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  width: min(100%, 860px);
+  margin: 0 auto 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.chat-thread-summary__main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-thread-summary__title {
+  color: #0f172a;
+}
+
+.chat-thread-summary__detail {
+  line-height: 1.6;
+}
+
+.chat-thread-summary__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chat-thread-summary__request-id {
+  max-width: 320px;
+  text-align: right;
+}
+
+.chat-thread-summary__link {
+  padding-inline: 0 !important;
+}
+
 .chat-bubble {
   box-shadow: none;
 }
@@ -4386,6 +4506,35 @@ body {
   box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
 }
 
+.chat-composer-guidance {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.chat-composer-guidance__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-composer-guidance__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-composer-guidance__actions .ant-btn {
+  border-radius: 999px;
+  border-color: rgba(37, 99, 235, 0.16);
+  background: rgba(239, 246, 255, 0.78);
+}
+
 .chat-composer .ant-input {
   font-size: 15px;
   line-height: 1.7;
@@ -4440,6 +4589,11 @@ body {
     padding-inline: 18px;
   }
 
+  .chat-thread-summary {
+    margin-inline: 18px;
+    width: auto;
+  }
+
   .chat-empty-panel__prompts {
     grid-template-columns: 1fr;
   }
@@ -4450,6 +4604,20 @@ body {
 
   .chat-composer-shell {
     padding-inline: 16px;
+  }
+
+  .chat-thread-summary,
+  .chat-thread-summary__meta {
+    align-items: flex-start;
+  }
+
+  .chat-thread-summary {
+    flex-direction: column;
+  }
+
+  .chat-thread-summary__request-id {
+    max-width: 100%;
+    text-align: left;
   }
 }
 

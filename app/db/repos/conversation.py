@@ -218,9 +218,9 @@ class ConversationRepository:
             """
             INSERT INTO message (
                 message_id, conversation_id, role, content, refusal, refusal_reason,
-                timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
-                sequence_no, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                timing_json, suggestions_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
+                sequence_no, created_at, request_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             (
                 record.message_id,
@@ -230,12 +230,14 @@ class ConversationRepository:
                 int(record.refusal),
                 record.refusal_reason,
                 self._dumps(record.timing),
+                self._dumps(record.suggestions),
                 self._dumps(record.next_steps),
                 self._dumps(record.citations),
                 record.parent_message_id,
                 record.edited_from_message_id,
                 record.sequence_no,
                 record.created_at,
+                record.request_id,
             ),
         )
         self._db.execute(
@@ -256,8 +258,8 @@ class ConversationRepository:
         rows = self._db.fetch_all(
             """
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
-                   sequence_no, created_at
+                   timing_json, suggestions_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
+                   sequence_no, created_at, request_id
             FROM message
             WHERE conversation_id = ?
             ORDER BY COALESCE(sequence_no, 0) ASC, created_at ASC;
@@ -273,12 +275,14 @@ class ConversationRepository:
                 refusal=bool(row["refusal"]),
                 refusal_reason=row["refusal_reason"],
                 timing=self._loads(row["timing_json"]),
+                suggestions=self._loads(row["suggestions_json"]) or [],
                 next_steps=self._loads(row["next_steps_json"]) or [],
                 citations=self._loads(row["citations_json"]) or [],
                 parent_message_id=row["parent_message_id"],
                 edited_from_message_id=row["edited_from_message_id"],
                 sequence_no=row["sequence_no"],
                 created_at=row["created_at"],
+                request_id=row.get("request_id"),
             )
             for row in rows
         ]
@@ -303,8 +307,8 @@ class ConversationRepository:
         rows = self._db.fetch_all(
             f"""
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
-                   sequence_no, created_at
+                   timing_json, suggestions_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
+                   sequence_no, created_at, request_id
             FROM message
             {where_clause}
             ORDER BY COALESCE(sequence_no, 0) DESC, created_at DESC
@@ -324,12 +328,14 @@ class ConversationRepository:
                 refusal=bool(row["refusal"]),
                 refusal_reason=row["refusal_reason"],
                 timing=self._loads(row["timing_json"]),
+                suggestions=self._loads(row["suggestions_json"]) or [],
                 next_steps=self._loads(row["next_steps_json"]) or [],
                 citations=self._loads(row["citations_json"]) or [],
                 parent_message_id=row["parent_message_id"],
                 edited_from_message_id=row["edited_from_message_id"],
                 sequence_no=row["sequence_no"],
                 created_at=row["created_at"],
+                request_id=row.get("request_id"),
             )
             for row in rows
         ]
@@ -342,8 +348,8 @@ class ConversationRepository:
         row = self._db.fetch_one(
             """
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
-                   sequence_no, created_at
+                   timing_json, suggestions_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
+                   sequence_no, created_at, request_id
             FROM message
             WHERE message_id = ?;
             """,
@@ -359,12 +365,14 @@ class ConversationRepository:
             refusal=bool(row["refusal"]),
             refusal_reason=row["refusal_reason"],
             timing=self._loads(row["timing_json"]),
+            suggestions=self._loads(row["suggestions_json"]) or [],
             next_steps=self._loads(row["next_steps_json"]) or [],
             citations=self._loads(row["citations_json"]) or [],
             parent_message_id=row["parent_message_id"],
             edited_from_message_id=row["edited_from_message_id"],
             sequence_no=row["sequence_no"],
             created_at=row["created_at"],
+            request_id=row.get("request_id"),
         )
 
     def get_previous_user_message(
@@ -379,8 +387,8 @@ class ConversationRepository:
         row = self._db.fetch_one(
             """
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
-                   sequence_no, created_at
+                   timing_json, suggestions_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
+                   sequence_no, created_at, request_id
             FROM message
             WHERE conversation_id = ? AND role = 'user' AND COALESCE(sequence_no, 0) < ?
             ORDER BY COALESCE(sequence_no, 0) DESC, created_at DESC
@@ -398,12 +406,14 @@ class ConversationRepository:
             refusal=bool(row["refusal"]),
             refusal_reason=row["refusal_reason"],
             timing=self._loads(row["timing_json"]),
+            suggestions=self._loads(row["suggestions_json"]) or [],
             next_steps=self._loads(row["next_steps_json"]) or [],
             citations=self._loads(row["citations_json"]) or [],
             parent_message_id=row["parent_message_id"],
             edited_from_message_id=row["edited_from_message_id"],
             sequence_no=row["sequence_no"],
             created_at=row["created_at"],
+            request_id=row.get("request_id"),
         )
 
     def list_recent_assistant_messages(self, limit: int) -> list[MessageRecord]:
@@ -413,8 +423,8 @@ class ConversationRepository:
         rows = self._db.fetch_all(
             """
             SELECT message_id, conversation_id, role, content, refusal, refusal_reason,
-                   timing_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
-                   sequence_no, created_at
+                   timing_json, suggestions_json, next_steps_json, citations_json, parent_message_id, edited_from_message_id,
+                   sequence_no, created_at, request_id
             FROM message
             WHERE role = 'assistant'
             ORDER BY created_at DESC, COALESCE(sequence_no, 0) DESC
@@ -431,12 +441,14 @@ class ConversationRepository:
                 refusal=bool(row["refusal"]),
                 refusal_reason=row["refusal_reason"],
                 timing=self._loads(row["timing_json"]),
+                suggestions=self._loads(row["suggestions_json"]) or [],
                 next_steps=self._loads(row["next_steps_json"]) or [],
                 citations=self._loads(row["citations_json"]) or [],
                 parent_message_id=row["parent_message_id"],
                 edited_from_message_id=row["edited_from_message_id"],
                 sequence_no=row["sequence_no"],
                 created_at=row["created_at"],
+                request_id=row.get("request_id"),
             )
             for row in rows
         ]

@@ -115,10 +115,12 @@ class RagService:
         user_message = self._save_user_message(
             conversation_id=conversation.conversation_id,
             question=question,
+            request_id=request_id,
         )
         assistant_message = self._save_assistant_message(
             conversation_id=conversation.conversation_id,
             computed=computed,
+            request_id=request_id,
             parent_message_id=user_message.message_id,
         )
         result = AskResult(
@@ -186,6 +188,7 @@ class RagService:
         assistant_message = self._save_assistant_message(
             conversation_id=conversation_id,
             computed=computed,
+            request_id=request_id,
             parent_message_id=user_message_id,
         )
         result = AskResult(
@@ -261,6 +264,7 @@ class RagService:
         user_message = self._save_user_message(
             conversation_id=conversation.conversation_id,
             question=question,
+            request_id=request_id,
         )
         if cancel_checker():
             yield self._canceled_event(run_id, request_id, user_message.message_id)
@@ -288,6 +292,7 @@ class RagService:
             assistant_message = self._save_assistant_message(
                 conversation_id=conversation.conversation_id,
                 computed=computed,
+                request_id=request_id,
                 parent_message_id=user_message.message_id,
             )
             self._log_ask(
@@ -355,6 +360,7 @@ class RagService:
         assistant_message = self._save_assistant_message(
             conversation_id=conversation.conversation_id,
             computed=computed,
+            request_id=request_id,
             parent_message_id=user_message.message_id,
         )
         for citation in computed.citations:
@@ -697,7 +703,12 @@ class RagService:
         answer_with_warning = f"{answer}\n\n提示：{warning}"
         return answer_with_warning, suggestions, next_steps
 
-    def _save_user_message(self, conversation_id: str, question: str) -> MessageRecord:
+    def _save_user_message(
+        self,
+        conversation_id: str,
+        question: str,
+        request_id: str | None,
+    ) -> MessageRecord:
         """保存用户消息。"""
 
         return self._conversation_service.save_message(
@@ -707,14 +718,17 @@ class RagService:
             refusal=False,
             refusal_reason=None,
             timing=None,
+            suggestions=None,
             next_steps=None,
             citations=None,
+            request_id=request_id,
         )
 
     def _save_assistant_message(
         self,
         conversation_id: str,
         computed: _ComputationResult,
+        request_id: str | None,
         parent_message_id: str | None,
     ) -> MessageRecord:
         """保存助手消息。"""
@@ -726,8 +740,10 @@ class RagService:
             refusal=computed.refusal,
             refusal_reason=computed.refusal_reason,
             timing=computed.timing,
+            suggestions=computed.suggestions,
             next_steps=[item.model_dump() for item in computed.next_steps],
             citations=[item.model_dump() for item in computed.citations],
+            request_id=request_id,
             message_id=new_id("msg"),
             parent_message_id=parent_message_id,
         )

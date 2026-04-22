@@ -508,6 +508,56 @@ def test_latest_question_adds_freshness_warning() -> None:
     assert any(step["action"] == "check_official_source" for step in payload["next_steps"])
 
 
+def test_ambiguous_followup_without_new_constraints_still_clarifies() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post(
+        "/api/v1/kb",
+        json={"name": "纯指代追问知识库", "config": _kb_config(topk=1, threshold=0.0)},
+        headers=headers,
+    ).json()["kb_id"]
+    upload = client.post(
+        f"/api/v1/kb/{kb_id}/documents",
+        files={
+            "file": (
+                "followup.pdf",
+                "补考申请条件 本科生 在规定时间内提交申请".encode("utf-8"),
+                "application/pdf",
+            )
+        },
+        headers=headers,
+    )
+    assert upload.status_code == 200
+    _wait_for_job(client, upload.json()["job"]["job_id"], headers)
+
+    first = client.post(
+        f"/api/v1/kb/{kb_id}/ask",
+        json={"question": "补考申请条件是什么？"},
+        headers=headers,
+    )
+    if is_qdrant_backend() and not is_qdrant_available():
+        assert first.status_code == 503
+        assert first.json()["error"]["code"] == "VECTOR_SEARCH_FAILED"
+        return
+    assert first.status_code == 200
+    first_payload = first.json()
+    assert first_payload["refusal"] is False
+
+    second = client.post(
+        f"/api/v1/kb/{kb_id}/ask",
+        json={
+            "question": "这个怎么办？",
+            "conversation_id": first_payload["conversation_id"],
+        },
+        headers=headers,
+    )
+    assert second.status_code == 200
+    second_payload = second.json()
+    assert second_payload["conversation_id"] == first_payload["conversation_id"]
+    assert second_payload["refusal"] is True
+    assert any(step["action"] == "add_context" for step in second_payload["next_steps"])
+
+
 def test_semantic_no_evidence_answer_switches_to_refusal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

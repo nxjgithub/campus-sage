@@ -120,6 +120,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 若未启动 Qdrant/Redis，相关集成测试可能被跳过或返回依赖不可用错误，这属于可预期行为。
 - 所有 Python 命令默认使用仓库本地 `.venv` 执行；禁止 `pip --user` 用户级安装。
 - 开发环境必须禁用 user-site（`PYTHONNOUSERSITE=1`），避免从 `AppData\Roaming\Python\...` 混入用户级包。
+- 使用 Docker Compose 时，容器内 MySQL 相关变量统一使用 `CSAGE_MYSQL_*` 与 `CSAGE_DATABASE_URL_INTERNAL`，避免宿主机已有的通用 `MYSQL_*` 环境变量干扰当前项目。
 
 ### 5.2 前端
 - 安装依赖：`pnpm install`

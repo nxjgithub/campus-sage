@@ -371,6 +371,9 @@ VECTOR_BACKEND=qdrant
 QDRANT_URL=http://127.0.0.1:6333
 ```
 3. 重启服务后即可使用 MySQL 作为关系库、Qdrant 作为向量库。
+补充说明：
+- 若通过 Docker Compose 启动 `api/worker`，请同时在 `.env` 中配置 `CSAGE_DATABASE_URL_INTERNAL`。
+- 若 MySQL 密码包含 `@`、`:`、`/`、`?` 等 URL 保留字符，`CSAGE_DATABASE_URL_INTERNAL` 中必须使用 URL 编码后的密码，避免容器内 `DATABASE_URL` 解析失败。
 
 
 ## 11. 常见问题
@@ -408,6 +411,8 @@ docker compose down
 说明：
 - Compose 中 `api/worker` 默认使用容器内 MySQL 地址：`mysql+pymysql://csage:<password>@mysql:3306/<db>?charset=utf8mb4`。
 - 宿主机默认通过 `127.0.0.1:3307` 访问容器内 MySQL，可避免与本机已安装的 MySQL 争抢 3306 端口。
+- Compose 读取容器内数据库地址时优先使用 `CSAGE_DATABASE_URL_INTERNAL`；若你自定义了 Compose 的 MySQL 密码，也必须同步更新该值。
+- Compose 的 MySQL 初始化变量统一使用 `CSAGE_MYSQL_*` 前缀，避免宿主机上已有的通用 `MYSQL_*` 环境变量污染当前项目。
 - Compose 中 `api/worker` 已强制使用容器内地址：`QDRANT_URL=http://qdrant:6333`、`REDIS_URL=redis://redis:6379/0`。
 - Compose 中 `api/worker` 默认使用容器内 Embedding 地址：`EMBEDDING_BASE_URL=http://tei:80/v1`、`EMBEDDING_API_PATH=/embeddings`，避免容器内误连 `127.0.0.1`。
 - 如需自定义容器内 Embedding 地址，可设置 `EMBEDDING_BASE_URL_INTERNAL` 与 `EMBEDDING_API_PATH_INTERNAL`。

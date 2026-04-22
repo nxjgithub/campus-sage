@@ -16,9 +16,11 @@ class MessageRecord:
     refusal: bool
     refusal_reason: str | None
     timing: dict[str, int] | None
+    suggestions: list[str] | None
     next_steps: list[dict[str, object]]
     citations: list[dict[str, object]]
     created_at: str
+    request_id: str | None = None
     parent_message_id: str | None = None
     edited_from_message_id: str | None = None
     sequence_no: int | None = None

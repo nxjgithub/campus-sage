@@ -38,6 +38,8 @@ import { FeedbackAction } from "../../shared/components/FeedbackAction";
 import { RefusalNextStepsCard } from "../../shared/components/RefusalNextStepsCard";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import { splitCitationMarkers } from "../../shared/utils/citation";
+import { resolveReviewNextStep } from "../../shared/utils/nextStep";
+import { formatRefusalReason } from "../../shared/utils/refusal";
 
 type SortOrder = "desc" | "asc";
 type MessageFilter = "all" | "assistant" | "user";
@@ -116,8 +118,9 @@ export function MessageCard(props: {
   submitting: boolean;
   submitted: boolean;
   onFeedbackSubmit: (messageId: string, payload: FeedbackPayload) => Promise<void>;
+  onApplyNextStep?: (step: NonNullable<ConversationMessage["next_steps"]>[number], citations: CitationItem[]) => void | Promise<void>;
 }) {
-  const { item, submitting, submitted, onFeedbackSubmit } = props;
+  const { item, submitting, submitted, onFeedbackSubmit, onApplyNextStep } = props;
   const citations = asCitationItems(item.citations);
   const timing = timingEntries(item.timing);
   const [activeCitationId, setActiveCitationId] = useState<number | null>(null);
@@ -154,12 +157,23 @@ export function MessageCard(props: {
           <Space direction="vertical" style={{ width: "100%" }} size={10}>
             {item.refusal && item.refusal_reason ? (
               <Card size="small" className="card-inset" title="拒答说明">
-                <Typography.Text type="secondary">{item.refusal_reason}</Typography.Text>
+                <Typography.Text type="secondary">
+                  {formatRefusalReason(item.refusal_reason)}
+                </Typography.Text>
               </Card>
+            ) : null}
+            {item.request_id ? (
+              <Typography.Text copyable={{ text: item.request_id }} type="secondary">
+                请求 ID：{item.request_id}
+              </Typography.Text>
             ) : null}
             {item.refusal ? (
               <RefusalNextStepsCard
                 nextSteps={Array.isArray(item.next_steps) ? item.next_steps : []}
+                suggestions={Array.isArray(item.suggestions) ? item.suggestions : []}
+                onApplyStep={(step) => {
+                  void onApplyNextStep?.(step, citations);
+                }}
               />
             ) : null}
             {timing.length > 0 ? (
@@ -362,6 +376,35 @@ export function ConversationsPage() {
     } finally {
       setSubmittingFeedbackMessageId((current) => (current === messageId ? null : current));
     }
+  };
+
+  const handleApplyNextStep = async (
+    step: NonNullable<ConversationMessage["next_steps"]>[number],
+    citations: CitationItem[]
+  ) => {
+    const resolution = resolveReviewNextStep(step, citations);
+
+    if (resolution.kind === "open") {
+      window.open(resolution.payload, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    if (resolution.kind === "copy") {
+      try {
+        if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(resolution.payload);
+          message.success("建议内容已复制");
+          return;
+        }
+      } catch {
+        message.info(`建议内容：${resolution.payload}`);
+        return;
+      }
+      message.info(`建议内容：${resolution.payload}`);
+      return;
+    }
+
+    message.info(resolution.payload);
   };
 
   return (
@@ -585,6 +628,7 @@ export function ConversationsPage() {
                           submitting={submittingFeedbackMessageId === item.message_id}
                           submitted={Boolean(submittedFeedbackMap[item.message_id])}
                           onFeedbackSubmit={handleFeedbackSubmit}
+                          onApplyNextStep={handleApplyNextStep}
                         />
                       )}
                     />

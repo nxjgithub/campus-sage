@@ -291,9 +291,12 @@ describe("AskPage 聊天交互", () => {
     await fillQuestionInput("这个问题信息不够");
     await userEvent.click(screen.getByRole("button", { name: /发送/ }));
 
-    expect(await screen.findByText("补充场景条件")).toBeInTheDocument();
+    expect(await screen.findByText("等待补充")).toBeInTheDocument();
+    expect(screen.getByText("继续追问建议")).toBeInTheDocument();
+    expect(screen.getByText("请求 ID：req_refusal")).toBeInTheDocument();
+    expect((await screen.findAllByText("补充场景条件")).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("建议补充学院、年级、身份或办理场景等限定信息")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "查看官方来源" })).toBeInTheDocument();
+    expect((await screen.findAllByRole("button", { name: "查看官方来源" })).length).toBeGreaterThanOrEqual(2);
 
     await userEvent.click(screen.getByRole("button", { name: "填入补充条件" }));
 
@@ -303,7 +306,7 @@ describe("AskPage 聊天交互", () => {
       );
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "查看官方来源" }));
+    await userEvent.click((await screen.findAllByRole("button", { name: "查看官方来源" }))[0]);
 
     expect(windowOpenMock).toHaveBeenCalledWith(
       "https://example.edu/academic/policy",
@@ -320,6 +323,36 @@ describe("AskPage 聊天交互", () => {
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/请输入你的问题|请输入问题/)).toHaveValue(
         "研究生复试需要准备哪些材料？"
+      );
+    });
+  });
+
+  it("知识库失效后应自动刷新并回退到可用知识库", async () => {
+    vi.mocked(fetchKbList)
+      .mockResolvedValueOnce({
+        items: [{ kb_id: "kb_deleted", name: "失效知识库", visibility: "public", updated_at: "2026-02-21" }]
+      })
+      .mockResolvedValueOnce({
+        items: [{ kb_id: "kb_1", name: "教务知识库", visibility: "public", updated_at: "2026-02-22" }]
+      });
+    vi.mocked(askStreamByKb).mockRejectedValue({
+      code: "KB_NOT_FOUND",
+      message: "知识库不存在",
+      request_id: "req_missing_kb"
+    });
+
+    renderWithProviders(<AskPage />);
+
+    await fillQuestionInput("补考申请条件？");
+    await userEvent.click(screen.getByRole("button", { name: /发送/ }));
+
+    await waitFor(() => {
+      expect(fetchKbList).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(screen.getByText("知识库：教务知识库")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/请输入你的问题|请输入问题/)).toHaveValue(
+        "补考申请条件？"
       );
     });
   });

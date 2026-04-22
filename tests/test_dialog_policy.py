@@ -61,6 +61,15 @@ def test_analyze_intent_rewrites_followup_query() -> None:
     assert decision.retrieval_query.startswith("补考申请条件是什么")
 
 
+def test_analyze_intent_keeps_clarification_for_underspecified_followup() -> None:
+    history = [_message(role="user", content="补考申请条件是什么？")]
+    state = build_dialog_state(history)
+    decision = analyze_intent("这个怎么办", state)
+    assert decision.intent == "clarification"
+    assert decision.early_refusal is True
+    assert any(step.action == "add_context" for step in decision.next_steps)
+
+
 def test_analyze_intent_prefers_policy_query_when_topic_is_clear() -> None:
     state = build_dialog_state([])
     decision = analyze_intent("本科生补考流程和申请材料是什么？", state)
@@ -123,6 +132,7 @@ def _message(
         refusal=refusal,
         refusal_reason="LOW_COVERAGE" if refusal else None,
         timing=None,
+        suggestions=[],
         next_steps=next_steps or [],
         citations=[],
         created_at=utc_now_iso(),

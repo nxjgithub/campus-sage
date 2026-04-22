@@ -68,9 +68,11 @@ class MessageItem(BaseModel):
     citations: list[Citation] | None = Field(default=None, description="引用列表")
     refusal: bool | None = Field(default=None, description="是否拒答")
     refusal_reason: str | None = Field(default=None, description="拒答原因")
+    suggestions: list[str] | None = Field(default=None, description="补充建议列表")
     next_steps: list[NextStep] | None = Field(default=None, description="结构化下一步建议")
     timing: dict[str, int] | None = Field(default=None, description="耗时信息")
     created_at: str = Field(description="创建时间")
+    request_id: str | None = Field(default=None, description="消息所属请求ID")
 
 
 class ConversationDetailResponse(RequestIdMixin):

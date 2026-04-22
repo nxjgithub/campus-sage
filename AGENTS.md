@@ -1,4 +1,4 @@
-# AGENTS.md — 给 Codex / AI Agent 的仓库级工作约束（必须遵守） codex resume 019dadff-a229-7863-bf18-fca74f42f462
+# AGENTS.md — 给 Codex / AI Agent 的仓库级工作约束（必须遵守） 
 
 本项目：CampusSage（CSage）— Evidence-grounded University Knowledge Assistant（RAG）  
 当前技术栈：FastAPI + VectorDB(Qdrant 默认) + vLLM + OpenAI 兼容 Embedding（后端）+ React 前端（已落地）

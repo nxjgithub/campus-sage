@@ -55,6 +55,8 @@ import { PortalSwitch } from "../../shared/components/PortalSwitch";
 import { RefusalNextStepsCard } from "../../shared/components/RefusalNextStepsCard";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import { splitCitationMarkers } from "../../shared/utils/citation";
+import { resolveOfficialSourceUrl } from "../../shared/utils/nextStep";
+import { formatRefusalReason } from "../../shared/utils/refusal";
 
 type ComposerStatus = "idle" | "sending" | "streaming" | "stopping" | "failed";
 
@@ -72,6 +74,13 @@ interface ThreadMessage {
   created_at: string;
   request_id: string | null;
   pending: boolean;
+}
+
+interface ThreadSummary {
+  tagColor: string;
+  label: string;
+  title: string;
+  detail: string;
 }
 
 const MESSAGE_PAGE_SIZE = 30;
@@ -112,11 +121,11 @@ function toThreadMessage(item: ConversationMessage): ThreadMessage {
     citations: Array.isArray(item.citations) ? item.citations : [],
     refusal: item.refusal ?? null,
     refusal_reason: item.refusal_reason ?? null,
-    suggestions: [],
+    suggestions: Array.isArray(item.suggestions) ? item.suggestions : [],
     next_steps: Array.isArray(item.next_steps) ? item.next_steps : [],
     timing: item.timing ?? null,
     created_at: item.created_at,
-    request_id: null,
+    request_id: item.request_id ?? null,
     pending: false
   };
 }
@@ -157,26 +166,6 @@ function buildDraftFromNextStep(step: NextStepItem, currentQuestion: string) {
     return value || trimmedQuestion;
   }
   return value || trimmedQuestion;
-}
-
-function isOfficialSourceUrl(value?: string | null) {
-  if (!value) {
-    return false;
-  }
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function resolveOfficialSourceUrl(step: NextStepItem, citations: CitationItem[]) {
-  if (isOfficialSourceUrl(step.value)) {
-    return step.value as string;
-  }
-  const candidate = citations.find((citation) => isOfficialSourceUrl(citation.source_uri));
-  return candidate?.source_uri ?? null;
 }
 
 function compactTime(iso?: string | null) {
@@ -231,6 +220,100 @@ function isAbortError(error: unknown) {
 
 function summarizeConversation(item: ConversationListItem) {
   return item.last_message_preview || "暂无消息";
+}
+
+function resolveNextKbId(currentKbId: string, items: { kb_id: string }[]) {
+  if (!items.length) {
+    return "";
+  }
+  if (currentKbId && items.some((item) => item.kb_id === currentKbId)) {
+    return currentKbId;
+  }
+  return items[0].kb_id;
+}
+
+function resolveNextConversationId(
+  currentConversationId: string | null,
+  items: ConversationListItem[]
+) {
+  if (!items.length) {
+    return null;
+  }
+  if (
+    currentConversationId &&
+    items.some((item) => item.conversation_id === currentConversationId)
+  ) {
+    return currentConversationId;
+  }
+  return items[0].conversation_id;
+}
+
+function buildThreadSummary(params: {
+  composerStatus: ComposerStatus;
+  hasMessages: boolean;
+  hasConversation: boolean;
+  latestAssistant: ThreadMessage | null;
+}) {
+  const { composerStatus, hasMessages, hasConversation, latestAssistant } = params;
+  if (composerStatus === "sending") {
+    return {
+      tagColor: "processing",
+      label: "发送中",
+      title: "问题已提交",
+      detail: "正在准备检索上下文，请稍候。"
+    } satisfies ThreadSummary;
+  }
+  if (composerStatus === "streaming") {
+    return {
+      tagColor: "blue",
+      label: "生成中",
+      title: "正在输出回答",
+      detail: "助手会持续补全正文和引用，可随时停止。"
+    } satisfies ThreadSummary;
+  }
+  if (composerStatus === "stopping") {
+    return {
+      tagColor: "warning",
+      label: "停止中",
+      title: "正在终止本轮生成",
+      detail: "服务会尽快收敛当前 run 状态。"
+    } satisfies ThreadSummary;
+  }
+  if (!hasMessages) {
+    return {
+      tagColor: "default",
+      label: hasConversation ? "等待提问" : "新会话",
+      title: hasConversation ? "当前会话还没有消息" : "准备开始一次新问答",
+      detail: "选择知识库后输入问题，系统会返回引用或结构化拒答建议。"
+    } satisfies ThreadSummary;
+  }
+  if (latestAssistant?.refusal) {
+    const firstStep = latestAssistant.next_steps[0];
+    return {
+      tagColor: "warning",
+      label: "等待补充",
+      title: formatRefusalReason(latestAssistant.refusal_reason),
+      detail:
+        firstStep?.detail ?? "当前问题还缺少场景、条件或对象，建议先补全再继续追问。"
+    } satisfies ThreadSummary;
+  }
+  if (latestAssistant) {
+    return {
+      tagColor: "success",
+      label: "已回答",
+      title: "最近一轮回答已完成",
+      detail:
+        latestAssistant.citations.length > 0
+          ? `本轮附带 ${latestAssistant.citations.length} 条引用，可直接打开证据面板复核。`
+          : "当前回答已生成完成，可继续追问补充细节。"
+    } satisfies ThreadSummary;
+  }
+  return {
+    tagColor: "default",
+    label: "待处理",
+    title: "等待下一步操作",
+    detail: "你可以继续提问，或切换到其他会话。"
+  } satisfies ThreadSummary;
 }
 
 export function AskPage() {
@@ -294,19 +377,53 @@ export function AskPage() {
     [conversationQuery.data?.items]
   );
 
+  const isBusy =
+    composerStatus === "sending" ||
+    composerStatus === "streaming" ||
+    composerStatus === "stopping";
+
   useEffect(() => {
-    if (kbId || !kbQuery.data?.items.length) {
+    const nextKbId = resolveNextKbId(kbId, kbQuery.data?.items ?? []);
+    if (nextKbId === kbId) {
       return;
     }
-    setKbId(kbQuery.data.items[0].kb_id);
+    setKbId(nextKbId);
+    setKeyword("");
+    setActiveConversationId(null);
+    setHistoryMessages([]);
+    setLocalMessages([]);
+    setMessagesHasMore(false);
+    setMessagesBefore(null);
+    setMessagesError(null);
+    setThreadError(null);
+    setActiveAssistantKey(null);
+    setActiveCitationId(null);
   }, [kbId, kbQuery.data?.items]);
 
   useEffect(() => {
-    if (!hasAccessToken || activeConversationId || !conversationItems.length) {
+    if (!hasAccessToken || isBusy) {
       return;
     }
-    setActiveConversationId(conversationItems[0].conversation_id);
-  }, [activeConversationId, conversationItems, hasAccessToken]);
+    const nextConversationId = resolveNextConversationId(
+      activeConversationId,
+      conversationItems
+    );
+    if (nextConversationId === activeConversationId) {
+      return;
+    }
+    setActiveConversationId(nextConversationId);
+    if (nextConversationId) {
+      return;
+    }
+    setHistoryMessages([]);
+    setLocalMessages([]);
+    setMessagesHasMore(false);
+    setMessagesBefore(null);
+    setMessagesError(null);
+    setThreadError(null);
+    setActiveAssistantKey(null);
+    setActiveCitationId(null);
+  }, [activeConversationId, conversationItems, hasAccessToken, isBusy]);
 
   const threadMessages = useMemo(
     () => mergeMessages(historyMessages, localMessages),
@@ -336,6 +453,8 @@ export function AskPage() {
     [threadMessages]
   );
 
+  const latestAssistant = assistantMessages[assistantMessages.length - 1] ?? null;
+
   useEffect(() => {
     if (!assistantMessages.length) {
       setActiveAssistantKey(null);
@@ -356,6 +475,22 @@ export function AskPage() {
   }, [activeAssistantKey, assistantMessages]);
 
   const latestAssistantContent = assistantMessages[assistantMessages.length - 1]?.content ?? "";
+
+  const threadSummary = useMemo(
+    () =>
+      buildThreadSummary({
+        composerStatus,
+        hasMessages: threadMessages.length > 0,
+        hasConversation: Boolean(activeConversationId),
+        latestAssistant
+      }),
+    [activeConversationId, composerStatus, latestAssistant, threadMessages.length]
+  );
+
+  const composerNextSteps = useMemo(
+    () => (latestAssistant?.refusal ? latestAssistant.next_steps.slice(0, 3) : []),
+    [latestAssistant]
+  );
 
   useEffect(() => {
     const container = threadViewportRef.current;
@@ -426,16 +561,25 @@ export function AskPage() {
     retry: false
   });
 
-  const isBusy =
-    composerStatus === "sending" ||
-    composerStatus === "streaming" ||
-    composerStatus === "stopping";
-
   const refreshConversationList = async () => {
     if (!hasAccessToken) {
       return;
     }
     await conversationQuery.refetch();
+  };
+
+  const resetThreadState = (options?: { clearConversationId?: boolean }) => {
+    if (options?.clearConversationId ?? true) {
+      setActiveConversationId(null);
+    }
+    setHistoryMessages([]);
+    setLocalMessages([]);
+    setMessagesHasMore(false);
+    setMessagesBefore(null);
+    setMessagesError(null);
+    setThreadError(null);
+    setActiveAssistantKey(null);
+    setActiveCitationId(null);
   };
 
   const loadMessages = async (conversationId: string, appendOlder: boolean) => {
@@ -451,7 +595,12 @@ export function AskPage() {
       setMessagesBefore(response.next_before ?? null);
       setMessagesError(null);
     } catch (error) {
-      setMessagesError(normalizeApiError(error));
+      const normalized = normalizeApiError(error);
+      setMessagesError(normalized);
+      if (normalized.code === "CONVERSATION_NOT_FOUND") {
+        resetThreadState();
+        await refreshConversationList();
+      }
     } finally {
       setMessagesLoading(false);
     }
@@ -707,11 +856,22 @@ export function AskPage() {
         setThreadError(normalized);
         setComposerStatus("failed");
         message.error(formatApiErrorMessage(normalized));
+        if (normalized.code === "KB_NOT_FOUND" || normalized.code === "KB_ACCESS_DENIED") {
+          setComposerText(question);
+          resetThreadState();
+          await kbQuery.refetch();
+          await refreshConversationList();
+        } else if (normalized.code === "CONVERSATION_NOT_FOUND") {
+          setComposerText(question);
+          resetThreadState();
+          await refreshConversationList();
+        } else {
+          patchLocalAssistant(assistantLocalId, (current) => ({
+            pending: false,
+            content: current.content || "生成已中断。"
+          }));
+        }
       }
-      patchLocalAssistant(assistantLocalId, (current) => ({
-        pending: false,
-        content: current.content || "生成已中断。"
-      }));
       if (localRunId) {
         await recoverRun(localRunId);
       }
@@ -1052,7 +1212,13 @@ export function AskPage() {
               value={kbId || undefined}
               placeholder="选择知识库"
               onChange={(value) => {
-                setKbId(typeof value === "string" ? value.trim() : "");
+                const nextKbId = typeof value === "string" ? value.trim() : "";
+                if (nextKbId === kbId) {
+                  return;
+                }
+                setKbId(nextKbId);
+                setKeyword("");
+                resetThreadState();
               }}
               optionFilterProp="label"
               filterOption={(inputValue, option) =>
@@ -1222,6 +1388,45 @@ export function AskPage() {
               引用编号可打开证据面板
             </Typography.Text>
           </div>
+          <div className="chat-thread-summary" aria-label="当前会话状态摘要">
+            <div className="chat-thread-summary__main">
+              <Space wrap size={8}>
+                <Tag color={threadSummary.tagColor}>{threadSummary.label}</Tag>
+                {latestAssistant?.refusal_reason ? (
+                  <Tag color="warning">原因：{formatRefusalReason(latestAssistant.refusal_reason)}</Tag>
+                ) : null}
+              </Space>
+              <Typography.Text strong className="chat-thread-summary__title">
+                {threadSummary.title}
+              </Typography.Text>
+              <Typography.Text type="secondary" className="chat-thread-summary__detail">
+                {threadSummary.detail}
+              </Typography.Text>
+            </div>
+            <div className="chat-thread-summary__meta">
+              {latestAssistant?.request_id ? (
+                <Typography.Text
+                  type="secondary"
+                  className="chat-thread-summary__request-id"
+                  copyable={{ text: latestAssistant.request_id }}
+                >
+                  请求 ID：{latestAssistant.request_id}
+                </Typography.Text>
+              ) : null}
+              {latestAssistant?.citations.length ? (
+                <Button
+                  type="link"
+                  size="small"
+                  className="chat-thread-summary__link"
+                  onClick={() => {
+                    openEvidenceModal(latestAssistant);
+                  }}
+                >
+                  查看引用（{latestAssistant.citations.length}）
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         {threadError ? <RequestErrorAlert error={threadError} /> : null}
@@ -1388,6 +1593,29 @@ export function AskPage() {
 
         <div className="chat-composer-shell">
           <div className="chat-composer">
+            {composerNextSteps.length ? (
+              <div className="chat-composer-guidance">
+                <div className="chat-composer-guidance__head">
+                  <Typography.Text strong>继续追问建议</Typography.Text>
+                  <Typography.Text type="secondary">
+                    下面的建议会直接回填到当前输入框
+                  </Typography.Text>
+                </div>
+                <div className="chat-composer-guidance__actions">
+                  {composerNextSteps.map((step) => (
+                    <Button
+                      key={`${step.action}_${step.label}_${step.value ?? ""}`}
+                      size="small"
+                      onClick={() => {
+                        handleApplyNextStep(step, latestAssistant?.citations ?? []);
+                      }}
+                    >
+                      {step.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <Input.TextArea
               value={composerText}
               autoSize={{ minRows: 3, maxRows: 8 }}
@@ -1454,7 +1682,16 @@ export function AskPage() {
                 {selectedAssistant.refusal ? "拒答结果" : "回答结果"}
               </Tag>
               {selectedAssistant.refusal_reason ? (
-                <Alert type="warning" showIcon message={selectedAssistant.refusal_reason} />
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={formatRefusalReason(selectedAssistant.refusal_reason)}
+                />
+              ) : null}
+              {selectedAssistant.request_id ? (
+                <Typography.Text copyable={{ text: selectedAssistant.request_id }} type="secondary">
+                  请求 ID：{selectedAssistant.request_id}
+                </Typography.Text>
               ) : null}
               {selectedAssistant.refusal ? (
                 <RefusalNextStepsCard

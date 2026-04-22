@@ -46,6 +46,7 @@ def run_sqlite_migrations(database: DatabaseProtocol) -> None:
             """,
             (migration.version, migration.name, utc_now_iso()),
         )
+    _ensure_sqlite_compatibility(database)
 
 
 def run_mysql_migrations(database: DatabaseProtocol) -> None:
@@ -59,6 +60,7 @@ def run_mysql_migrations(database: DatabaseProtocol) -> None:
             "请使用新的数据库实例完成切换。"
         )
     _execute_many(database, MYSQL_BOOTSTRAP_STATEMENTS)
+    _ensure_mysql_compatibility(database)
     for migration in MIGRATIONS:
         if migration.version <= current_version:
             continue
@@ -197,8 +199,10 @@ def _migration_1_initial_core_schema(database: DatabaseProtocol) -> None:
                 refusal INTEGER NOT NULL,
                 refusal_reason TEXT,
                 timing_json TEXT,
+                suggestions_json TEXT,
                 citations_json TEXT,
                 created_at TEXT NOT NULL,
+                request_id TEXT,
                 FOREIGN KEY(conversation_id) REFERENCES conversation(conversation_id)
             );
             """,
@@ -316,9 +320,11 @@ def _migration_2_extend_core_schema(database: DatabaseProtocol) -> None:
     _ensure_column(database, "ingest_job", "finished_at", "TEXT")
     _ensure_column(database, "conversation", "user_id", "TEXT")
     _ensure_column(database, "message", "next_steps_json", "TEXT")
+    _ensure_column(database, "message", "suggestions_json", "TEXT")
     _ensure_column(database, "message", "parent_message_id", "TEXT")
     _ensure_column(database, "message", "edited_from_message_id", "TEXT")
     _ensure_column(database, "message", "sequence_no", "INTEGER")
+    _ensure_column(database, "message", "request_id", "TEXT")
     _execute_many(
         database,
         (
@@ -461,6 +467,20 @@ def _migration_4_add_chat_run_schema(database: DatabaseProtocol) -> None:
     _ensure_column(database, "chat_run", "user_id", "TEXT")
 
 
+def _ensure_sqlite_compatibility(database: DatabaseProtocol) -> None:
+    """补齐 SQLite 运行时必需字段，兼容旧版本数据库。"""
+
+    _ensure_column(database, "message", "suggestions_json", "TEXT")
+    _ensure_column(database, "message", "request_id", "TEXT")
+
+
+def _ensure_mysql_compatibility(database: DatabaseProtocol) -> None:
+    """补齐 MySQL 运行时必需字段，兼容旧版本数据库。"""
+
+    _ensure_mysql_column(database, "message", "suggestions_json", "LONGTEXT NULL")
+    _ensure_mysql_column(database, "message", "request_id", "VARCHAR(128) NULL")
+
+
 def _ensure_column(
     database: DatabaseProtocol, table: str, column: str, column_type: str
 ) -> None:
@@ -469,6 +489,26 @@ def _ensure_column(
     if not _table_exists(database, table):
         return
     if _column_exists(database, table, column):
+        return
+    database.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type};")
+
+
+def _ensure_mysql_column(
+    database: DatabaseProtocol, table: str, column: str, column_type: str
+) -> None:
+    """仅在 MySQL 列缺失时补齐，避免旧库启动后接口字段缺失。"""
+
+    record = database.fetch_one(
+        """
+        SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+          AND COLUMN_NAME = ?;
+        """,
+        (table, column),
+    )
+    if record is not None:
         return
     database.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type};")
 
@@ -593,12 +633,14 @@ MYSQL_BOOTSTRAP_STATEMENTS: tuple[str, ...] = (
         refusal TINYINT(1) NOT NULL DEFAULT 0,
         refusal_reason VARCHAR(64) NULL,
         timing_json LONGTEXT NULL,
+        suggestions_json LONGTEXT NULL,
         next_steps_json LONGTEXT NULL,
         citations_json LONGTEXT NULL,
         parent_message_id VARCHAR(128) NULL,
         edited_from_message_id VARCHAR(128) NULL,
         sequence_no INT NULL,
         created_at VARCHAR(64) NOT NULL,
+        request_id VARCHAR(128) NULL,
         KEY idx_message_conversation_id (conversation_id),
         KEY idx_message_conversation_sequence (conversation_id, sequence_no),
         KEY idx_message_role_created_at (role, created_at),

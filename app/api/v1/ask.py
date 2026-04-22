@@ -386,8 +386,10 @@ def edit_and_resend_message(
         refusal=False,
         refusal_reason=None,
         timing=None,
+        suggestions=None,
         next_steps=None,
         citations=None,
+        request_id=request.state.request_id,
         edited_from_message_id=message_id,
     )
     filters = payload.filters.model_dump() if payload.filters else None

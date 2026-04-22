@@ -58,6 +58,7 @@ def _assistant_message(
         refusal=refusal,
         refusal_reason="LOW_COVERAGE" if refusal else None,
         timing={"total_ms": 10},
+        suggestions=[],
         next_steps=next_steps or [],
         citations=citations or [],
         created_at=utc_now_iso(),

@@ -24,9 +24,11 @@ export interface ConversationMessage {
   citations?: CitationItem[] | null;
   refusal?: boolean | null;
   refusal_reason?: string | null;
+  suggestions?: string[] | null;
   next_steps?: NextStepItem[] | null;
   timing?: Record<string, number> | null;
   created_at: string;
+  request_id?: string | null;
 }
 
 export interface ConversationDetailResponse {
