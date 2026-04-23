@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DeleteOutlined, EditOutlined, HistoryOutlined, LoginOutlined, LogoutOutlined, MessageOutlined, PlusOutlined, SearchOutlined, SendOutlined, StopOutlined } from "@ant-design/icons";
 import {
   Alert,
+  App as AntdApp,
   Button,
   Card,
   Empty,
@@ -12,8 +13,7 @@ import {
   Space,
   Tag,
   Tooltip,
-  Typography,
-  message
+  Typography
 } from "antd";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -318,11 +318,15 @@ function buildThreadSummary(params: {
 
 export function AskPage() {
   const navigate = useNavigate();
+  const { message: messageApi, modal } = AntdApp.useApp();
   const { user, role, isAuthenticated, signOut } = useAuth();
   const hasAccessToken = Boolean(getAccessToken());
   const [kbId, setKbId] = useState("");
   const [keyword, setKeyword] = useState("");
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [selectionLockConversationId, setSelectionLockConversationId] = useState<string | null>(
+    null
+  );
   const [historyMessages, setHistoryMessages] = useState<ThreadMessage[]>([]);
   const [localMessages, setLocalMessages] = useState<ThreadMessage[]>([]);
   const [messagesHasMore, setMessagesHasMore] = useState(false);
@@ -398,11 +402,29 @@ export function AskPage() {
     setThreadError(null);
     setActiveAssistantKey(null);
     setActiveCitationId(null);
+    setSelectionLockConversationId(null);
   }, [kbId, kbQuery.data?.items]);
 
   useEffect(() => {
     if (!hasAccessToken || isBusy) {
       return;
+    }
+    if (
+      selectionLockConversationId &&
+      activeConversationId === selectionLockConversationId &&
+      !conversationItems.some(
+        (item) => item.conversation_id === selectionLockConversationId
+      )
+    ) {
+      return;
+    }
+    if (
+      selectionLockConversationId &&
+      conversationItems.some(
+        (item) => item.conversation_id === selectionLockConversationId
+      )
+    ) {
+      setSelectionLockConversationId(null);
     }
     const nextConversationId = resolveNextConversationId(
       activeConversationId,
@@ -423,7 +445,8 @@ export function AskPage() {
     setThreadError(null);
     setActiveAssistantKey(null);
     setActiveCitationId(null);
-  }, [activeConversationId, conversationItems, hasAccessToken, isBusy]);
+    setSelectionLockConversationId(null);
+  }, [activeConversationId, conversationItems, hasAccessToken, isBusy, selectionLockConversationId]);
 
   const threadMessages = useMemo(
     () => mergeMessages(historyMessages, localMessages),
@@ -486,6 +509,9 @@ export function AskPage() {
       }),
     [activeConversationId, composerStatus, latestAssistant, threadMessages.length]
   );
+
+  const showThreadSummary = threadMessages.length > 0 || composerStatus !== "idle";
+  const showComposerStatusTag = composerStatus !== "idle";
 
   const composerNextSteps = useMemo(
     () => (latestAssistant?.refusal ? latestAssistant.next_steps.slice(0, 3) : []),
@@ -571,6 +597,7 @@ export function AskPage() {
   const resetThreadState = (options?: { clearConversationId?: boolean }) => {
     if (options?.clearConversationId ?? true) {
       setActiveConversationId(null);
+      setSelectionLockConversationId(null);
     }
     setHistoryMessages([]);
     setLocalMessages([]);
@@ -661,6 +688,7 @@ export function AskPage() {
     try {
       const run = await getChatRun(runId);
       if (run.conversation_id) {
+        setSelectionLockConversationId(run.conversation_id);
         setActiveConversationId(run.conversation_id);
         if (hasAccessToken) {
           await loadMessages(run.conversation_id, false);
@@ -766,11 +794,11 @@ export function AskPage() {
     const question = composerText.trim();
     const finalKbId = kbId.trim();
     if (!question) {
-      message.warning("请输入问题");
+      messageApi.warning("请输入问题");
       return;
     }
     if (!finalKbId) {
-      message.warning("请选择知识库");
+      messageApi.warning("请选择知识库");
       return;
     }
     const seed = `${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
@@ -820,6 +848,7 @@ export function AskPage() {
     let localConversationId = activeConversationId;
     const setConversation = (id: string) => {
       localConversationId = id;
+      setSelectionLockConversationId(id);
       setActiveConversationId(id);
     };
     try {
@@ -855,7 +884,7 @@ export function AskPage() {
         const normalized = normalizeApiError(error);
         setThreadError(normalized);
         setComposerStatus("failed");
-        message.error(formatApiErrorMessage(normalized));
+        messageApi.error(formatApiErrorMessage(normalized));
         if (normalized.code === "KB_NOT_FOUND" || normalized.code === "KB_ACCESS_DENIED") {
           setComposerText(question);
           resetThreadState();
@@ -893,7 +922,7 @@ export function AskPage() {
       } catch (error) {
         const normalized = normalizeApiError(error);
         setThreadError(normalized);
-        message.error(formatApiErrorMessage(normalized));
+        messageApi.error(formatApiErrorMessage(normalized));
         setComposerStatus("failed");
       }
       return;
@@ -919,13 +948,14 @@ export function AskPage() {
     setMessagesError(null);
     setLocalMessages([]);
     if (!hasAccessToken) {
+      setSelectionLockConversationId(null);
       setActiveConversationId(null);
       setHistoryMessages([]);
       return;
     }
     const finalKbId = kbId.trim();
     if (!finalKbId) {
-      message.warning("请选择知识库");
+      messageApi.warning("请选择知识库");
       return;
     }
     try {
@@ -933,6 +963,8 @@ export function AskPage() {
         kb_id: finalKbId,
         title: "新会话"
       });
+      setKeyword("");
+      setSelectionLockConversationId(created.conversation_id);
       setActiveConversationId(created.conversation_id);
       setHistoryMessages([]);
       setMessagesHasMore(false);
@@ -940,7 +972,7 @@ export function AskPage() {
       await refreshConversationList();
     } catch (error) {
       const normalized = normalizeApiError(error);
-      message.error(formatApiErrorMessage(normalized));
+      messageApi.error(formatApiErrorMessage(normalized));
     }
   };
 
@@ -965,10 +997,10 @@ export function AskPage() {
       });
       setRenameOpen(false);
       await refreshConversationList();
-      message.success("会话名称已更新");
+      messageApi.success("会话名称已更新");
     } catch (error) {
       const normalized = normalizeApiError(error);
-      message.error(formatApiErrorMessage(normalized));
+      messageApi.error(formatApiErrorMessage(normalized));
     } finally {
       setRenameLoading(false);
     }
@@ -978,7 +1010,7 @@ export function AskPage() {
     if (!activeConversationId) {
       return;
     }
-    Modal.confirm({
+    modal.confirm({
       title: "删除当前会话",
       content: "删除后会话将从列表移除，是否继续？",
       okText: "删除",
@@ -988,15 +1020,16 @@ export function AskPage() {
         try {
           await deleteConversationMutation.mutateAsync(activeConversationId);
           setActiveConversationId(null);
+          setSelectionLockConversationId(null);
           setHistoryMessages([]);
           setLocalMessages([]);
           setActiveAssistantKey(null);
           setActiveCitationId(null);
           await refreshConversationList();
-          message.success("会话已删除");
+          messageApi.success("会话已删除");
         } catch (error) {
           const normalized = normalizeApiError(error);
-          message.error(formatApiErrorMessage(normalized));
+          messageApi.error(formatApiErrorMessage(normalized));
         }
       }
     });
@@ -1010,10 +1043,10 @@ export function AskPage() {
     try {
       await feedbackMutation.mutateAsync({ messageId, payload });
       setSubmittedFeedbackMap((previous) => ({ ...previous, [messageId]: true }));
-      message.success("反馈已提交");
+      messageApi.success("反馈已提交");
     } catch (error) {
       const normalized = normalizeApiError(error);
-      message.error(formatApiErrorMessage(normalized));
+      messageApi.error(formatApiErrorMessage(normalized));
       throw error;
     } finally {
       setSubmittingFeedbackMessageId((current) => (current === messageId ? null : current));
@@ -1025,14 +1058,15 @@ export function AskPage() {
     try {
       const result = await regenerateMutation.mutateAsync(messageId);
       if (result.conversation_id) {
+        setSelectionLockConversationId(result.conversation_id);
         setActiveConversationId(result.conversation_id);
         await loadMessages(result.conversation_id, false);
       }
       await refreshConversationList();
-      message.success("已重新生成回答");
+      messageApi.success("已重新生成回答");
     } catch (error) {
       const normalized = normalizeApiError(error);
-      message.error(formatApiErrorMessage(normalized));
+      messageApi.error(formatApiErrorMessage(normalized));
     } finally {
       setActioningMessageId(null);
     }
@@ -1080,7 +1114,7 @@ export function AskPage() {
         navigate(kbId ? `/admin/documents?kb=${encodeURIComponent(kbId)}` : "/admin/documents");
         return;
       }
-      message.info("当前用户端无法直接打开文档管理页，请优先查看学校官网或联系管理员核对原文。");
+      messageApi.info("当前用户端无法直接打开文档管理页，请优先查看学校官网或联系管理员核对原文。");
       return;
     }
     const nextDraft = buildDraftFromNextStep(step, composerText);
@@ -1093,7 +1127,7 @@ export function AskPage() {
     }
     const question = editQuestion.trim();
     if (!question) {
-      message.warning("请输入编辑后的问题");
+      messageApi.warning("请输入编辑后的问题");
       return;
     }
     setActioningMessageId(editTargetMessageId);
@@ -1103,15 +1137,16 @@ export function AskPage() {
         question
       });
       if (result.conversation_id) {
+        setSelectionLockConversationId(result.conversation_id);
         setActiveConversationId(result.conversation_id);
         await loadMessages(result.conversation_id, false);
       }
       setEditOpen(false);
       await refreshConversationList();
-      message.success("已创建分支会话");
+      messageApi.success("已创建分支会话");
     } catch (error) {
       const normalized = normalizeApiError(error);
-      message.error(formatApiErrorMessage(normalized));
+      messageApi.error(formatApiErrorMessage(normalized));
     } finally {
       setActioningMessageId(null);
     }
@@ -1124,11 +1159,11 @@ export function AskPage() {
     setSigningOut(true);
     try {
       await signOut();
-      message.success("已退出登录");
+      messageApi.success("已退出登录");
       navigate("/login?next=/app/ask");
     } catch (error) {
       const normalized = normalizeApiError(error);
-      message.error(formatApiErrorMessage(normalized));
+      messageApi.error(formatApiErrorMessage(normalized));
     } finally {
       setSigningOut(false);
     }
@@ -1297,6 +1332,7 @@ export function AskPage() {
                       if (isBusy) {
                         return;
                       }
+                      setSelectionLockConversationId(null);
                       setActiveConversationId(item.conversation_id);
                       setLocalMessages([]);
                       setActiveAssistantKey(null);
@@ -1380,53 +1416,57 @@ export function AskPage() {
           <div className="chat-thread-titlebar">
             <Space wrap>
               {selectedKbName ? <Tag color="geekblue">知识库：{selectedKbName}</Tag> : null}
-              <Tag color={COMPOSER_STATUS_COLOR[composerStatus]} className="chat-status-tag">
-                {COMPOSER_STATUS_LABEL[composerStatus]}
-              </Tag>
+              {showComposerStatusTag ? (
+                <Tag color={COMPOSER_STATUS_COLOR[composerStatus]} className="chat-status-tag">
+                  {COMPOSER_STATUS_LABEL[composerStatus]}
+                </Tag>
+              ) : null}
             </Space>
             <Typography.Text className="chat-thread-kicker">
               引用编号可打开证据面板
             </Typography.Text>
           </div>
-          <div className="chat-thread-summary" aria-label="当前会话状态摘要">
-            <div className="chat-thread-summary__main">
-              <Space wrap size={8}>
-                <Tag color={threadSummary.tagColor}>{threadSummary.label}</Tag>
-                {latestAssistant?.refusal_reason ? (
-                  <Tag color="warning">原因：{formatRefusalReason(latestAssistant.refusal_reason)}</Tag>
-                ) : null}
-              </Space>
-              <Typography.Text strong className="chat-thread-summary__title">
-                {threadSummary.title}
-              </Typography.Text>
-              <Typography.Text type="secondary" className="chat-thread-summary__detail">
-                {threadSummary.detail}
-              </Typography.Text>
-            </div>
-            <div className="chat-thread-summary__meta">
-              {latestAssistant?.request_id ? (
-                <Typography.Text
-                  type="secondary"
-                  className="chat-thread-summary__request-id"
-                  copyable={{ text: latestAssistant.request_id }}
-                >
-                  请求 ID：{latestAssistant.request_id}
+          {showThreadSummary ? (
+            <div className="chat-thread-summary" aria-label="当前会话状态摘要">
+              <div className="chat-thread-summary__main">
+                <Space wrap size={8}>
+                  <Tag color={threadSummary.tagColor}>{threadSummary.label}</Tag>
+                  {latestAssistant?.refusal_reason ? (
+                    <Tag color="warning">原因：{formatRefusalReason(latestAssistant.refusal_reason)}</Tag>
+                  ) : null}
+                </Space>
+                <Typography.Text strong className="chat-thread-summary__title">
+                  {threadSummary.title}
                 </Typography.Text>
-              ) : null}
-              {latestAssistant?.citations.length ? (
-                <Button
-                  type="link"
-                  size="small"
-                  className="chat-thread-summary__link"
-                  onClick={() => {
-                    openEvidenceModal(latestAssistant);
-                  }}
-                >
-                  查看引用（{latestAssistant.citations.length}）
-                </Button>
-              ) : null}
+                <Typography.Text type="secondary" className="chat-thread-summary__detail">
+                  {threadSummary.detail}
+                </Typography.Text>
+              </div>
+              <div className="chat-thread-summary__meta">
+                {latestAssistant?.request_id ? (
+                  <Typography.Text
+                    type="secondary"
+                    className="chat-thread-summary__request-id"
+                    copyable={{ text: latestAssistant.request_id }}
+                  >
+                    请求 ID：{latestAssistant.request_id}
+                  </Typography.Text>
+                ) : null}
+                {latestAssistant?.citations.length ? (
+                  <Button
+                    type="link"
+                    size="small"
+                    className="chat-thread-summary__link"
+                    onClick={() => {
+                      openEvidenceModal(latestAssistant);
+                    }}
+                  >
+                    查看引用（{latestAssistant.citations.length}）
+                  </Button>
+                ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
 
         {threadError ? <RequestErrorAlert error={threadError} /> : null}

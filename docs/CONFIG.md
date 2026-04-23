@@ -2,6 +2,7 @@
 
 本文档描述 CSage 的核心配置项。所有配置必须通过环境变量输入，并由 Settings 统一读取。
 建议使用 `.env` 本地加载（提供 `.env.example`）。
+补充：`.env` 允许同时存在 Docker Compose 辅助变量；`Settings` 会忽略未声明的辅助键，不会因此阻断应用启动。
 
 
 ## 1. 基础服务
@@ -55,6 +56,16 @@
 - `LOCAL_EMBEDDING_MODEL_NAME`：本地 Embedding 模型名（方案 3 预留），默认 `BAAI/bge-m3`
 - `LOCAL_EMBEDDING_DEVICE`：本地 Embedding 设备（方案 3 预留），默认 `cpu`
 - `LOCAL_EMBEDDING_NORMALIZE`：本地 Embedding 是否归一化，默认 `true`
+
+### 4.2.1 Docker Compose / TEI 补充配置
+- `EMBEDDING_BASE_URL_INTERNAL`：容器内 API / Worker 访问 Embedding 服务的地址，默认 `http://tei:80/v1`
+- `EMBEDDING_API_PATH_INTERNAL`：容器内 Embedding 接口路径，默认 `/embeddings`
+- `NO_PROXY_INTERNAL`：容器内跳过代理的主机列表，默认 `mysql,qdrant,tei,redis,localhost,127.0.0.1`
+- `TEI_MODEL_ID`：TEI 容器加载的模型 ID，默认 `BAAI/bge-m3`
+- `TEI_SERVED_MODEL_NAME`：TEI 对外声明的模型名，默认 `bge-m3`
+- `TEI_MAX_CLIENT_BATCH_SIZE`：TEI 单次请求最大批量，默认 `8`
+- `TEI_MAX_CONCURRENT_REQUESTS`：TEI 最大并发请求数，默认 `64`
+- `HF_TOKEN`：Hugging Face 访问令牌，拉取私有模型时使用，可为空
 
 ### 4.3 Rerank（可选）
 - `RERANK_ENABLED`：true/false

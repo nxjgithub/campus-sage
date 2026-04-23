@@ -106,16 +106,22 @@ class Database:
 
         normalized_statement = self._normalize_statement(statement)
         with self._lock:
-            try:
-                if self._backend == "sqlite":
-                    self._connection.execute(normalized_statement, params)
-                else:
-                    with self._connection.cursor() as cursor:
-                        cursor.execute(normalized_statement, params)
-                self._connection.commit()
-            except Exception:
-                self._connection.rollback()
-                raise
+            for attempt in range(2):
+                try:
+                    if self._backend == "sqlite":
+                        self._connection.execute(normalized_statement, params)
+                    else:
+                        self._ensure_mysql_connection_alive()
+                        with self._connection.cursor() as cursor:
+                            cursor.execute(normalized_statement, params)
+                    self._connection.commit()
+                    return
+                except Exception as exc:
+                    self._rollback_safely()
+                    if attempt == 0 and self._is_reconnectable_error(exc):
+                        self._reconnect()
+                        continue
+                    raise
 
     def fetch_one(
         self, statement: str, params: tuple[object, ...] = ()
@@ -124,13 +130,22 @@ class Database:
 
         normalized_statement = self._normalize_statement(statement)
         with self._lock:
-            if self._backend == "sqlite":
-                cursor = self._connection.execute(normalized_statement, params)
-                row = cursor.fetchone()
-            else:
-                with self._connection.cursor() as cursor:
-                    cursor.execute(normalized_statement, params)
-                    row = cursor.fetchone()
+            for attempt in range(2):
+                try:
+                    if self._backend == "sqlite":
+                        cursor = self._connection.execute(normalized_statement, params)
+                        row = cursor.fetchone()
+                    else:
+                        self._ensure_mysql_connection_alive()
+                        with self._connection.cursor() as cursor:
+                            cursor.execute(normalized_statement, params)
+                            row = cursor.fetchone()
+                    break
+                except Exception as exc:
+                    if attempt == 0 and self._is_reconnectable_error(exc):
+                        self._reconnect()
+                        continue
+                    raise
         if row is None:
             return None
         return dict(row) if not isinstance(row, dict) else row
@@ -142,13 +157,22 @@ class Database:
 
         normalized_statement = self._normalize_statement(statement)
         with self._lock:
-            if self._backend == "sqlite":
-                cursor = self._connection.execute(normalized_statement, params)
-                rows = cursor.fetchall()
-            else:
-                with self._connection.cursor() as cursor:
-                    cursor.execute(normalized_statement, params)
-                    rows = cursor.fetchall()
+            for attempt in range(2):
+                try:
+                    if self._backend == "sqlite":
+                        cursor = self._connection.execute(normalized_statement, params)
+                        rows = cursor.fetchall()
+                    else:
+                        self._ensure_mysql_connection_alive()
+                        with self._connection.cursor() as cursor:
+                            cursor.execute(normalized_statement, params)
+                            rows = cursor.fetchall()
+                    break
+                except Exception as exc:
+                    if attempt == 0 and self._is_reconnectable_error(exc):
+                        self._reconnect()
+                        continue
+                    raise
         return [dict(row) if not isinstance(row, dict) else row for row in rows]
 
     def close(self) -> None:
@@ -168,6 +192,52 @@ class Database:
         if self._backend != "mysql":
             return statement
         return _convert_qmark_placeholders(statement)
+
+    def _ensure_mysql_connection_alive(self) -> None:
+        """执行 MySQL 操作前探活，避免复用已断开的长连接。"""
+
+        if self._backend != "mysql":
+            return
+        ping = getattr(self._connection, "ping", None)
+        if callable(ping):
+            ping(reconnect=True)
+
+    def _rollback_safely(self) -> None:
+        """回滚当前事务；断连时回滚本身也可能失败，需要兜底。"""
+
+        try:
+            self._connection.rollback()
+        except Exception:
+            pass
+
+    def _reconnect(self) -> None:
+        """重建数据库连接，用于恢复 MySQL 断连后的单次重试。"""
+
+        try:
+            self._connection.close()
+        except Exception:
+            pass
+        self._connection = self._create_connection()
+
+    def _is_reconnectable_error(self, exc: BaseException) -> bool:
+        """判断异常是否属于 MySQL 可重连错误。"""
+
+        if self._backend != "mysql":
+            return False
+        code = exc.args[0] if getattr(exc, "args", None) else None
+        if code in {2006, 2013, 2014, 2055}:
+            return True
+        message = str(exc).lower()
+        return any(
+            pattern in message
+            for pattern in (
+                "lost connection",
+                "server has gone away",
+                "connection reset",
+                "connection refused",
+                "software caused connection abort",
+            )
+        )
 
 
 _database: Database | None = None

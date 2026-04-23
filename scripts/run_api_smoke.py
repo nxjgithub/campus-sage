@@ -5,11 +5,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
-import sys
 
 import httpx
 
@@ -44,12 +44,16 @@ class SmokeRunner:
         admin_password: str,
         timeout_seconds: int,
         create_admin_if_missing: bool,
+        poll_interval_seconds: float,
+        ingest_timeout_seconds: int,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.admin_email = admin_email
         self.admin_password = admin_password
         self.timeout_seconds = timeout_seconds
         self.create_admin_if_missing = create_admin_if_missing
+        self.poll_interval_seconds = max(0.2, poll_interval_seconds)
+        self.ingest_timeout_seconds = max(10, ingest_timeout_seconds)
         self.run_id = uuid.uuid4().hex[:8]
         self.client = httpx.Client(
             base_url=self.base_url,
@@ -73,6 +77,7 @@ class SmokeRunner:
     def run(self) -> dict[str, object]:
         """执行完整 smoke 流程并返回报告。"""
 
+        self._log("开始执行 API smoke")
         q_clarify = "\u8fd9\u4e2a\u600e\u4e48\u529e"
         q_followup = "\u8865\u8003\u7533\u8bf7\u6761\u4ef6\u662f\u4ec0\u4e48\uff1f"
         q_latest = "\u6700\u65b0\u8865\u8003\u7533\u8bf7\u6761\u4ef6\u662f\u4ec0\u4e48\uff1f"
@@ -94,6 +99,7 @@ class SmokeRunner:
             if response_body is None:
                 raise RuntimeError("\u767b\u5f55\u5931\u8d25")
 
+            self._log("登录完成，开始检查基础接口")
             self._request(
                 "auth.refresh",
                 "POST",
@@ -130,6 +136,7 @@ class SmokeRunner:
                 )
             self._request("monitor.queues", "GET", "/api/v1/monitor/queues", token=True, expected={200})
 
+            self._log("开始创建 smoke 知识库")
             _, kb_payload = self._request(
                 "kb.create",
                 "POST",
@@ -153,6 +160,7 @@ class SmokeRunner:
             )
             if isinstance(kb_payload, dict):
                 self.state["kb_id"] = kb_payload.get("kb_id")
+                self._log(f"知识库已创建：{self.state['kb_id']}")
 
             self._request("kb.list", "GET", "/api/v1/kb", token=True, expected={200})
             self._request("kb.detail", "GET", f"/api/v1/kb/{self.state['kb_id']}", token=True, expected={200})
@@ -168,6 +176,7 @@ class SmokeRunner:
             temp_path = Path("data") / f"api_smoke_{self.run_id}.md"
             temp_path.write_text(doc_text, encoding="utf-8")
             self.state["temp_file"] = str(temp_path)
+            self._log(f"开始上传测试文档：{temp_path.name}")
             with temp_path.open("rb") as file_obj:
                 _, upload_payload = self._request(
                     "documents.upload",
@@ -185,6 +194,9 @@ class SmokeRunner:
             if isinstance(upload_payload, dict):
                 self.state["doc_id"] = (upload_payload.get("doc") or {}).get("doc_id")
                 self.state["job_id"] = (upload_payload.get("job") or {}).get("job_id")
+                self._log(
+                    f"文档已上传：doc_id={self.state['doc_id']}，job_id={self.state['job_id']}"
+                )
 
             self._request(
                 "documents.list",
@@ -202,7 +214,10 @@ class SmokeRunner:
             )
 
             if self.state["job_id"]:
-                job_result = self._wait_job(str(self.state["job_id"]), timeout_seconds=180)
+                job_result = self._wait_job(
+                    str(self.state["job_id"]),
+                    timeout_seconds=self.ingest_timeout_seconds,
+                )
                 self._record(
                     "ingest.job.final",
                     job_result.get("status") == "succeeded",
@@ -210,6 +225,7 @@ class SmokeRunner:
                     self._short_json(job_result),
                 )
 
+            self._log("开始验证澄清问答、多轮追问与时效提示")
             _, clarify_payload = self._request(
                 "rag.ask.clarification",
                 "POST",
@@ -288,6 +304,7 @@ class SmokeRunner:
                 )
 
             if self.state["message_id"]:
+                self._log("开始验证消息再生与反馈")
                 self._request(
                     "message.regenerate",
                     "POST",
@@ -340,9 +357,10 @@ class SmokeRunner:
                 },
             )
             if isinstance(eval_set_payload, dict):
-                self.state["eval_set_id"] = eval_set_payload.get("eval_set_id")
+                    self.state["eval_set_id"] = eval_set_payload.get("eval_set_id")
 
             if self.state.get("eval_set_id"):
+                self._log("开始验证离线评测接口")
                 _, eval_run_payload = self._request(
                     "eval.run.create",
                     "POST",
@@ -386,6 +404,10 @@ class SmokeRunner:
         }
         summary["failed"] = summary["total"] - summary["passed"]
         failed_cases = [asdict(item) for item in self.results if not item.ok]
+        self._log(
+            "执行结束："
+            f"total={summary['total']} passed={summary['passed']} failed={summary['failed']}"
+        )
         return {
             "summary": summary,
             "failed_cases": failed_cases,
@@ -442,18 +464,53 @@ class SmokeRunner:
         """轮询入库任务直到结束。"""
 
         deadline = time.time() + timeout_seconds
+        started_at = time.time()
+        last_status: str | None = None
+        last_stage: str | None = None
+        last_reported_elapsed = -1
+        transient_failures = 0
         while time.time() < deadline:
-            _, body = self._request(
+            response, body = self._request(
                 f"ingest.job.poll.{job_id}",
                 "GET",
                 f"/api/v1/ingest/jobs/{job_id}",
                 token=True,
                 expected={200},
             )
-            if isinstance(body, dict) and body.get("status") in {"succeeded", "failed", "canceled"}:
-                return body
-            time.sleep(1)
-        return {"status": "timeout"}
+            if response is None:
+                transient_failures += 1
+                elapsed = int(time.time() - started_at)
+                self._log(
+                    f"轮询入库任务异常：job_id={job_id} failures={transient_failures} elapsed={elapsed}s"
+                )
+                time.sleep(self.poll_interval_seconds)
+                continue
+            if isinstance(body, dict):
+                status = str(body.get("status") or "")
+                progress = body.get("progress") if isinstance(body.get("progress"), dict) else {}
+                stage = str(progress.get("stage") or "")
+                normalized_status = status or None
+                normalized_stage = stage or None
+                elapsed = int(time.time() - started_at)
+                should_report = (
+                    normalized_status != last_status
+                    or normalized_stage != last_stage
+                    or elapsed // 10 > last_reported_elapsed // 10
+                )
+                if should_report:
+                    self._log(
+                        "入库任务状态更新："
+                        f"job_id={job_id} status={status or 'unknown'} "
+                        f"stage={stage or '-'} elapsed={elapsed}s"
+                    )
+                    last_status = normalized_status
+                    last_stage = normalized_stage
+                    last_reported_elapsed = elapsed
+                if status in {"succeeded", "failed", "canceled"}:
+                    return body
+            time.sleep(self.poll_interval_seconds)
+        self._log(f"入库任务轮询超时：job_id={job_id} timeout={timeout_seconds}s")
+        return {"status": "timeout", "job_id": job_id}
 
     def _request(
         self,
@@ -473,6 +530,7 @@ class SmokeRunner:
         try:
             response = self.client.request(method, path, headers=headers, **kwargs)
         except Exception as exc:
+            self._log(f"请求异常：{name} error={exc}")
             self._record(name, False, None, f"request_failed={exc}")
             return None, {}
         try:
@@ -480,6 +538,10 @@ class SmokeRunner:
         except Exception:
             payload = response.text
         ok = response.status_code in set(expected or {response.status_code})
+        if not ok:
+            self._log(
+                f"请求结果异常：{name} status={response.status_code} payload={self._short_json(payload, limit=160)}"
+            )
         self._record(
             name,
             ok,
@@ -528,6 +590,11 @@ class SmokeRunner:
 
         self.results.append(SmokeCaseResult(name=name, ok=ok, status=status, detail=detail))
 
+    def _log(self, message: str) -> None:
+        """向控制台输出进度，避免长轮询阶段看起来像卡住。"""
+
+        print(f"[api_smoke:{self.run_id}] {message}", flush=True)
+
     @staticmethod
     def _short_json(payload: object, limit: int = 280) -> str:
         """压缩输出体，避免日志过长。"""
@@ -562,6 +629,18 @@ def main() -> None:
         action="store_true",
         help="登录失败时自动创建管理员",
     )
+    parser.add_argument(
+        "--poll-interval-seconds",
+        type=float,
+        default=1.0,
+        help="入库任务轮询间隔（秒）",
+    )
+    parser.add_argument(
+        "--ingest-timeout-seconds",
+        type=int,
+        default=180,
+        help="入库任务轮询超时（秒）",
+    )
     args = parser.parse_args()
 
     runner = SmokeRunner(
@@ -570,6 +649,8 @@ def main() -> None:
         admin_password=args.admin_password,
         timeout_seconds=max(5, args.timeout_seconds),
         create_admin_if_missing=args.create_admin_if_missing,
+        poll_interval_seconds=args.poll_interval_seconds,
+        ingest_timeout_seconds=args.ingest_timeout_seconds,
     )
     report = runner.run()
     run_id = report["summary"]["run_id"]

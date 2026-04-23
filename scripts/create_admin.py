@@ -1,10 +1,17 @@
 from __future__ import annotations
+# ruff: noqa: E402
 
 import argparse
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from app.auth.service import UserService
 from app.core.settings import get_settings
-from app.db.database import get_database
+from app.db.database import get_database, init_database
 from app.db.repos import RepositoryProvider
 
 
@@ -17,6 +24,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = get_settings()
+    init_database(settings)
     provider = RepositoryProvider(get_database(settings))
     service = UserService(
         provider.user(),

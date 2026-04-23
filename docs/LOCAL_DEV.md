@@ -413,12 +413,16 @@ docker compose down
 - 宿主机默认通过 `127.0.0.1:3307` 访问容器内 MySQL，可避免与本机已安装的 MySQL 争抢 3306 端口。
 - Compose 读取容器内数据库地址时优先使用 `CSAGE_DATABASE_URL_INTERNAL`；若你自定义了 Compose 的 MySQL 密码，也必须同步更新该值。
 - Compose 的 MySQL 初始化变量统一使用 `CSAGE_MYSQL_*` 前缀，避免宿主机上已有的通用 `MYSQL_*` 环境变量污染当前项目。
+- Compose 内置了 MySQL 低内存参数（如 `innodb-buffer-pool-size=128M`），用于降低 Docker Desktop 仅分配少量内存时被 `tei/mysql/api/worker` 组合挤爆的概率。
 - Compose 中 `api/worker` 已强制使用容器内地址：`QDRANT_URL=http://qdrant:6333`、`REDIS_URL=redis://redis:6379/0`。
 - Compose 中 `api/worker` 默认使用容器内 Embedding 地址：`EMBEDDING_BASE_URL=http://tei:80/v1`、`EMBEDDING_API_PATH=/embeddings`，避免容器内误连 `127.0.0.1`。
 - 如需自定义容器内 Embedding 地址，可设置 `EMBEDDING_BASE_URL_INTERNAL` 与 `EMBEDDING_API_PATH_INTERNAL`。
 - Compose 中 `api/worker` 默认注入 `NO_PROXY=qdrant,tei,redis,localhost,127.0.0.1`，避免本地服务请求被代理劫持。
+- Dockerfile 在 `pip install` 构建层会主动清空 `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY`，避免 Docker Desktop 残留的失效代理导致镜像构建失败。
+- 若你必须通过代理访问 PyPI，请先确认 Docker Desktop 的代理地址真实可用；否则应在 Docker Desktop 中关闭全局代理后再执行 `docker compose build`。
 - 若未配置 Embedding 服务，Compose 默认回退 `EMBEDDING_BACKEND=simple`，便于本地快速跑通。
 - 若你需要 HTTP Embedding，请在 `.env` 中显式设置 `EMBEDDING_BACKEND=http` 与可达的 `EMBEDDING_BASE_URL`。
+- 若 `mysql` 或 `tei` 仍频繁出现 `Exited (137)`，优先增加 Docker Desktop 的内存配额；当前仓库默认参数只做“尽量省内存”的保底，不等于无限压缩资源占用。
 
 ## 13. 本地演示 SOP（DeepSeek + 本地 TEI）
 以下步骤用于演示“真实生成模型 + 本地 Embedding + 引用问答”的完整闭环。

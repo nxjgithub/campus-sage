@@ -10,6 +10,19 @@ import { AppRole } from "../../shared/auth/role";
 
 const mockNavigate = vi.fn();
 
+function createMatchMedia(matches: boolean) {
+  return vi.fn().mockImplementation(() => ({
+    matches,
+    media: "(min-width: 901px)",
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  })) as typeof window.matchMedia;
+}
+
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
   return {
@@ -102,6 +115,7 @@ describe("PortalLayout", () => {
     mockAuthState.signOut = vi.fn().mockResolvedValue(undefined);
     mockAuthState.signIn = vi.fn().mockResolvedValue(undefined);
     mockAuthState.refreshUser = vi.fn().mockResolvedValue(undefined);
+    window.matchMedia = createMatchMedia(true);
   });
 
   it("匿名态在常规用户路由显示登录入口", async () => {
@@ -153,5 +167,25 @@ describe("PortalLayout", () => {
     expect(await screen.findByText("问答页")).toBeInTheDocument();
     expect(document.querySelector(".app-sider")).not.toBeInTheDocument();
     expect(document.querySelector(".app-header")).not.toBeInTheDocument();
+  });
+
+  it("移动端使用顶部工作台栏与抽屉导航", async () => {
+    window.matchMedia = createMatchMedia(false);
+
+    mockAuthState.status = "authenticated";
+    mockAuthState.role = "admin";
+    mockAuthState.isAuthenticated = true;
+    mockAuthState.user = { email: "admin@example.com", roles: ["admin"] };
+
+    renderWithRouter(["/admin/kb"], createAdminAndUserRoutes());
+
+    expect(await screen.findByText("知识库页")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "打开导航菜单" })).toBeInTheDocument();
+    expect(screen.queryByText("工作台")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "打开导航菜单" }));
+
+    expect(await screen.findByText("工作台")).toBeInTheDocument();
+    expect(screen.getAllByText("知识库管理").length).toBeGreaterThan(0);
   });
 });

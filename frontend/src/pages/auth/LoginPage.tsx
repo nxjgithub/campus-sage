@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Col, Form, Input, Row, Space, Typography, message } from "antd";
+import { App as AntdApp, Button, Card, Col, Form, Input, Row, Space, Typography } from "antd";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { useAuth } from "../../shared/auth/auth";
@@ -22,6 +22,7 @@ function resolveNextPath(rawNext: string | null, fallback: string) {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const { message: messageApi } = AntdApp.useApp();
   const [searchParams] = useSearchParams();
   const { signIn, role, isAuthenticated, status } = useAuth();
   const [form] = Form.useForm<LoginFormValues>();
@@ -104,11 +105,11 @@ export function LoginPage() {
                 setSubmitting(true);
                 try {
                   await signIn(values);
-                  message.success("登录成功");
+                  messageApi.success("登录成功");
                   navigate(nextPath, { replace: true });
                 } catch (error) {
                   const normalized = normalizeApiError(error);
-                  message.error(formatApiErrorMessage(normalized));
+                  messageApi.error(formatApiErrorMessage(normalized));
                 } finally {
                   setSubmitting(false);
                 }
@@ -169,4 +170,3 @@ export function LoginPage() {
     </div>
   );
 }
-

@@ -10,7 +10,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """应用配置，统一从环境变量读取。"""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     app_env: str = Field(default="local", description="运行环境（local/dev/prod）")
     app_host: str = Field(default="127.0.0.1", description="服务监听地址")

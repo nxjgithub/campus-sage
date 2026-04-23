@@ -19,6 +19,10 @@
 .\.venv\Scripts\python.exe scripts/run_api_smoke.py --base-url http://127.0.0.1:8010 --create-admin-if-missing
 ```
 
+补充说明：
+- `run_api_smoke.py` 会在控制台实时输出当前阶段、入库任务状态变化与请求异常，避免长轮询时看起来像“卡住”。
+- 如需放宽入库等待时间，可追加 `--ingest-timeout-seconds <seconds>`；如需调整轮询频率，可追加 `--poll-interval-seconds <seconds>`。
+
 ## 3. 真实业务场景清单（建议至少覆盖）
 - 场景 A：明确政策问答（应返回 `refusal=false` 且有 citations）
 - 场景 B：模糊提问澄清（首轮 `refusal=true` + `next_steps`，次轮补充后恢复正常回答）

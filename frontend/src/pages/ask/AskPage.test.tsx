@@ -17,6 +17,29 @@ import {
 import { fetchKbList } from "../../shared/api/modules/kb";
 import { AskPage } from "./AskPage";
 
+const mockSignOut = vi.fn();
+let mockAccessToken: string | null = null;
+let mockAuthState: {
+  status: "loading" | "authenticated" | "anonymous";
+  user:
+    | {
+        user_id: string;
+        email: string;
+        status: "active" | "disabled" | "deleted";
+        roles: string[];
+        created_at?: string;
+        updated_at?: string;
+      }
+    | null;
+  role: "admin" | "user";
+  isAuthenticated: boolean;
+} = {
+  status: "anonymous",
+  user: null,
+  role: "user",
+  isAuthenticated: false
+};
+
 vi.mock("../../shared/api/modules/kb", () => ({
   fetchKbList: vi.fn()
 }));
@@ -44,15 +67,23 @@ vi.mock("../../shared/api/modules/conversations", () => ({
 
 vi.mock("../../shared/auth/auth", () => ({
   useAuth: () => ({
-    status: "anonymous",
-    user: null,
-    role: "user",
-    isAuthenticated: false,
+    status: mockAuthState.status,
+    user: mockAuthState.user,
+    role: mockAuthState.role,
+    isAuthenticated: mockAuthState.isAuthenticated,
     signIn: vi.fn(),
-    signOut: vi.fn(),
+    signOut: mockSignOut,
     refreshUser: vi.fn()
   })
 }));
+
+vi.mock("../../shared/auth/token", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../shared/auth/token")>();
+  return {
+    ...original,
+    getAccessToken: () => mockAccessToken
+  };
+});
 
 function renderWithProviders(node: ReactNode) {
   const queryClient = new QueryClient({
@@ -174,6 +205,13 @@ describe("AskPage 聊天交互", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAccessToken = null;
+    mockAuthState = {
+      status: "anonymous",
+      user: null,
+      role: "user",
+      isAuthenticated: false
+    };
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
       value: scrollIntoViewMock
@@ -318,6 +356,10 @@ describe("AskPage 聊天交互", () => {
   it("空态示例问题应可直接回填输入框", async () => {
     renderWithProviders(<AskPage />);
 
+    expect(screen.queryByText("准备开始一次新问答")).not.toBeInTheDocument();
+    expect(screen.queryByText("当前会话还没有消息")).not.toBeInTheDocument();
+    expect(screen.queryByText("就绪")).not.toBeInTheDocument();
+
     await userEvent.click(await screen.findByRole("button", { name: "研究生复试需要准备哪些材料？" }));
 
     await waitFor(() => {
@@ -355,5 +397,78 @@ describe("AskPage 聊天交互", () => {
         "补考申请条件？"
       );
     });
+  });
+
+  it("新建会话后即使列表刷新仍返回旧列表，也应保持新会话线程而不回退", async () => {
+    mockAccessToken = "token_ask";
+    mockAuthState = {
+      status: "authenticated",
+      user: { user_id: "user_1", email: "admin@example.com", roles: ["admin"], status: "active" },
+      role: "admin",
+      isAuthenticated: true
+    };
+    vi.mocked(fetchConversationList)
+      .mockResolvedValueOnce({
+        items: [
+          {
+            conversation_id: "conv_old",
+            kb_id: "kb_1",
+            title: "旧会话",
+            last_message_preview: "旧会话里的内容",
+            last_message_at: "2026-02-21T10:00:00Z",
+            updated_at: "2026-02-21T10:00:00Z"
+          }
+        ],
+        total: 1,
+        next_cursor: null
+      })
+      .mockResolvedValue({
+        items: [
+          {
+            conversation_id: "conv_old",
+            kb_id: "kb_1",
+            title: "旧会话",
+            last_message_preview: "旧会话里的内容",
+            last_message_at: "2026-02-21T10:00:00Z",
+            updated_at: "2026-02-21T10:00:00Z"
+          }
+        ],
+        total: 1,
+        next_cursor: null
+      });
+    vi.mocked(fetchConversationMessagesPage).mockImplementation(async (conversationId) => ({
+      items:
+        conversationId === "conv_old"
+          ? [
+              {
+                message_id: "msg_old_assistant",
+                role: "assistant",
+                content: "这是旧会话回答",
+                citations: [],
+                refusal: false,
+                refusal_reason: null,
+                suggestions: [],
+                next_steps: [],
+                timing: null,
+                created_at: "2026-02-21T10:00:00Z",
+                request_id: "req_old"
+              }
+            ]
+          : [],
+      has_more: false,
+      next_before: null
+    }));
+
+    renderWithProviders(<AskPage />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /旧会话/ }));
+    expect(await screen.findByText("这是旧会话回答")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "新建会话" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("当前会话暂无消息")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("这是旧会话回答")).not.toBeInTheDocument();
   });
 });
