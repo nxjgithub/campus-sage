@@ -16,7 +16,7 @@ def test_create_admin_script_can_run_from_repo_root(tmp_path: Path) -> None:
     env["EMBEDDING_BACKEND"] = "simple"
     env["INGEST_QUEUE_ENABLED"] = "false"
     env["VLLM_ENABLED"] = "false"
-    env["JWT_SECRET_KEY"] = "test-secret"
+    env["JWT_SECRET_KEY"] = "test-secret-key-with-32-bytes-minimum!!"
 
     result = subprocess.run(
         [

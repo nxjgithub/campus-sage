@@ -72,13 +72,14 @@
 - `RERANK_MODEL_NAME`：如 `bge-reranker`（示例）
 
 ## 4.4 认证与安全
-- `JWT_SECRET_KEY`：JWT 密钥（必须修改）
+- `JWT_SECRET_KEY`：JWT 密钥（必须修改，且建议至少 32 个字符）
 - `JWT_ALGORITHM`：默认 HS256
 - `JWT_ISSUER`：默认 csage
 - `ACCESS_TOKEN_EXPIRE_MINUTES`：访问令牌过期分钟
 - `REFRESH_TOKEN_EXPIRE_DAYS`：刷新令牌过期天数
 - `PASSWORD_MIN_LENGTH`：密码最小长度
 说明：密码必须包含字母与数字，长度不足将返回 `PASSWORD_TOO_WEAK`。
+补充：当 `APP_ENV=prod` 时，若 `JWT_SECRET_KEY` 仍为默认值或长度小于 32，服务将拒绝启动。
 
 
 ## 5. RAG 参数（可被 KB config 覆盖）
@@ -151,6 +152,7 @@
   - 去重并保留声明顺序
 - 为兼容历史本地环境，若该配置仅为 `pdf`，系统会自动扩展为 `pdf,docx,html,htm,md,txt`。
 - 管理员可通过 `GET /api/v1/monitor/runtime` 查看当前生效的关键配置摘要与告警信息。
+- 运行时诊断会额外暴露 `security.jwt_default_secret` 与 `security.jwt_weak_secret`，用于区分“仍为默认值”和“长度过短”两类 JWT 风险。
 
 ## 上传类型补充（2026-03 第三轮）
 - `UPLOAD_ALLOWED_EXTS` 默认值调整为 `pdf,docx,html,htm,md,txt`。

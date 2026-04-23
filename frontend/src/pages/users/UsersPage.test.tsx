@@ -4,7 +4,7 @@ import { App as AntdApp } from "antd";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchRoleList } from "../../shared/api/modules/roles";
 import { createUser, fetchUserList } from "../../shared/api/modules/users";
 import { UsersCreatePage } from "./UsersCreatePage";
@@ -39,8 +39,23 @@ function renderWithProviders(node: ReactNode) {
 }
 
 describe("UsersCreatePage submit", () => {
+  const originalConsoleError = console.error;
+  const originalConsoleWarn = console.warn;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      if (args.some((item) => String(item).includes("There may be circular references"))) {
+        return;
+      }
+      originalConsoleError(...args);
+    });
+    vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+      if (args.some((item) => String(item).includes("There may be circular references"))) {
+        return;
+      }
+      originalConsoleWarn(...args);
+    });
     vi.mocked(fetchUserList).mockResolvedValue({
       items: [
         {
@@ -66,6 +81,10 @@ describe("UsersCreatePage submit", () => {
       created_at: "2026-02-12T10:01:00Z",
       updated_at: "2026-02-12T10:01:00Z"
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("should submit expected payload when creating a user", async () => {

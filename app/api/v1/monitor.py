@@ -94,7 +94,8 @@ def get_runtime_diagnostics(
             allowed_exts=list(settings.allowed_upload_extensions),
         ),
         security=RuntimeSecurityInfo(
-            jwt_default_secret=settings.jwt_secret_key == "CHANGE_ME",
+            jwt_default_secret=settings.jwt_secret_is_default,
+            jwt_weak_secret=settings.jwt_secret_is_weak,
         ),
         rag_metrics=RuntimeRagMetricsInfo(
             sample_size=rag_metrics.sample_size,

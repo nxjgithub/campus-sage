@@ -7,6 +7,9 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+JWT_SECRET_MIN_LENGTH = 32
+
+
 class Settings(BaseSettings):
     """应用配置，统一从环境变量读取。"""
 
@@ -196,12 +199,42 @@ class Settings(BaseSettings):
             return f"{host}:{port}"
         return parsed.path or parsed.netloc or self.database_url
 
+    @property
+    def jwt_secret_is_default(self) -> bool:
+        """判断 JWT 密钥是否仍使用默认占位值。"""
+
+        return self.jwt_secret_key == "CHANGE_ME"
+
+    @property
+    def jwt_secret_is_weak(self) -> bool:
+        """判断 JWT 密钥长度是否低于推荐安全下限。"""
+
+        return len(self.jwt_secret_key) < JWT_SECRET_MIN_LENGTH
+
+    def runtime_errors(self) -> list[str]:
+        """汇总会阻断服务启动的运行时配置错误。"""
+
+        errors: list[str] = []
+        if self.app_env.lower() != "prod":
+            return errors
+        if self.jwt_secret_is_default:
+            errors.append("生产环境禁止使用默认 JWT_SECRET_KEY。")
+        elif self.jwt_secret_is_weak:
+            errors.append(
+                f"生产环境要求 JWT_SECRET_KEY 至少 {JWT_SECRET_MIN_LENGTH} 个字符。"
+            )
+        return errors
+
     def runtime_warnings(self) -> list[str]:
         """汇总当前运行配置下需要额外关注的告警信息。"""
 
         warnings: list[str] = []
-        if self.jwt_secret_key == "CHANGE_ME":
+        if self.jwt_secret_is_default:
             warnings.append("JWT_SECRET_KEY 仍为默认值，部署前必须替换。")
+        elif self.jwt_secret_is_weak:
+            warnings.append(
+                f"JWT_SECRET_KEY 长度过短，建议至少 {JWT_SECRET_MIN_LENGTH} 个字符。"
+            )
         if not self.allowed_upload_extensions:
             warnings.append("UPLOAD_ALLOWED_EXTS 为空，上传接口将拒绝所有文件。")
         return warnings

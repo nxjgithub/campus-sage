@@ -184,6 +184,7 @@ docker compose exec mysql mysql -ucsage -pcsage123 -D csage -e "SELECT version, 
 - 若 SQLite 数据库文件已损坏或历史结构异常，优先备份后删除本地 SQLite 文件，再重启服务让系统重建；不要手工跳过迁移记录。
 - 若 MySQL schema 已被手工改坏，优先新建空数据库实例重新初始化，不要在半迁移旧库上继续叠补丁。
 - 若你怀疑服务实际加载的配置与 `.env` 不一致，可登录后访问 `GET /api/v1/monitor/runtime` 检查当前 schema 版本、上传配置和关键开关。
+- 若你计划用 `APP_ENV=prod` 启动演示环境，必须先确认 `JWT_SECRET_KEY` 已替换且长度不少于 32；否则服务会在启动阶段直接报错并拒绝运行。
 
 ## 8. 运行评测脚本
 评测集 JSON 格式示例：

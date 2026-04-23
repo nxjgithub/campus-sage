@@ -18,6 +18,9 @@ def create_app() -> FastAPI:
     """创建 FastAPI 应用实例。"""
 
     settings = get_settings()
+    runtime_errors = settings.runtime_errors()
+    if runtime_errors:
+        raise RuntimeError("运行时配置不合法：" + "；".join(runtime_errors))
     docs_url = "/docs" if settings.enable_swagger else None
     redoc_url = "/redoc" if settings.enable_swagger else None
     app = FastAPI(

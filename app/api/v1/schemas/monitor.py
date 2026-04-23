@@ -60,6 +60,7 @@ class RuntimeSecurityInfo(BaseModel):
     """安全相关配置摘要。"""
 
     jwt_default_secret: bool = Field(description="JWT 密钥是否仍为默认值")
+    jwt_weak_secret: bool = Field(description="JWT 密钥长度是否低于推荐安全下限")
 
 
 class RuntimeRagMetricsInfo(BaseModel):

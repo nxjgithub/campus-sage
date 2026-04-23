@@ -71,7 +71,7 @@ def test_run_sqlite_migrations_upgrades_legacy_database(tmp_path: Path) -> None:
 def test_init_database_seeds_default_roles(tmp_path: Path) -> None:
     settings = Settings(
         database_url=f"sqlite:///{(tmp_path / 'seed.db').as_posix()}",
-        jwt_secret_key="test-secret",
+        jwt_secret_key="test-secret-key-with-32-bytes-minimum!!",
     )
     reset_database_singleton()
 

@@ -582,6 +582,7 @@ def test_monitor_runtime_diagnostics() -> None:
     assert "citation_coverage_rate" in payload["rag_metrics"]
     assert "pdf" in payload["upload"]["allowed_exts"]
     assert payload["security"]["jwt_default_secret"] is False
+    assert payload["security"]["jwt_weak_secret"] is False
 
 
 def test_monitor_runtime_rag_metrics_reflect_recent_messages() -> None:

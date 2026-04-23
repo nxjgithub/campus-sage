@@ -1010,7 +1010,8 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
     "allowed_exts": ["pdf", "docx", "html", "htm", "md", "txt"]
   },
   "security": {
-    "jwt_default_secret": false
+    "jwt_default_secret": false,
+    "jwt_weak_secret": false
   },
   "rag_metrics": {
     "sample_size": 18,
@@ -1047,6 +1048,12 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 
 ## 监控补充（2026-03）
 `GET /api/v1/monitor/runtime` 新增 `rag_metrics` 字段，用于观测联调健康度。
+
+## 安全诊断补充（2026-04）
+- `GET /api/v1/monitor/runtime` 的 `security` 字段现同时返回：
+  - `jwt_default_secret`：是否仍使用默认占位密钥
+  - `jwt_weak_secret`：是否低于推荐最小长度（32 字符）
+- 该接口只返回风险摘要，不返回密钥原文。
 
 响应字段：
 - `sample_size`: 统计样本数量（最近助手消息）

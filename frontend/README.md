@@ -1,8 +1,8 @@
 # CampusSage Frontend
 
 ## 本地启动
-1. 安装依赖：`npm install`
-2. 启动开发服务：`npm run dev`
+1. 安装依赖：`pnpm install`
+2. 启动开发服务：`pnpm dev`
 3. 访问：`http://127.0.0.1:5173`
 
 ## 路由约定
@@ -25,14 +25,14 @@
 
 ## 常用命令
 # 开发阶段
-npm run dev          # 启动开发服务器
-npm run typecheck    # 定期检查类型
-npm run lint         # 保持代码规范
+pnpm dev          # 启动开发服务器
+pnpm typecheck    # 定期检查类型
+pnpm lint         # 保持代码规范
 
 # 提交前
-npm run test         # 确保所有测试通过
-npm run build        # 验证生产构建成功
+pnpm test         # 确保所有测试通过
+pnpm build        # 验证生产构建成功
 
 ## 类型生成
-- `npm run gen:types`
+- `pnpm gen:types`
 - 默认从 `http://127.0.0.1:8000/openapi.json` 生成

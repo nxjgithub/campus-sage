@@ -26,7 +26,10 @@ def test_reset_database_deletes_chat_run_before_user_dependencies(
     monkeypatch.setattr(database_module, "_seed_default_roles", lambda database: None)
 
     database_module.reset_database(
-        Settings(database_url="sqlite:///./data/test-reset.db", jwt_secret_key="test-secret")
+        Settings(
+            database_url="sqlite:///./data/test-reset.db",
+            jwt_secret_key="test-secret-key-with-32-bytes-minimum!!",
+        )
     )
 
     assert fake_database.executed.index("DELETE FROM chat_run;") < fake_database.executed.index(
