@@ -300,17 +300,21 @@ export function KbPage() {
             <div className="ops-scroll-pane">
               <Table
                 size={tableDensity}
-                className={`kb-table${tableDensity === "small" ? " dense-table" : ""}`}
+                className={`admin-table--priority kb-table${
+                  tableDensity === "small" ? " dense-table" : ""
+                }`}
                 rowKey="kb_id"
                 tableLayout="fixed"
                 dataSource={filteredItems}
                 pagination={false}
-                scroll={{ x: 940 }}
+                scroll={{ x: 980 }}
                 columns={[
                   {
                     title: "知识库",
                     dataIndex: "name",
-                    width: 248,
+                    width: 320,
+                    fixed: "left",
+                    className: "admin-table-cell--primary",
                     render: (_value: string, record) => (
                       <div className="kb-name-cell">
                         <Typography.Text
@@ -333,7 +337,8 @@ export function KbPage() {
                   {
                     title: "策略",
                     key: "retrieval",
-                    width: 196,
+                    width: 190,
+                    className: "admin-table-cell--meta",
                     render: (_, record) => (
                       <div className="kb-strategy-cell">
                         <Typography.Text className="kb-strategy-cell__primary">
@@ -349,7 +354,8 @@ export function KbPage() {
                   {
                     title: "可见性",
                     dataIndex: "visibility",
-                    width: 112,
+                    width: 108,
+                    className: "admin-table-cell--status",
                     render: (value: KbEditValues["visibility"]) => (
                       <Tag color={resolveVisibilityColor(value)} icon={<EyeOutlined />}>
                         {value}
@@ -359,7 +365,8 @@ export function KbPage() {
                   {
                     title: "更新时间",
                     dataIndex: "updated_at",
-                    width: 168,
+                    width: 150,
+                    className: "admin-table-cell--time",
                     render: (value: string) => {
                       const formatted = formatDateParts(value);
                       return (
@@ -377,7 +384,9 @@ export function KbPage() {
                   {
                     title: "操作",
                     key: "actions",
-                    width: 108,
+                    width: 96,
+                    fixed: "right",
+                    className: "admin-table-cell--actions",
                     render: (_, record: { kb_id: string }) => (
                       <Space size={8} className="kb-actions">
                         <Tooltip title="编辑">

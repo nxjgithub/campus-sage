@@ -6863,6 +6863,148 @@ body {
   display: none;
 }
 
+.app-shell--admin .page-stack {
+  max-width: 1560px;
+}
+
+.app-sider--admin {
+  padding: 14px 12px 14px 14px;
+}
+
+.app-sider--admin .ant-layout-sider-children {
+  gap: 10px;
+}
+
+.app-sider--admin .brand-block {
+  padding: 14px 14px 12px;
+  margin: 8px 8px 6px;
+  border-radius: 20px;
+}
+
+.app-sider--admin .brand-block .brand-lockup {
+  gap: 12px;
+}
+
+.app-sider--admin .brand-block .brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+.app-sider--admin .brand-block .brand-title {
+  font-size: 28px;
+  line-height: 1.04 !important;
+}
+
+.app-sider--admin .brand-description {
+  max-width: none;
+  line-height: 1.55;
+}
+
+.app-sider--admin .brand-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.app-sider--admin .brand-overview__item {
+  min-height: 58px;
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.app-sider--admin .brand-overview__label {
+  font-size: 11px;
+}
+
+.app-sider--admin .brand-overview__value {
+  font-size: 14px;
+}
+
+.app-sider--admin .brand-meta-row {
+  margin-top: 6px;
+}
+
+.app-sider--admin .nav-section-label {
+  margin-top: 0;
+  padding-inline: 10px;
+}
+
+.app-sider--admin .ant-menu {
+  padding: 2px 0 4px;
+}
+
+.app-sider--admin .ant-menu-item {
+  min-height: 66px;
+  padding: 8px 8px 8px 10px !important;
+  border-radius: 16px;
+}
+
+.app-sider--admin .nav-menu-link {
+  gap: 12px;
+}
+
+.app-sider--admin .nav-menu-copy {
+  gap: 2px;
+}
+
+.app-sider--admin .nav-menu-label__title {
+  font-size: 13px;
+}
+
+.app-sider--admin .nav-menu-label__desc {
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.app-sider--admin .menu-footer {
+  margin: 6px 8px 8px;
+  padding: 12px 14px;
+  border-radius: 18px;
+}
+
+.app-sider--admin .menu-footer-value {
+  margin-bottom: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.app-sider--admin .menu-footer-meta {
+  margin-bottom: 4px;
+}
+
+.app-sider--admin .menu-footer-route {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-bottom: 8px;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.app-sider--admin .menu-footer-actions {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-sider--admin .menu-footer-actions .portal-switch {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-sider--admin .menu-footer-action-row {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
 .app-mobile-drawer .ant-drawer-content {
   background:
     radial-gradient(circle at top right, rgba(37, 99, 235, 0.06), transparent 28%),
@@ -6966,5 +7108,356 @@ body {
 
   .app-sider:not(.app-sider--mobile) {
     display: none;
+  }
+}
+
+/* 第四轮管理端比例收口：压低页头与工具条占高，把首屏空间留给表格和任务内容。 */
+.app-shell--admin .app-content:not(.app-content--ask) {
+  padding: 22px 28px 30px;
+}
+
+.app-shell--admin .page-stack {
+  gap: 18px;
+  max-width: 1480px;
+}
+
+.app-shell--admin .card-soft,
+.app-shell--admin .ops-pane-card,
+.app-shell--admin .kb-list-card .ops-pane-card,
+.app-shell--admin .split-manage-card .ops-pane-card,
+.app-shell--admin .monitor-metric-card,
+.app-shell--admin .split-overview-card,
+.app-shell--admin .kb-overview-card {
+  border-radius: 18px !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07) !important;
+}
+
+.app-shell--admin .compact-page-hero .ant-card-body,
+.app-shell--admin .split-overview-card .ant-card-body,
+.app-shell--admin .kb-overview-card .ant-card-body {
+  padding: 18px 20px;
+}
+
+.app-shell--admin .compact-page-hero__main,
+.app-shell--admin .split-overview,
+.app-shell--admin .kb-overview {
+  align-items: center;
+  gap: 18px;
+}
+
+.app-shell--admin .compact-page-hero__copy,
+.app-shell--admin .split-overview__copy,
+.app-shell--admin .kb-overview__copy {
+  gap: 8px;
+  min-width: min(360px, 100%);
+}
+
+.app-shell--admin .compact-page-hero .hero-title,
+.app-shell--admin .split-overview .hero-title,
+.app-shell--admin .kb-overview .hero-title {
+  font-size: clamp(24px, 2.1vw, 32px) !important;
+  line-height: 1.12 !important;
+}
+
+.app-shell--admin .kb-overview__desc,
+.app-shell--admin .split-overview__desc {
+  max-width: 760px;
+  margin-bottom: 0;
+  color: #64748b;
+  line-height: 1.65;
+}
+
+.app-shell--admin .compact-page-hero__stats,
+.app-shell--admin .kb-overview__summary,
+.app-shell--admin .split-overview__stats {
+  gap: 10px;
+}
+
+.app-shell--admin .summary-item,
+.app-shell--admin .kb-overview-summary-item,
+.app-shell--admin .kb-overview-stat,
+.app-shell--admin .split-overview-stat {
+  min-height: 74px;
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.app-shell--admin .summary-item-value,
+.app-shell--admin .kb-overview-summary-item__value,
+.app-shell--admin .kb-overview-stat__value,
+.app-shell--admin .split-overview-stat__value {
+  font-size: clamp(22px, 1.8vw, 28px);
+  line-height: 1.05;
+}
+
+.app-shell--admin .summary-item-label,
+.app-shell--admin .kb-overview-summary-item__label,
+.app-shell--admin .kb-overview-stat__label,
+.app-shell--admin .split-overview-stat__label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.app-shell--admin .ops-pane-card .ant-card-head,
+.app-shell--admin .card-soft .ant-card-head {
+  min-height: 56px;
+  padding-inline: 18px;
+}
+
+.app-shell--admin .ops-pane-card .ant-card-body,
+.app-shell--admin .card-soft .ant-card-body {
+  padding: 16px;
+}
+
+.app-shell--admin .card-soft.kb-overview-card .ant-card-body,
+.app-shell--admin .card-soft.split-overview-card .ant-card-body {
+  padding: 18px 20px;
+}
+
+.app-shell--admin .ops-pane-body {
+  gap: 14px;
+}
+
+.app-shell--admin .ops-pane-head__title {
+  font-size: 14px;
+}
+
+.app-shell--admin .ops-pane-head__hint {
+  width: 24px;
+  height: 24px;
+}
+
+.app-shell--admin .density-toolbar,
+.app-shell--admin .density-toolbar--clean {
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.app-shell--admin .density-toolbar__group {
+  gap: 8px;
+}
+
+.app-shell--admin .density-meta {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.app-shell--admin .density-toolbar .ant-btn,
+.app-shell--admin .ops-pane-card .ant-btn,
+.app-shell--admin .card-inset .ant-btn {
+  min-height: 36px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.app-shell--admin .density-toolbar .ant-btn.ant-btn-circle,
+.app-shell--admin .ops-pane-card .ant-btn.ant-btn-circle,
+.app-shell--admin .card-inset .ant-btn.ant-btn-circle {
+  min-width: 36px;
+}
+
+.app-shell--admin .app-content:not(.app-content--ask) .density-toolbar .ant-input,
+.app-shell--admin .app-content:not(.app-content--ask) .density-toolbar .ant-input-affix-wrapper,
+.app-shell--admin .app-content:not(.app-content--ask) .density-toolbar .ant-select-selector {
+  min-height: 38px !important;
+  border-radius: 10px !important;
+}
+
+.app-shell--admin .ant-segmented {
+  border-radius: 10px;
+  background: #eef2f7;
+}
+
+.app-shell--admin .ant-segmented-item {
+  min-height: 30px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.app-shell--admin .card-inset {
+  border-radius: 14px;
+}
+
+.app-shell--admin .card-inset .ant-card-head {
+  min-height: 48px;
+  padding-inline: 14px;
+}
+
+.app-shell--admin .card-inset .ant-card-body {
+  padding: 14px;
+}
+
+.app-shell--admin .app-content:not(.app-content--ask) .ant-table-wrapper {
+  min-width: 0;
+}
+
+.app-shell--admin .app-content:not(.app-content--ask) .ant-table-wrapper .ant-table-container {
+  border-radius: 14px;
+}
+
+.app-shell--admin .app-content:not(.app-content--ask) .ant-table-wrapper .ant-table-thead > tr > th {
+  padding: 11px 12px;
+  white-space: nowrap;
+}
+
+.app-shell--admin .app-content:not(.app-content--ask) .ant-table-wrapper .ant-table-tbody > tr > td {
+  padding: 13px 12px;
+  vertical-align: top;
+}
+
+.app-shell--admin .app-content:not(.app-content--ask) .ant-table-wrapper .dense-table .ant-table-thead > tr > th {
+  padding: 9px 10px;
+}
+
+.app-shell--admin .app-content:not(.app-content--ask) .ant-table-wrapper .dense-table .ant-table-tbody > tr > td {
+  padding: 10px;
+}
+
+.app-shell--admin .app-content:not(.app-content--ask) .ant-table-cell .ant-tag {
+  margin-inline-end: 4px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.app-shell--admin .admin-table--priority .ant-table-body,
+.app-shell--admin .admin-table--priority .ant-table-content {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.34) transparent;
+}
+
+.app-shell--admin .admin-table--priority .ant-table-cell {
+  min-width: 0;
+}
+
+.app-shell--admin .admin-table--priority .ant-table-cell-fix-left,
+.app-shell--admin .admin-table--priority .ant-table-cell-fix-right {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98)) !important;
+}
+
+.app-shell--admin .admin-table--priority .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.app-shell--admin .admin-table--priority .ant-table-tbody > tr:hover > .ant-table-cell-fix-right {
+  background: rgba(239, 245, 255, 0.96) !important;
+}
+
+.app-shell--admin .admin-table-cell--primary {
+  min-width: 260px;
+}
+
+.app-shell--admin .admin-table-cell--primary .ant-typography,
+.app-shell--admin .admin-table-cell--meta .ant-typography,
+.app-shell--admin .admin-table-cell--time .ant-typography {
+  display: block;
+  max-width: 100%;
+}
+
+.app-shell--admin .admin-table-primary-stack {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+}
+
+.app-shell--admin .admin-table-cell--status,
+.app-shell--admin .admin-table-cell--number,
+.app-shell--admin .admin-table-cell--actions {
+  white-space: nowrap;
+}
+
+.app-shell--admin .admin-table-cell--status {
+  text-align: center;
+}
+
+.app-shell--admin .admin-table-cell--number {
+  font-family: "JetBrains Mono", "Cascadia Mono", monospace;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-shell--admin .admin-table-cell--time {
+  color: #64748b;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-shell--admin .admin-table-cell--actions {
+  text-align: center;
+}
+
+.app-shell--admin .admin-table-cell--actions .ant-space {
+  justify-content: center;
+}
+
+.app-shell--admin .admin-table-cell--actions .ant-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+}
+
+.app-shell--admin .kb-name-cell__title,
+.app-shell--admin .ant-table-cell .ant-typography strong {
+  color: #0f172a;
+}
+
+.app-shell--admin .kb-name-cell__desc,
+.app-shell--admin .kb-strategy-cell__secondary {
+  margin-bottom: 0;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.app-shell--admin .split-pane-copy,
+.app-shell--admin .kb-pane-copy {
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.app-shell--admin .split-pane-copy__title,
+.app-shell--admin .kb-pane-copy__title {
+  font-size: 14px;
+}
+
+.app-shell--admin .split-pane-copy__desc,
+.app-shell--admin .kb-pane-copy__desc {
+  line-height: 1.6;
+}
+
+.app-shell--admin .dashboard-grid {
+  gap: 14px;
+}
+
+.app-shell--admin .metric-bars,
+.app-shell--admin .metric-donut,
+.app-shell--admin .metric-trend {
+  padding: 0;
+}
+
+@media (max-width: 1280px) {
+  .app-shell--admin .app-content:not(.app-content--ask) {
+    padding: 20px 22px 28px;
+  }
+
+  .app-shell--admin .page-stack {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell--admin .app-content:not(.app-content--ask) {
+    padding: 16px 14px 22px;
+  }
+
+  .app-shell--admin .compact-page-hero__main,
+  .app-shell--admin .split-overview,
+  .app-shell--admin .kb-overview {
+    align-items: stretch;
+  }
+
+  .app-shell--admin .summary-item,
+  .app-shell--admin .kb-overview-summary-item,
+  .app-shell--admin .kb-overview-stat,
+  .app-shell--admin .split-overview-stat {
+    min-height: 68px;
   }
 }

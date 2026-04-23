@@ -459,9 +459,13 @@ export function EvalPage() {
 
                 <Table
                   size={tableDensity}
-                  className={tableDensity === "small" ? "dense-table" : undefined}
+                  className={`admin-table--priority${
+                    tableDensity === "small" ? " dense-table" : ""
+                  }`}
                   rowKey="metric"
+                  tableLayout="fixed"
                   pagination={false}
+                  scroll={{ x: 460 }}
                   dataSource={[
                     { metric: "Recall@K", value: formatMetric(runDetail.metrics?.recall_at_k) },
                     { metric: "MRR", value: formatMetric(runDetail.metrics?.mrr) },
@@ -470,8 +474,20 @@ export function EvalPage() {
                     { metric: "样本数", value: formatMetric(runDetail.metrics?.samples) }
                   ]}
                   columns={[
-                    { title: "指标", dataIndex: "metric", width: 180 },
-                    { title: "值", dataIndex: "value" }
+                    {
+                      title: "指标",
+                      dataIndex: "metric",
+                      width: 240,
+                      fixed: "left",
+                      className: "admin-table-cell--primary"
+                    },
+                    {
+                      title: "值",
+                      dataIndex: "value",
+                      width: 180,
+                      align: "right",
+                      className: "admin-table-cell--number"
+                    }
                   ]}
                 />
               </Space>

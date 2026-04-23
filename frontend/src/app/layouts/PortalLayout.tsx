@@ -121,6 +121,7 @@ export function PortalLayout({
   const activeRoute = resolveNavEntry(location.pathname, navItems);
   const activePortal: AppRole = isAdminRoute ? "admin" : "user";
   const routeTitle = activeRoute?.label ?? panelLabel;
+  const desktopSiderWidth = panelRole === "admin" ? 304 : 280;
 
   const handlePortalChange = (targetRole: AppRole) => {
     setMobileNavOpen(false);
@@ -274,9 +275,18 @@ export function PortalLayout({
   );
 
   return (
-    <Layout className={hideGlobalSider ? "app-shell app-shell--no-sider" : "app-shell"}>
+    <Layout
+      className={
+        hideGlobalSider
+          ? `app-shell app-shell--no-sider${panelRole === "admin" ? " app-shell--admin" : ""}`
+          : `app-shell${panelRole === "admin" ? " app-shell--admin" : ""}`
+      }
+    >
       {!hideGlobalSider && isDesktop ? (
-        <Sider width={280} className="app-sider">
+        <Sider
+          width={desktopSiderWidth}
+          className={panelRole === "admin" ? "app-sider app-sider--admin" : "app-sider"}
+        >
           {siderContent}
         </Sider>
       ) : null}
@@ -323,7 +333,15 @@ export function PortalLayout({
           }}
           rootClassName="app-mobile-drawer"
         >
-          <div className="app-sider app-sider--mobile">{siderContent}</div>
+          <div
+            className={
+              panelRole === "admin"
+                ? "app-sider app-sider--mobile app-sider--admin"
+                : "app-sider app-sider--mobile"
+            }
+          >
+            {siderContent}
+          </div>
         </Drawer>
       ) : null}
     </Layout>

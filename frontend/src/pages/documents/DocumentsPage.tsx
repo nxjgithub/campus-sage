@@ -468,21 +468,36 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
             ) : (
               <Table
                 size={tableDensity}
-                className={tableDensity === "small" ? "dense-table" : undefined}
+                className={`admin-table--priority${
+                  tableDensity === "small" ? " dense-table" : ""
+                }`}
                 rowKey="doc_id"
+                tableLayout="fixed"
                 loading={documentsQuery.isLoading}
                 dataSource={filteredDocuments}
                 pagination={false}
-                scroll={{ y: 260 }}
+                scroll={{ x: 900, y: 260 }}
                 locale={{ emptyText: "当前筛选下暂无文档" }}
                 columns={[
                   {
                     title: "文档",
                     dataIndex: "doc_name",
+                    width: 360,
+                    fixed: "left",
+                    className: "admin-table-cell--primary",
                     render: (_: string, record: DocumentItem) => (
-                      <Space direction="vertical" size={2}>
-                        <Typography.Text strong>{record.doc_name}</Typography.Text>
-                        <Typography.Text type="secondary">
+                      <Space direction="vertical" size={2} className="admin-table-primary-stack">
+                        <Typography.Text strong ellipsis={{ tooltip: record.doc_name }}>
+                          {record.doc_name}
+                        </Typography.Text>
+                        <Typography.Text
+                          type="secondary"
+                          ellipsis={{
+                            tooltip: `${record.doc_version ? `版本：${record.doc_version}` : "未填写版本"}${
+                              record.published_at ? ` · 发布：${record.published_at}` : ""
+                            }`
+                          }}
+                        >
                           {record.doc_version ? `版本：${record.doc_version}` : "未填写版本"}
                           {record.published_at ? ` · 发布：${record.published_at}` : ""}
                         </Typography.Text>
@@ -497,7 +512,8 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                   {
                     title: "状态",
                     dataIndex: "status",
-                    width: 120,
+                    width: 108,
+                    className: "admin-table-cell--status",
                     render: (value: DocumentItem["status"]) => {
                       const meta = DOCUMENT_STATUS_META[value];
                       return <Tag color={meta.color}>{meta.label}</Tag>;
@@ -506,21 +522,26 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                   {
                     title: "分块数",
                     dataIndex: "chunk_count",
-                    width: 120,
+                    width: 92,
+                    align: "right",
+                    className: "admin-table-cell--number",
                     render: (value: number) => value ?? 0
                   },
                   {
                     title: "更新时间",
                     dataIndex: "updated_at",
-                    width: 140,
+                    width: 148,
+                    className: "admin-table-cell--time",
                     render: (value: string) => formatDateTime(value)
                   },
                   {
                     title: "操作",
                     key: "actions",
-                    width: 220,
+                    width: 96,
+                    fixed: "right",
+                    className: "admin-table-cell--actions",
                     render: (_: unknown, record: DocumentItem) => (
-                      <Space wrap>
+                      <Space size={6}>
                         <ConfirmAction
                           title="确认重建该文档索引？"
                           description="系统将重新生成文档向量索引，期间可能增加队列负载。"
@@ -710,21 +731,35 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
             ) : (
               <Table
                 size={tableDensity}
-                className={tableDensity === "small" ? "dense-table" : undefined}
+                className={`admin-table--priority${
+                  tableDensity === "small" ? " dense-table" : ""
+                }`}
                 rowKey="job_id"
+                tableLayout="fixed"
                 dataSource={historyJobs}
                 pagination={false}
-                scroll={{ y: 250 }}
+                scroll={{ x: 900, y: 250 }}
                 columns={[
                   {
                     title: "文档",
                     dataIndex: "doc_id",
-                    render: (value: string) => docNameMap.get(value) ?? "未知文档"
+                    width: 330,
+                    fixed: "left",
+                    className: "admin-table-cell--primary",
+                    render: (value: string) => {
+                      const docName = docNameMap.get(value) ?? "未知文档";
+                      return (
+                        <Typography.Text strong ellipsis={{ tooltip: docName }}>
+                          {docName}
+                        </Typography.Text>
+                      );
+                    }
                   },
                   {
                     title: "状态",
                     dataIndex: "status",
-                    width: 120,
+                    width: 108,
+                    className: "admin-table-cell--status",
                     render: (value: IngestJob["status"]) => {
                       const meta = JOB_STATUS_META[value];
                       return <Tag color={meta.color}>{meta.label}</Tag>;
@@ -733,21 +768,25 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                   {
                     title: "阶段",
                     key: "stage",
-                    width: 130,
+                    width: 120,
+                    className: "admin-table-cell--meta",
                     render: (_: unknown, record: IngestJob) => getJobStageLabel(record.progress?.stage)
                   },
                   {
                     title: "更新时间",
                     dataIndex: "updated_at",
-                    width: 140,
+                    width: 148,
+                    className: "admin-table-cell--time",
                     render: (value: string) => formatDateTime(value)
                   },
                   {
                     title: "操作",
                     key: "actions",
-                    width: 230,
+                    width: 132,
+                    fixed: "right",
+                    className: "admin-table-cell--actions",
                     render: (_: unknown, record: IngestJob) => (
-                      <Space wrap>
+                      <Space size={6}>
                         <Tooltip title="查看">
                           <Button
                             size="small"

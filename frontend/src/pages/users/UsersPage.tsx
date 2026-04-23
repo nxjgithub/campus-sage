@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRightOutlined,
   DeleteOutlined,
@@ -454,9 +454,13 @@ export function UsersPage() {
             <div className="ops-scroll-pane">
               <Table
                 size={tableDensity}
-                className={tableDensity === "small" ? "dense-table" : undefined}
+                className={`admin-table--priority${
+                  tableDensity === "small" ? " dense-table" : ""
+                }`}
                 rowKey="user_id"
+                tableLayout="fixed"
                 dataSource={filteredUsers}
+                scroll={{ x: 780 }}
                 pagination={{
                   current: page,
                   pageSize,
@@ -472,18 +476,25 @@ export function UsersPage() {
                   {
                     title: "用户",
                     dataIndex: "email",
-                    width: 280,
+                    width: 360,
+                    fixed: "left",
+                    className: "admin-table-cell--primary",
                     render: (value: string, record: UserListItem) => (
-                      <Space direction="vertical" size={2}>
-                        <Typography.Text strong>{value}</Typography.Text>
-                        <Typography.Text type="secondary">创建于 {record.created_at}</Typography.Text>
+                      <Space direction="vertical" size={2} className="admin-table-primary-stack">
+                        <Typography.Text strong ellipsis={{ tooltip: value }}>
+                          {value}
+                        </Typography.Text>
+                        <Typography.Text type="secondary" ellipsis={{ tooltip: `创建于 ${record.created_at}` }}>
+                          创建于 {record.created_at}
+                        </Typography.Text>
                       </Space>
                     )
                   },
                   {
                     title: "状态",
                     dataIndex: "status",
-                    width: 120,
+                    width: 108,
+                    className: "admin-table-cell--status",
                     render: (value: EditUserValues["status"]) => (
                       <Tag color={resolveStatusColor(value)}>{value}</Tag>
                     )
@@ -491,6 +502,8 @@ export function UsersPage() {
                   {
                     title: "角色",
                     dataIndex: "roles",
+                    width: 180,
+                    className: "admin-table-cell--meta",
                     render: (roles: string[]) => (
                       <Space wrap>
                         {roles.map((role) => (
@@ -504,9 +517,11 @@ export function UsersPage() {
                   {
                     title: "操作",
                     key: "actions",
-                    width: 220,
+                    width: 96,
+                    fixed: "right",
+                    className: "admin-table-cell--actions",
                     render: (_, record: UserListItem) => (
-                      <Space>
+                      <Space size={6}>
                         <Tooltip title="编辑">
                           <Button
                             size="small"
@@ -643,25 +658,41 @@ export function UsersPage() {
         <Table<KbAccessItem>
           rowKey="kb_id"
           size="small"
+          className="admin-table--priority"
+          tableLayout="fixed"
           loading={accessQuery.isLoading}
           dataSource={accessQuery.data?.items ?? []}
           pagination={false}
+          scroll={{ x: 560 }}
           columns={[
             {
               title: "知识库",
               dataIndex: "kb_id",
-              render: (value: string) => kbNameMap.get(value) ?? "未知知识库"
+              width: 320,
+              fixed: "left",
+              className: "admin-table-cell--primary",
+              render: (value: string) => {
+                const kbName = kbNameMap.get(value) ?? "未知知识库";
+                return (
+                  <Typography.Text strong ellipsis={{ tooltip: kbName }}>
+                    {kbName}
+                  </Typography.Text>
+                );
+              }
             },
             {
               title: "访问级别",
               dataIndex: "access_level",
-              width: 140,
+              width: 112,
+              className: "admin-table-cell--status",
               render: (value: KbAccessValues["access_level"]) => <Tag>{value}</Tag>
             },
             {
               title: "操作",
               key: "actions",
-              width: 120,
+              width: 92,
+              fixed: "right",
+              className: "admin-table-cell--actions",
               render: (_, record) => (
                 <Tooltip title="撤销权限">
                   <span>
