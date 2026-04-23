@@ -63,6 +63,8 @@ type ComposerStatus = "idle" | "sending" | "streaming" | "stopping" | "failed";
 interface ThreadMessage {
   local_id: string;
   message_id: string | null;
+  parent_message_id: string | null;
+  edited_from_message_id: string | null;
   role: "user" | "assistant";
   content: string;
   citations: CitationItem[];
@@ -116,6 +118,8 @@ function toThreadMessage(item: ConversationMessage): ThreadMessage {
   return {
     local_id: `server_${item.message_id}`,
     message_id: item.message_id,
+    parent_message_id: item.parent_message_id ?? null,
+    edited_from_message_id: item.edited_from_message_id ?? null,
     role: item.role,
     content: item.content,
     citations: Array.isArray(item.citations) ? item.citations : [],
@@ -139,6 +143,25 @@ function mergeMessages(history: ThreadMessage[], local: ThreadMessage[]) {
   );
   const pending = local.filter((item) => !item.message_id || !historyIds.has(item.message_id));
   return [...history, ...pending];
+}
+
+function collapseRegeneratedAnswers(messages: ThreadMessage[]) {
+  const latestAssistantByParent = new Map<string, string>();
+  for (const item of messages) {
+    if (item.role !== "assistant" || !item.parent_message_id) {
+      continue;
+    }
+    latestAssistantByParent.set(item.parent_message_id, messageKey(item));
+  }
+  if (!latestAssistantByParent.size) {
+    return messages;
+  }
+  return messages.filter((item) => {
+    if (item.role !== "assistant" || !item.parent_message_id) {
+      return true;
+    }
+    return latestAssistantByParent.get(item.parent_message_id) === messageKey(item);
+  });
 }
 
 function messageKey(item: ThreadMessage) {
@@ -449,7 +472,7 @@ export function AskPage() {
   }, [activeConversationId, conversationItems, hasAccessToken, isBusy, selectionLockConversationId]);
 
   const threadMessages = useMemo(
-    () => mergeMessages(historyMessages, localMessages),
+    () => collapseRegeneratedAnswers(mergeMessages(historyMessages, localMessages)),
     [historyMessages, localMessages]
   );
 
@@ -733,6 +756,7 @@ export function AskPage() {
       patchLocalUserMessageId(runtime.userLocalId, data.user_message_id);
       patchLocalAssistant(runtime.assistantLocalId, {
         message_id: data.message_id ?? null,
+        parent_message_id: data.user_message_id ?? null,
         content: data.answer,
         refusal: true,
         refusal_reason: data.refusal_reason ?? null,
@@ -775,6 +799,7 @@ export function AskPage() {
       patchLocalUserMessageId(runtime.userLocalId, data.user_message_id);
       patchLocalAssistant(runtime.assistantLocalId, (current) => ({
         message_id: data.message_id ?? current.message_id,
+        parent_message_id: data.user_message_id ?? current.parent_message_id,
         created_at: data.assistant_created_at ?? current.created_at,
         timing: data.timing ?? current.timing,
         refusal: data.refusal ?? current.refusal,
@@ -812,6 +837,8 @@ export function AskPage() {
       {
         local_id: userLocalId,
         message_id: null,
+        parent_message_id: null,
+        edited_from_message_id: null,
         role: "user",
         content: question,
         citations: [],
@@ -827,6 +854,8 @@ export function AskPage() {
       {
         local_id: assistantLocalId,
         message_id: null,
+        parent_message_id: null,
+        edited_from_message_id: null,
         role: "assistant",
         content: "",
         citations: [],
@@ -1228,6 +1257,24 @@ export function AskPage() {
                 <span>引用优先</span>
                 <span>拒答可追踪</span>
               </div>
+              <div className="brand-overview chat-sidebar-brand__overview">
+                <div className="brand-overview__item">
+                  <span className="brand-overview__label">当前视角</span>
+                  <span className="brand-overview__value">问答视角</span>
+                </div>
+                <div className="brand-overview__item">
+                  <span className="brand-overview__label">会话数量</span>
+                  <span className="brand-overview__value">
+                    {hasAccessToken ? conversationItems.length : 0} 项
+                  </span>
+                </div>
+              </div>
+              <Space size={8} wrap className="brand-meta-row chat-sidebar-brand__meta">
+                <Typography.Text className="brand-kicker">用户端</Typography.Text>
+                <Tag bordered={false} color="cyan">
+                  问答视角
+                </Tag>
+              </Space>
             </div>
           </Tooltip>
           <div className="chat-sidebar-section-head">

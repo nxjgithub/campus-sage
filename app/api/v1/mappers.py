@@ -101,6 +101,8 @@ def message_to_item(record: MessageRecord) -> MessageItem:
 
     return MessageItem(
         message_id=record.message_id,
+        parent_message_id=record.parent_message_id,
+        edited_from_message_id=record.edited_from_message_id,
         role=record.role,
         content=record.content,
         citations=record.citations or None,

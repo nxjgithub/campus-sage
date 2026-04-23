@@ -5,7 +5,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { askStreamByKb } from "../../shared/api/modules/ask";
+import { askStreamByKb, regenerateMessage } from "../../shared/api/modules/ask";
 import {
   createConversation,
   deleteConversation,
@@ -470,5 +470,151 @@ describe("AskPage 聊天交互", () => {
       expect(screen.getByText("当前会话暂无消息")).toBeInTheDocument();
     });
     expect(screen.queryByText("这是旧会话回答")).not.toBeInTheDocument();
+  });
+
+  it("重新生成后同一用户问题只展示最新助手回答", async () => {
+    mockAccessToken = "token_ask";
+    mockAuthState = {
+      status: "authenticated",
+      user: { user_id: "user_1", email: "admin@example.com", roles: ["admin"], status: "active" },
+      role: "admin",
+      isAuthenticated: true
+    };
+    vi.mocked(fetchConversationList).mockResolvedValue({
+      items: [
+        {
+          conversation_id: "conv_1",
+          kb_id: "kb_1",
+          title: "研究生考点有哪些？",
+          last_message_preview: "旧回答",
+          last_message_at: "2026-02-21T10:00:00Z",
+          updated_at: "2026-02-21T10:00:00Z"
+        }
+      ],
+      total: 1,
+      next_cursor: null
+    });
+    vi.mocked(fetchConversationMessagesPage)
+      .mockResolvedValueOnce({
+        items: [
+          {
+            message_id: "msg_user_1",
+            role: "user",
+            content: "研究生考点有哪些？",
+            created_at: "2026-02-21T10:00:00Z",
+            request_id: "req_user"
+          },
+          {
+            message_id: "msg_assistant_old",
+            parent_message_id: "msg_user_1",
+            role: "assistant",
+            content: "旧回答：考点在旧地点。",
+            citations: [],
+            refusal: false,
+            refusal_reason: null,
+            suggestions: [],
+            next_steps: [],
+            timing: null,
+            created_at: "2026-02-21T10:01:00Z",
+            request_id: "req_old"
+          }
+        ],
+        has_more: false,
+        next_before: null
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            message_id: "msg_user_1",
+            role: "user",
+            content: "研究生考点有哪些？",
+            created_at: "2026-02-21T10:00:00Z",
+            request_id: "req_user"
+          },
+          {
+            message_id: "msg_assistant_old",
+            parent_message_id: "msg_user_1",
+            role: "assistant",
+            content: "旧回答：考点在旧地点。",
+            citations: [],
+            refusal: false,
+            refusal_reason: null,
+            suggestions: [],
+            next_steps: [],
+            timing: null,
+            created_at: "2026-02-21T10:01:00Z",
+            request_id: "req_old"
+          }
+        ],
+        has_more: false,
+        next_before: null
+      })
+      .mockResolvedValue({
+        items: [
+          {
+            message_id: "msg_user_1",
+            role: "user",
+            content: "研究生考点有哪些？",
+            created_at: "2026-02-21T10:00:00Z",
+            request_id: "req_user"
+          },
+          {
+            message_id: "msg_assistant_old",
+            parent_message_id: "msg_user_1",
+            role: "assistant",
+            content: "旧回答：考点在旧地点。",
+            citations: [],
+            refusal: false,
+            refusal_reason: null,
+            suggestions: [],
+            next_steps: [],
+            timing: null,
+            created_at: "2026-02-21T10:01:00Z",
+            request_id: "req_old"
+          },
+          {
+            message_id: "msg_assistant_new",
+            parent_message_id: "msg_user_1",
+            role: "assistant",
+            content: "新回答：考点以最新公告为准。",
+            citations: [],
+            refusal: false,
+            refusal_reason: null,
+            suggestions: [],
+            next_steps: [],
+            timing: null,
+            created_at: "2026-02-21T10:02:00Z",
+            request_id: "req_new"
+          }
+        ],
+        has_more: false,
+        next_before: null
+      });
+    vi.mocked(regenerateMessage).mockResolvedValue({
+      answer: "新回答：考点以最新公告为准。",
+      refusal: false,
+      refusal_reason: null,
+      suggestions: [],
+      next_steps: [],
+      citations: [],
+      conversation_id: "conv_1",
+      message_id: "msg_assistant_new",
+      user_message_id: "msg_user_1",
+      assistant_created_at: "2026-02-21T10:02:00Z",
+      timing: { total_ms: 100 },
+      request_id: "req_new"
+    });
+
+    renderWithProviders(<AskPage />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /研究生考点有哪些/ }));
+    expect(await screen.findByText("旧回答：考点在旧地点。")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "重试" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("新回答：考点以最新公告为准。")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("旧回答：考点在旧地点。")).not.toBeInTheDocument();
   });
 });

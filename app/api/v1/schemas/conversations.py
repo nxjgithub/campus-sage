@@ -63,6 +63,8 @@ class MessageItem(BaseModel):
     """消息条目。"""
 
     message_id: str = Field(description="消息ID")
+    parent_message_id: str | None = Field(default=None, description="父消息ID")
+    edited_from_message_id: str | None = Field(default=None, description="编辑来源消息ID")
     role: Literal["user", "assistant"] = Field(description="消息角色")
     content: str = Field(description="消息内容")
     citations: list[Citation] | None = Field(default=None, description="引用列表")

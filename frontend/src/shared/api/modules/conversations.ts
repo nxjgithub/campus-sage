@@ -19,6 +19,8 @@ export interface ConversationListResponse {
 
 export interface ConversationMessage {
   message_id: string;
+  parent_message_id?: string | null;
+  edited_from_message_id?: string | null;
   role: "user" | "assistant";
   content: string;
   citations?: CitationItem[] | null;

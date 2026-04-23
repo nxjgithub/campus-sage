@@ -148,6 +148,12 @@ export function EvalPage() {
     () => new Map(recentSets.map((item) => [item.eval_set_id, item.name])),
     [recentSets]
   );
+  const runDetailEvalSetName = runDetail
+    ? evalSetNameMap.get(runDetail.eval_set_id) ?? "最近评测集"
+    : "最近评测集";
+  const runDetailKbName = runDetail
+    ? kbNameMap.get(runDetail.kb_id) ?? "未知知识库"
+    : "未知知识库";
   const qualityMetricItems = [
     {
       key: "recall",
@@ -432,13 +438,23 @@ export function EvalPage() {
                   <div className="ops-kpi-item">
                     <span className="ops-kpi-item__label">评测集</span>
                     <span className="ops-kpi-item__value">
-                      {evalSetNameMap.get(runDetail.eval_set_id) ?? "最近评测集"}
+                      <Typography.Text
+                        className="ops-kpi-item__text"
+                        ellipsis={{ tooltip: runDetailEvalSetName }}
+                      >
+                        {runDetailEvalSetName}
+                      </Typography.Text>
                     </span>
                   </div>
                   <div className="ops-kpi-item">
                     <span className="ops-kpi-item__label">知识库</span>
                     <span className="ops-kpi-item__value">
-                      {kbNameMap.get(runDetail.kb_id) ?? "未知知识库"}
+                      <Typography.Text
+                        className="ops-kpi-item__text"
+                        ellipsis={{ tooltip: runDetailKbName }}
+                      >
+                        {runDetailKbName}
+                      </Typography.Text>
                     </span>
                   </div>
                   <div className="ops-kpi-item">

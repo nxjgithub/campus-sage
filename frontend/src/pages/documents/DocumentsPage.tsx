@@ -267,6 +267,10 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
     [allDocuments]
   );
   const activeJobStatus = jobQuery.data ? JOB_STATUS_META[jobQuery.data.status] : null;
+  const activeJobKbName = jobQuery.data ? kbNameMap.get(jobQuery.data.kb_id) ?? "-" : "-";
+  const activeJobDocName = jobQuery.data
+    ? docNameMap.get(jobQuery.data.doc_id) ?? "处理中..."
+    : "处理中...";
   const documentStatusChartItems = [
     { key: "indexed", label: "已索引", value: indexedCount, color: "#16a34a" },
     { key: "processing", label: "处理中", value: processingCount, color: "#2563eb" },
@@ -617,11 +621,25 @@ export function DocumentsPage({ initialKbId }: DocumentsPageProps) {
                 <div className="ops-kpi-grid">
                   <div className="ops-kpi-item">
                     <span className="ops-kpi-item__label">知识库</span>
-                    <span className="ops-kpi-item__value">{kbNameMap.get(jobQuery.data.kb_id) ?? "-"}</span>
+                    <span className="ops-kpi-item__value">
+                      <Typography.Text
+                        className="ops-kpi-item__text"
+                        ellipsis={{ tooltip: activeJobKbName }}
+                      >
+                        {activeJobKbName}
+                      </Typography.Text>
+                    </span>
                   </div>
                   <div className="ops-kpi-item">
                     <span className="ops-kpi-item__label">文档</span>
-                    <span className="ops-kpi-item__value">{docNameMap.get(jobQuery.data.doc_id) ?? "处理中..."}</span>
+                    <span className="ops-kpi-item__value">
+                      <Typography.Text
+                        className="ops-kpi-item__text"
+                        ellipsis={{ tooltip: activeJobDocName }}
+                      >
+                        {activeJobDocName}
+                      </Typography.Text>
+                    </span>
                   </div>
                   <div className="ops-kpi-item">
                     <span className="ops-kpi-item__label">状态</span>

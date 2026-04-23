@@ -174,7 +174,7 @@
 - `GET /conversations/{conversation_id}/messages?before=&limit=`
   - 用途：历史消息分页
   - 返回：`items/has_more/next_before`
-  - 消息项补充：助手消息可返回消息级 `request_id`，用于历史回放排障展示
+  - 消息项补充：消息项返回 `parent_message_id/edited_from_message_id`，助手消息可返回消息级 `request_id`，用于历史回放排障展示
 
 前端展示约束：
 - 用户消息与助手消息视觉区分。
@@ -182,6 +182,7 @@
 - 助手消息若同时带 `suggestions[]`，历史会话中也必须作为兼容性补充说明一起展示。
 - 助手消息中的 `refusal_reason` 必须先映射为中文展示，不直接暴露原始后端码。
 - 助手消息若带 `request_id`，历史会话中也必须支持复制查看。
+- 重新生成产生多个同父级助手消息时，问答主线程只展示最新助手消息，避免同一问题重复回答。
 - 历史会话中的 `check_official_source` 建议应可直接打开；`search_keyword/rewrite_question/add_context` 等文本型建议至少应支持复制。
 - 助手消息点击后打开证据弹窗，弹窗内展示 `timing/citations`。
 - 问答主界面必须支持“加载更早消息”。

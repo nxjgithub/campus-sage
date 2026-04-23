@@ -626,12 +626,16 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
  "messages": [
     {
       "message_id": "msg_789",
+      "parent_message_id": null,
+      "edited_from_message_id": null,
       "role": "user",
       "content": "补考申请需要满足什么条件？",
       "created_at": "2026-02-07T10:10:00Z"
     },
     {
       "message_id": "msg_790",
+      "parent_message_id": "msg_789",
+      "edited_from_message_id": null,
       "role": "assistant",
       "content": "根据教务管理规定……[1]",
       "citations": [],
@@ -647,7 +651,7 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
   "request_id": "req_xxx"
 }
 ```
-说明：`assistant` 消息包含 `citations/refusal/refusal_reason/suggestions/next_steps/timing/request_id` 字段，`user` 消息这些字段为 `null` 或省略。
+说明：`assistant` 消息包含 `citations/refusal/refusal_reason/suggestions/next_steps/timing/request_id` 字段，`user` 消息这些字段为 `null` 或省略。`parent_message_id` 用于标识助手回答对应的用户消息；重新生成产生多条同父级助手消息时，前端主线程只展示最新回答。
 
 ### 5.4 重命名会话
 `PATCH /api/v1/conversations/{conversation_id}`
@@ -685,12 +689,16 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
   "items": [
     {
       "message_id": "msg_100",
+      "parent_message_id": null,
+      "edited_from_message_id": null,
       "role": "user",
       "content": "补考申请条件是什么？",
       "created_at": "2026-02-07T10:08:00Z"
     },
     {
       "message_id": "msg_101",
+      "parent_message_id": "msg_100",
+      "edited_from_message_id": null,
       "role": "assistant",
       "content": "根据规定……[1]",
       "citations": [],
