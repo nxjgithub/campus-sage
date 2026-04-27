@@ -420,8 +420,10 @@ docker compose down
 - Compose 中 `api/worker` 默认使用容器内 Embedding 地址：`EMBEDDING_BASE_URL=http://tei:80/v1`、`EMBEDDING_API_PATH=/embeddings`，避免容器内误连 `127.0.0.1`。
 - 如需自定义容器内 Embedding 地址，可设置 `EMBEDDING_BASE_URL_INTERNAL` 与 `EMBEDDING_API_PATH_INTERNAL`。
 - Compose 中 `api/worker` 默认注入 `NO_PROXY=qdrant,tei,redis,localhost,127.0.0.1`，避免本地服务请求被代理劫持。
+- Compose 中 `tei` 默认清空 `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY` 并设置 `NO_PROXY=*`，避免 Docker Desktop 继承宿主机失效代理后，模型下载或加载阶段访问 Hugging Face 失败。
 - Dockerfile 在 `pip install` 构建层会主动清空 `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY`，避免 Docker Desktop 残留的失效代理导致镜像构建失败。
 - 若你必须通过代理访问 PyPI，请先确认 Docker Desktop 的代理地址真实可用；否则应在 Docker Desktop 中关闭全局代理后再执行 `docker compose build`。
+- 若你必须通过代理访问 Hugging Face，请确认该代理在容器内可访问；否则保持 `tei` 的代理变量为空，让容器直接访问外网。
 - 若未配置 Embedding 服务，Compose 默认回退 `EMBEDDING_BACKEND=simple`，便于本地快速跑通。
 - 若你需要 HTTP Embedding，请在 `.env` 中显式设置 `EMBEDDING_BACKEND=http` 与可达的 `EMBEDDING_BASE_URL`。
 - 若 `mysql` 或 `tei` 仍频繁出现 `Exited (137)`，优先增加 Docker Desktop 的内存配额；当前仓库默认参数只做“尽量省内存”的保底，不等于无限压缩资源占用。

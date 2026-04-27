@@ -67,6 +67,10 @@
 - `TEI_MAX_CONCURRENT_REQUESTS`：TEI 最大并发请求数，默认 `64`
 - `HF_TOKEN`：Hugging Face 访问令牌，拉取私有模型时使用，可为空
 
+说明：
+- `tei` 服务会在 Compose 中显式清空 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 及其小写形式，并设置 `NO_PROXY=*`。这是为了避免 Docker Desktop 继承宿主机失效代理后，TEI 无法从 Hugging Face 下载或加载模型。
+- 如果你的网络环境必须通过代理访问 Hugging Face，应先确保 Docker 容器内代理地址真实可达，再按需调整 `docker-compose.yml` 中 `tei.environment` 的代理变量。
+
 ### 4.3 Rerank（可选）
 - `RERANK_ENABLED`：true/false
 - `RERANK_MODEL_NAME`：如 `bge-reranker`（示例）

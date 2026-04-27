@@ -37,6 +37,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 
 ## 2.1 最新能力快照（已落地）
 - 真实 Embedding 已支持 OpenAI 兼容 HTTP 接入，并可通过配置开关切换后端。
+- Docker Compose 中 TEI 已固定清空失效代理变量，降低本地模型下载或加载被宿主代理配置干扰的概率。
 - 生成模型已支持 OpenAI 兼容 HTTP 接入，可直接切换到 DeepSeek 等外部服务。
 - 向量库默认后端已切换为真实 Qdrant，写入前执行 payload 契约校验。
 - 关系型数据库现已支持真实 MySQL，Docker Compose 默认以 MySQL 作为 API/Worker 的关系库存储。

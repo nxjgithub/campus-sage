@@ -100,6 +100,14 @@ services:
     gpus: all
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      NO_PROXY: "*"
+      no_proxy: "*"
     command:
       - "--model-id"
       - "${TEI_MODEL_ID:-BAAI/bge-m3}"
