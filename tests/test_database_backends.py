@@ -77,6 +77,26 @@ def test_run_mysql_migrations_bootstraps_latest_schema() -> None:
     assert database.current_version == LATEST_SCHEMA_VERSION
     assert any("CREATE TABLE IF NOT EXISTS knowledge_base" in item for item in database.executed)
     assert any("CREATE TABLE IF NOT EXISTS chat_run" in item for item in database.executed)
+    assert any("ALTER TABLE `knowledge_base` COMMENT" in item for item in database.executed)
+    assert any(
+        "MODIFY COLUMN `kb_id` VARCHAR(128) NOT NULL COMMENT" in item
+        for item in database.executed
+    )
+
+
+def test_run_mysql_migrations_upgrades_v4_comments() -> None:
+    """已初始化到 v4 的 MySQL 库应允许补齐中文注释元数据。"""
+
+    database = FakeMigrationDatabase(current_version=4)
+
+    run_mysql_migrations(database)
+
+    assert database.current_version == LATEST_SCHEMA_VERSION
+    assert any("ALTER TABLE `document` COMMENT" in item for item in database.executed)
+    assert any(
+        "MODIFY COLUMN `doc_name` VARCHAR(255) NOT NULL COMMENT" in item
+        for item in database.executed
+    )
 
 
 def test_run_mysql_migrations_rejects_partial_legacy_version() -> None:

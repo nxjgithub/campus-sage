@@ -137,6 +137,7 @@
 ## 9. Schema 初始化与迁移说明（2026-04）
 - SQLite：后端启动时会自动执行增量 schema 迁移，不再依赖 `init_database()` 内部的隐式 `ALTER TABLE` 补列。
 - MySQL：后端启动时会自动执行空库初始化，直接建到当前最新 schema，并写入 `schema_migration`。
+- MySQL 表和字段会写入中文 `COMMENT` 元数据，便于通过 DataGrip、Navicat 或 `information_schema` 理解字段含义。
 - 迁移历史统一保存在 `schema_migration` 表，当前版本按代码内置迁移序列递增。
 - 已存在的旧 SQLite 库会按版本顺序补齐缺失表、列与索引；全新 SQLite/MySQL 数据库会直接初始化到最新版本。
 - 当前 MySQL 不支持“半迁移旧库”增量补丁；切换到 MySQL 时应使用全新的数据库实例。

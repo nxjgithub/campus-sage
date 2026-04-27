@@ -30,6 +30,14 @@ class Migration:
     apply: Callable[[DatabaseProtocol], None]
 
 
+@dataclass(frozen=True, slots=True)
+class MysqlColumnComment:
+    """描述 MySQL 字段注释所需的完整列定义。"""
+
+    definition: str
+    comment: str
+
+
 def run_sqlite_migrations(database: DatabaseProtocol) -> None:
     """按版本顺序执行 SQLite schema 迁移。"""
 
@@ -54,7 +62,8 @@ def run_mysql_migrations(database: DatabaseProtocol) -> None:
 
     _ensure_migration_table(database)
     current_version = get_current_schema_version(database)
-    if current_version not in (0, LATEST_SCHEMA_VERSION):
+    allowed_versions = {0, MYSQL_COMMENT_BASE_SCHEMA_VERSION, LATEST_SCHEMA_VERSION}
+    if current_version not in allowed_versions:
         raise RuntimeError(
             "当前 MySQL schema 仅支持空库初始化或已初始化到最新版本；"
             "请使用新的数据库实例完成切换。"
@@ -64,6 +73,8 @@ def run_mysql_migrations(database: DatabaseProtocol) -> None:
     for migration in MIGRATIONS:
         if migration.version <= current_version:
             continue
+        if migration.version == MYSQL_COMMENT_SCHEMA_VERSION:
+            _apply_mysql_schema_comments(database)
         database.execute(
             """
             INSERT INTO schema_migration (version, name, applied_at)
@@ -467,6 +478,12 @@ def _migration_4_add_chat_run_schema(database: DatabaseProtocol) -> None:
     _ensure_column(database, "chat_run", "user_id", "TEXT")
 
 
+def _migration_5_add_mysql_schema_comments(database: DatabaseProtocol) -> None:
+    """占位记录 MySQL 注释版本；SQLite 无同等元数据能力。"""
+
+    return None
+
+
 def _ensure_sqlite_compatibility(database: DatabaseProtocol) -> None:
     """补齐 SQLite 运行时必需字段，兼容旧版本数据库。"""
 
@@ -513,6 +530,40 @@ def _ensure_mysql_column(
     database.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type};")
 
 
+def _apply_mysql_schema_comments(database: DatabaseProtocol) -> None:
+    """为 MySQL 表和字段写入中文 COMMENT 元数据。"""
+
+    database.execute("SET FOREIGN_KEY_CHECKS=0;")
+    try:
+        for table, table_comment in MYSQL_TABLE_COMMENTS.items():
+            quoted_table = _quote_mysql_identifier(table)
+            escaped_table_comment = _escape_mysql_comment(table_comment)
+            database.execute(f"ALTER TABLE {quoted_table} COMMENT = '{escaped_table_comment}';")
+            for column, column_comment in MYSQL_COLUMN_COMMENTS[table].items():
+                quoted_column = _quote_mysql_identifier(column)
+                escaped_column_comment = _escape_mysql_comment(column_comment.comment)
+                statement = (
+                    f"ALTER TABLE {quoted_table} MODIFY COLUMN {quoted_column} "
+                    f"{column_comment.definition} COMMENT '{escaped_column_comment}';"
+                )
+                database.execute(statement)
+    finally:
+        database.execute("SET FOREIGN_KEY_CHECKS=1;")
+
+
+def _quote_mysql_identifier(identifier: str) -> str:
+    """转义 MySQL 标识符，避免 user/rank 等名称产生歧义。"""
+
+    escaped = identifier.replace("`", "``")
+    return f"`{escaped}`"
+
+
+def _escape_mysql_comment(comment: str) -> str:
+    """转义 MySQL COMMENT 字符串，确保中文注释可安全写入。"""
+
+    return comment.replace("\\", "\\\\").replace("'", "''")
+
+
 def _table_exists(database: DatabaseProtocol, table: str) -> bool:
     """判断表是否存在。"""
 
@@ -546,9 +597,216 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(2, "extend_core_schema", _migration_2_extend_core_schema),
     Migration(3, "add_auth_schema", _migration_3_add_auth_schema),
     Migration(4, "add_chat_run_schema", _migration_4_add_chat_run_schema),
+    Migration(5, "add_mysql_schema_comments", _migration_5_add_mysql_schema_comments),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
+MYSQL_COMMENT_BASE_SCHEMA_VERSION = 4
+MYSQL_COMMENT_SCHEMA_VERSION = 5
+
+MYSQL_TABLE_COMMENTS: dict[str, str] = {
+    "schema_migration": "数据库结构迁移历史表，记录已应用的 schema 版本。",
+    "knowledge_base": "知识库主表，保存 RAG 问答可选择的数据集合。",
+    "document": "文档主表，保存上传文件及其入库状态。",
+    "ingest_job": "入库任务表，跟踪文档解析、切分、向量化和写入进度。",
+    "conversation": "问答会话表，保存用户与知识库之间的会话元数据。",
+    "message": "会话消息表，保存用户问题、助手回答和拒答信息。",
+    "citation": "回答引用表，保存助手消息使用的证据片段。",
+    "feedback": "用户反馈表，保存对助手回答的评价与修正建议。",
+    "eval_set": "评测集表，保存一组可复现实验问题。",
+    "eval_item": "评测样本表，保存单条评测问题及标准证据。",
+    "eval_run": "评测运行表，保存一次检索评测的配置和汇总指标。",
+    "eval_result": "评测结果表，保存单条评测样本的命中情况。",
+    "user": "用户账号表，保存登录身份和账号状态。",
+    "role": "角色表，保存 RBAC 角色及权限集合。",
+    "user_role": "用户角色关联表，保存用户与角色的多对多关系。",
+    "kb_access": "知识库授权表，保存用户对知识库的访问级别。",
+    "refresh_token": "刷新令牌表，保存登录续期令牌的哈希与撤销状态。",
+    "chat_run": "问答运行表，跟踪一次 ask 或流式问答的执行状态。",
+}
+
+MYSQL_COLUMN_COMMENTS: dict[str, dict[str, MysqlColumnComment]] = {
+    "schema_migration": {
+        "version": MysqlColumnComment("INTEGER NOT NULL", "schema 版本号。"),
+        "name": MysqlColumnComment("TEXT NOT NULL", "迁移步骤名称。"),
+        "applied_at": MysqlColumnComment("TEXT NOT NULL", "迁移应用时间，使用 ISO 字符串。"),
+    },
+    "knowledge_base": {
+        "kb_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "知识库唯一标识。"),
+        "name": MysqlColumnComment("VARCHAR(255) NOT NULL", "知识库名称，建议全局唯一。"),
+        "description": MysqlColumnComment("LONGTEXT NULL", "知识库说明，用于前端展示和管理识别。"),
+        "visibility": MysqlColumnComment("VARCHAR(32) NOT NULL", "可见范围，例如 public/internal/admin。"),
+        "config_json": MysqlColumnComment("LONGTEXT NOT NULL", "知识库检索与生成配置 JSON。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+        "updated_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "最近更新时间，使用 ISO 字符串。"),
+        "deleted": MysqlColumnComment("TINYINT(1) NOT NULL DEFAULT 0", "软删除标记，1 表示已删除。"),
+    },
+    "document": {
+        "doc_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "文档唯一标识。"),
+        "kb_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "所属知识库 ID。"),
+        "doc_name": MysqlColumnComment("VARCHAR(255) NOT NULL", "文档展示名称。"),
+        "doc_version": MysqlColumnComment("VARCHAR(128) NULL", "文档版本号或人工维护版本。"),
+        "published_at": MysqlColumnComment("VARCHAR(64) NULL", "文档发布日期，用于时效性判断。"),
+        "source_uri": MysqlColumnComment("VARCHAR(1024) NULL", "原始来源链接，用于引用核验。"),
+        "status": MysqlColumnComment("VARCHAR(32) NOT NULL", "文档入库状态。"),
+        "error_message": MysqlColumnComment("LONGTEXT NULL", "入库失败时的可读错误信息。"),
+        "chunk_count": MysqlColumnComment("INT NOT NULL DEFAULT 0", "已生成并写入的切片数量。"),
+        "file_path": MysqlColumnComment("VARCHAR(1024) NULL", "本地存储路径或对象存储 key。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+        "updated_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "最近更新时间，使用 ISO 字符串。"),
+        "deleted": MysqlColumnComment("TINYINT(1) NOT NULL DEFAULT 0", "软删除标记，1 表示已删除。"),
+    },
+    "ingest_job": {
+        "job_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "入库任务唯一标识。"),
+        "kb_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "任务所属知识库 ID。"),
+        "doc_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "任务处理的文档 ID。"),
+        "status": MysqlColumnComment("VARCHAR(32) NOT NULL", "任务状态。"),
+        "progress_json": MysqlColumnComment("LONGTEXT NULL", "阶段进度、耗时和计数统计 JSON。"),
+        "error_message": MysqlColumnComment("LONGTEXT NULL", "任务失败时的可读错误信息。"),
+        "error_code": MysqlColumnComment("VARCHAR(64) NULL", "任务失败时的机器可读错误码。"),
+        "started_at": MysqlColumnComment("VARCHAR(64) NULL", "任务开始时间，使用 ISO 字符串。"),
+        "finished_at": MysqlColumnComment("VARCHAR(64) NULL", "任务结束时间，使用 ISO 字符串。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+        "updated_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "最近更新时间，使用 ISO 字符串。"),
+    },
+    "conversation": {
+        "conversation_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "会话唯一标识。"),
+        "kb_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "会话绑定的知识库 ID。"),
+        "user_id": MysqlColumnComment("VARCHAR(128) NULL", "会话归属用户 ID，匿名或历史数据可为空。"),
+        "title": MysqlColumnComment("VARCHAR(255) NULL", "会话标题。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+        "updated_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "最近更新时间，使用 ISO 字符串。"),
+        "deleted": MysqlColumnComment("TINYINT(1) NOT NULL DEFAULT 0", "软删除标记，1 表示已删除。"),
+    },
+    "message": {
+        "message_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "消息唯一标识。"),
+        "conversation_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "所属会话 ID。"),
+        "role": MysqlColumnComment("VARCHAR(32) NOT NULL", "消息角色，取值 user 或 assistant。"),
+        "content": MysqlColumnComment("LONGTEXT NOT NULL", "消息正文。"),
+        "refusal": MysqlColumnComment("TINYINT(1) NOT NULL DEFAULT 0", "是否为拒答消息。"),
+        "refusal_reason": MysqlColumnComment("VARCHAR(64) NULL", "拒答原因码或简短原因。"),
+        "timing_json": MysqlColumnComment("LONGTEXT NULL", "检索、生成、总耗时等计时 JSON。"),
+        "suggestions_json": MysqlColumnComment("LONGTEXT NULL", "历史兼容的建议 JSON。"),
+        "next_steps_json": MysqlColumnComment("LONGTEXT NULL", "拒答或澄清时的下一步建议 JSON。"),
+        "citations_json": MysqlColumnComment("LONGTEXT NULL", "历史兼容的引用快照 JSON。"),
+        "parent_message_id": MysqlColumnComment("VARCHAR(128) NULL", "分支消息的父消息 ID。"),
+        "edited_from_message_id": MysqlColumnComment("VARCHAR(128) NULL", "编辑后重发来源消息 ID。"),
+        "sequence_no": MysqlColumnComment("INT NULL", "会话内消息顺序号。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+        "request_id": MysqlColumnComment("VARCHAR(128) NULL", "本次请求 ID，用于日志追踪。"),
+    },
+    "citation": {
+        "citation_row_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "引用记录唯一标识。"),
+        "message_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "关联的助手消息 ID。"),
+        "citation_id": MysqlColumnComment("INT NOT NULL", "回答中的引用编号，对应 [1][2]。"),
+        "doc_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "证据所属文档 ID。"),
+        "doc_name": MysqlColumnComment("VARCHAR(255) NOT NULL", "证据所属文档名称。"),
+        "doc_version": MysqlColumnComment("VARCHAR(128) NULL", "证据所属文档版本。"),
+        "published_at": MysqlColumnComment("VARCHAR(64) NULL", "证据文档发布日期。"),
+        "page_start": MysqlColumnComment("INT NULL", "证据起始页码。"),
+        "page_end": MysqlColumnComment("INT NULL", "证据结束页码。"),
+        "section_path": MysqlColumnComment("VARCHAR(1024) NULL", "证据章节路径。"),
+        "chunk_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "向量库切片 ID。"),
+        "snippet": MysqlColumnComment("LONGTEXT NOT NULL", "引用片段摘要。"),
+        "score": MysqlColumnComment("DOUBLE NULL", "检索相似度或重排得分。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+    },
+    "feedback": {
+        "feedback_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "反馈唯一标识。"),
+        "message_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "被反馈的助手消息 ID。"),
+        "rating": MysqlColumnComment("VARCHAR(32) NOT NULL", "反馈评分，取值 up 或 down。"),
+        "reasons_json": MysqlColumnComment("LONGTEXT NULL", "反馈原因列表 JSON。"),
+        "comment": MysqlColumnComment("LONGTEXT NULL", "用户补充说明。"),
+        "expected_hint": MysqlColumnComment("LONGTEXT NULL", "用户期望答案或修正提示。"),
+        "status": MysqlColumnComment("VARCHAR(32) NOT NULL", "反馈处理状态。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+    },
+    "eval_set": {
+        "eval_set_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "评测集唯一标识。"),
+        "name": MysqlColumnComment("VARCHAR(255) NOT NULL", "评测集名称。"),
+        "description": MysqlColumnComment("LONGTEXT NULL", "评测集说明。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+    },
+    "eval_item": {
+        "eval_item_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "评测样本唯一标识。"),
+        "eval_set_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "所属评测集 ID。"),
+        "question": MysqlColumnComment("LONGTEXT NOT NULL", "评测问题。"),
+        "gold_doc_id": MysqlColumnComment("VARCHAR(128) NULL", "标准命中文档 ID。"),
+        "gold_page_start": MysqlColumnComment("INT NULL", "标准证据起始页码。"),
+        "gold_page_end": MysqlColumnComment("INT NULL", "标准证据结束页码。"),
+        "tags_json": MysqlColumnComment("LONGTEXT NULL", "样本标签 JSON。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+    },
+    "eval_run": {
+        "run_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "评测运行唯一标识。"),
+        "eval_set_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "本次运行使用的评测集 ID。"),
+        "kb_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "本次运行评测的知识库 ID。"),
+        "topk": MysqlColumnComment("INT NOT NULL", "检索返回的候选数量。"),
+        "threshold": MysqlColumnComment("DOUBLE NULL", "额外分数阈值，空表示不启用。"),
+        "rerank_enabled": MysqlColumnComment("TINYINT(1) NOT NULL DEFAULT 0", "是否启用重排。"),
+        "metrics_json": MysqlColumnComment("LONGTEXT NULL", "Recall、MRR、延迟等汇总指标 JSON。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+    },
+    "eval_result": {
+        "run_result_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "评测结果唯一标识。"),
+        "run_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "所属评测运行 ID。"),
+        "eval_item_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "对应评测样本 ID。"),
+        "hit": MysqlColumnComment("TINYINT(1) NOT NULL DEFAULT 0", "标准证据是否命中 TopK。"),
+        "rank": MysqlColumnComment("INT NULL", "标准证据在结果中的排名。"),
+        "retrieve_ms": MysqlColumnComment("INT NULL", "单题检索耗时，单位毫秒。"),
+        "notes": MysqlColumnComment("LONGTEXT NULL", "评测备注或诊断信息。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+    },
+    "user": {
+        "user_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "用户唯一标识。"),
+        "email": MysqlColumnComment("VARCHAR(255) NOT NULL", "登录邮箱。"),
+        "password_hash": MysqlColumnComment("VARCHAR(255) NOT NULL", "密码哈希，不保存明文密码。"),
+        "status": MysqlColumnComment("VARCHAR(32) NOT NULL", "账号状态。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+        "updated_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "最近更新时间，使用 ISO 字符串。"),
+        "last_login_at": MysqlColumnComment("VARCHAR(64) NULL", "最近登录时间，使用 ISO 字符串。"),
+    },
+    "role": {
+        "role_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "角色唯一标识。"),
+        "name": MysqlColumnComment("VARCHAR(64) NOT NULL", "角色名称。"),
+        "permissions_json": MysqlColumnComment("LONGTEXT NOT NULL", "权限标识列表 JSON。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+    },
+    "user_role": {
+        "user_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "用户 ID。"),
+        "role_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "角色 ID。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+    },
+    "kb_access": {
+        "user_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "被授权用户 ID。"),
+        "kb_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "授权范围内的知识库 ID。"),
+        "access_level": MysqlColumnComment("VARCHAR(32) NOT NULL", "访问级别，取值 read/write/admin。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+        "updated_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "最近更新时间，使用 ISO 字符串。"),
+    },
+    "refresh_token": {
+        "token_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "刷新令牌唯一标识。"),
+        "user_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "令牌所属用户 ID。"),
+        "token_hash": MysqlColumnComment("VARCHAR(255) NOT NULL", "刷新令牌哈希值。"),
+        "expires_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "令牌过期时间，使用 ISO 字符串。"),
+        "revoked": MysqlColumnComment("TINYINT(1) NOT NULL DEFAULT 0", "是否已撤销。"),
+        "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
+        "revoked_at": MysqlColumnComment("VARCHAR(64) NULL", "撤销时间，使用 ISO 字符串。"),
+    },
+    "chat_run": {
+        "run_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "问答运行唯一标识。"),
+        "kb_id": MysqlColumnComment("VARCHAR(128) NULL", "运行使用的知识库 ID。"),
+        "user_id": MysqlColumnComment("VARCHAR(128) NULL", "发起运行的用户 ID。"),
+        "conversation_id": MysqlColumnComment("VARCHAR(128) NULL", "关联会话 ID。"),
+        "user_message_id": MysqlColumnComment("VARCHAR(128) NULL", "本次运行产生或使用的用户消息 ID。"),
+        "assistant_message_id": MysqlColumnComment("VARCHAR(128) NULL", "本次运行产生的助手消息 ID。"),
+        "status": MysqlColumnComment("VARCHAR(32) NOT NULL", "运行状态。"),
+        "cancel_flag": MysqlColumnComment("TINYINT(1) NOT NULL DEFAULT 0", "取消标记，1 表示用户请求取消。"),
+        "started_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "运行开始时间，使用 ISO 字符串。"),
+        "finished_at": MysqlColumnComment("VARCHAR(64) NULL", "运行结束时间，使用 ISO 字符串。"),
+        "request_id": MysqlColumnComment("VARCHAR(128) NULL", "本次请求 ID，用于日志追踪。"),
+    },
+}
 
 MYSQL_BOOTSTRAP_STATEMENTS: tuple[str, ...] = (
     """
