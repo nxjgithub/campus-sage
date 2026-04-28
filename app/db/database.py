@@ -278,6 +278,7 @@ def reset_database(settings: Settings) -> None:
     database.execute("DELETE FROM refresh_token;")
     database.execute("DELETE FROM kb_access;")
     database.execute("DELETE FROM user_role;")
+    database.execute("DELETE FROM conversation_memory;")
     database.execute("DELETE FROM message;")
     database.execute("DELETE FROM conversation;")
     database.execute("DELETE FROM ingest_job;")

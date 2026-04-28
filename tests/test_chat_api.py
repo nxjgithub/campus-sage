@@ -469,6 +469,12 @@ def test_multiturn_clarification_then_answer() -> None:
     second_payload = second.json()
     assert second_payload["conversation_id"] == first_payload["conversation_id"]
     assert second_payload["refusal"] is False
+    memory = RepositoryProvider(get_database(get_settings())).conversation().get_memory(
+        first_payload["conversation_id"]
+    )
+    assert memory is not None
+    assert memory.anchor_question == "补考申请条件是什么？"
+    assert memory.slots["topic"] == "补考与重修"
 
 
 def test_latest_question_adds_freshness_warning() -> None:

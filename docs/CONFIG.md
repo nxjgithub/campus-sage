@@ -44,6 +44,8 @@
 - `VLLM_TIMEOUT_S`：默认 60
 - `VLLM_API_KEY`：OpenAI 兼容生成服务的 API Key，可为空
 - `VLLM_ENABLED`：true/false，是否启用 vLLM 生成
+- 流式问答说明：`VLLM_ENABLED=true` 时，`POST /api/v1/kb/{kb_id}/ask/stream` 会向 `/chat/completions` 发送 `stream=true`，并把上游 delta 透传为 SSE `token`；未启用 vLLM 时仅使用本地兜底答案切片。
+
 ### 4.2 Embedding（向量模型）
 - `EMBEDDING_BACKEND`：Embedding 后端（http/simple/local），默认 http
 - `EMBEDDING_BASE_URL`：Embedding 服务地址（OpenAI 兼容），默认 `http://127.0.0.1:8001/v1`
@@ -143,6 +145,7 @@
 - MySQL：后端启动时会自动执行空库初始化，直接建到当前最新 schema，并写入 `schema_migration`。
 - MySQL 表和字段会写入中文 `COMMENT` 元数据，便于通过 DataGrip、Navicat 或 `information_schema` 理解字段含义。
 - 迁移历史统一保存在 `schema_migration` 表，当前版本按代码内置迁移序列递增。
+- 当前 schema 包含 `conversation_memory`，用于保存多轮检索改写所需的轻量摘要；该表内容不作为回答证据。
 - 已存在的旧 SQLite 库会按版本顺序补齐缺失表、列与索引；全新 SQLite/MySQL 数据库会直接初始化到最新版本。
 - 当前 MySQL 不支持“半迁移旧库”增量补丁；切换到 MySQL 时应使用全新的数据库实例。
 - 开发与测试时如果怀疑 schema 未升级，可检查：

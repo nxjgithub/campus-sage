@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.core.utils import utc_now_iso
-from app.db.models import MessageRecord
+from app.db.models import ConversationMemoryRecord, MessageRecord
 from app.rag.dialog_policy import (
     analyze_intent,
     build_dialog_state,
@@ -31,6 +31,8 @@ def test_build_dialog_state_marks_pending_clarification() -> None:
     state = build_dialog_state(messages)
     assert state.turn_count == 1
     assert state.last_user_question == "补考申请条件是什么？"
+    assert state.anchor_question == "补考申请条件是什么？"
+    assert state.slot_summary["topic"] == "补考与重修"
     assert state.pending_clarification is True
 
 
@@ -58,7 +60,38 @@ def test_analyze_intent_rewrites_followup_query() -> None:
     decision = analyze_intent("那时间呢", state)
     assert decision.intent == "policy_query"
     assert decision.early_refusal is False
-    assert decision.retrieval_query.startswith("补考申请条件是什么")
+    assert "历史主题问题：补考申请条件是什么" in decision.retrieval_query
+    assert "历史槽位：主题=补考与重修" in decision.retrieval_query
+    assert "当前追问：那时间呢" in decision.retrieval_query
+
+
+def test_analyze_intent_keeps_anchor_across_consecutive_followups() -> None:
+    history = [
+        _message(role="user", content="本科生补考申请条件是什么？"),
+        _message(role="user", content="那时间呢"),
+    ]
+    state = build_dialog_state(history)
+    decision = analyze_intent("材料呢", state)
+    assert decision.intent == "policy_query"
+    assert decision.early_refusal is False
+    assert "历史主题问题：本科生补考申请条件是什么" in decision.retrieval_query
+    assert "近期追问：那时间呢" in decision.retrieval_query
+    assert "当前追问：材料呢" in decision.retrieval_query
+
+
+def test_build_dialog_state_uses_persisted_memory_as_fallback() -> None:
+    memory = ConversationMemoryRecord(
+        conversation_id="conv_test",
+        summary="主题问题：本科生补考申请条件是什么？",
+        anchor_question="本科生补考申请条件是什么？",
+        slots={"topic": "补考与重修", "role": "本科生"},
+        recent_user_questions=["本科生补考申请条件是什么？", "那时间呢"],
+        updated_at=utc_now_iso(),
+    )
+    state = build_dialog_state([], memory)
+    decision = analyze_intent("材料呢", state)
+    assert "历史主题问题：本科生补考申请条件是什么" in decision.retrieval_query
+    assert "历史槽位：主题=补考与重修，身份=本科生" in decision.retrieval_query
 
 
 def test_analyze_intent_keeps_clarification_for_underspecified_followup() -> None:

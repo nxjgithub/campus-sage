@@ -23,6 +23,7 @@ def test_run_sqlite_migrations_initializes_empty_database(tmp_path: Path) -> Non
         assert get_current_schema_version(database) == LATEST_SCHEMA_VERSION
         assert _table_exists(database, "schema_migration")
         assert _table_exists(database, "chat_run")
+        assert _table_exists(database, "conversation_memory")
         assert _column_names(database, "document") >= {"doc_id", "source_uri"}
         assert _column_names(database, "message") >= {
             "message_id",
@@ -63,6 +64,7 @@ def test_run_sqlite_migrations_upgrades_legacy_database(tmp_path: Path) -> None:
         assert _table_exists(database, "role")
         assert _table_exists(database, "refresh_token")
         assert _table_exists(database, "chat_run")
+        assert _table_exists(database, "conversation_memory")
         assert _migration_versions(database) == list(range(1, LATEST_SCHEMA_VERSION + 1))
     finally:
         database.close()

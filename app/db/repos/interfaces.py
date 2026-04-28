@@ -7,6 +7,7 @@ from typing import Protocol
 
 from app.db.models import (
     ChatRunRecord,
+    ConversationMemoryRecord,
     ConversationRecord,
     DocumentRecord,
     EvalItemRecord,
@@ -104,6 +105,10 @@ class ConversationRepositoryProtocol(Protocol):
     def list_recent_assistant_messages(self, limit: int) -> list[MessageRecord]: ...
 
     def create_feedback(self, record: FeedbackRecord) -> FeedbackRecord: ...
+
+    def get_memory(self, conversation_id: str) -> ConversationMemoryRecord | None: ...
+
+    def upsert_memory(self, record: ConversationMemoryRecord) -> ConversationMemoryRecord: ...
 
 
 class ChatRunRepositoryProtocol(Protocol):

@@ -60,6 +60,25 @@ class _ComputationResult:
     slots: dict[str, str]
 
 
+@dataclass(slots=True)
+class _GenerationInputs:
+    """生成前已完成的检索与上下文结果。"""
+
+    normalized_question: str
+    context: str
+    citations: list[CitationDTO]
+    retrieve_ms: int
+    rerank_ms: int
+    context_ms: int
+    total_start: float
+    topk: int
+    threshold: float
+    rerank_enabled: bool
+    hits_for_log: list[VectorHit]
+    intent: str
+    slots: dict[str, str]
+
+
 class RagService:
     """问答服务。"""
 
@@ -123,6 +142,7 @@ class RagService:
             request_id=request_id,
             parent_message_id=user_message.message_id,
         )
+        self._refresh_conversation_memory(conversation.conversation_id)
         result = AskResult(
             answer=computed.answer,
             refusal=computed.refusal,
@@ -191,6 +211,7 @@ class RagService:
             request_id=request_id,
             parent_message_id=user_message_id,
         )
+        self._refresh_conversation_memory(conversation_id)
         result = AskResult(
             answer=computed.answer,
             refusal=computed.refusal,
@@ -276,7 +297,7 @@ class RagService:
                 user_message_id=user_message.message_id,
             )
             return
-        computed = self._compute_answer(
+        prepared = self._prepare_generation_inputs(
             kb=kb,
             question=intent_decision.retrieval_query,
             topk=topk,
@@ -288,6 +309,86 @@ class RagService:
             dialog_state=dialog_state,
             intent_decision=intent_decision,
         )
+        streamed_answer = False
+        if isinstance(prepared, _ComputationResult):
+            computed = prepared
+        else:
+            generate_start = time.perf_counter()
+            if self._settings.vllm_enabled:
+                streamed_answer = True
+                answer_parts: list[str] = []
+                for delta in self._llm_client.stream_generate(
+                    question=prepared.normalized_question,
+                    context=prepared.context,
+                    cancel_checker=cancel_checker,
+                ):
+                    if cancel_checker():
+                        yield self._canceled_event(run_id, request_id, user_message.message_id)
+                        yield self._done_event(
+                            run_id,
+                            request_id,
+                            status="canceled",
+                            conversation_id=conversation.conversation_id,
+                            user_message_id=user_message.message_id,
+                        )
+                        return
+                    if not delta:
+                        continue
+                    answer_parts.append(delta)
+                    yield {
+                        "event": "token",
+                        "data": {
+                            "run_id": run_id,
+                            "delta": delta,
+                            "request_id": request_id,
+                        },
+                    }
+                answer, citation_delta = self._ensure_citations_for_stream(
+                    "".join(answer_parts),
+                    prepared.citations,
+                )
+                if cancel_checker():
+                    yield self._canceled_event(run_id, request_id, user_message.message_id)
+                    yield self._done_event(
+                        run_id,
+                        request_id,
+                        status="canceled",
+                        conversation_id=conversation.conversation_id,
+                        user_message_id=user_message.message_id,
+                    )
+                    return
+                if citation_delta:
+                    yield {
+                        "event": "token",
+                        "data": {
+                            "run_id": run_id,
+                            "delta": citation_delta,
+                            "request_id": request_id,
+                        },
+                    }
+            else:
+                answer = self._build_answer(prepared.citations)
+            generate_ms = int((time.perf_counter() - generate_start) * 1000)
+            computed = self._build_generated_result(
+                prepared=prepared,
+                answer=answer,
+                generate_ms=generate_ms,
+            )
+            if streamed_answer and not computed.refusal and computed.answer != answer:
+                policy_delta = (
+                    computed.answer[len(answer) :]
+                    if computed.answer.startswith(answer)
+                    else computed.answer
+                )
+                if policy_delta:
+                    yield {
+                        "event": "token",
+                        "data": {
+                            "run_id": run_id,
+                            "delta": policy_delta,
+                            "request_id": request_id,
+                        },
+                    }
         if computed.refusal:
             assistant_message = self._save_assistant_message(
                 conversation_id=conversation.conversation_id,
@@ -295,6 +396,7 @@ class RagService:
                 request_id=request_id,
                 parent_message_id=user_message.message_id,
             )
+            self._refresh_conversation_memory(conversation.conversation_id)
             self._log_ask(
                 request_id=request_id,
                 kb_id=kb_id,
@@ -338,31 +440,33 @@ class RagService:
                 refusal=True,
             )
             return
-        for chunk in self._stream_text_chunks(computed.answer):
-            if cancel_checker():
-                yield self._canceled_event(run_id, request_id, user_message.message_id)
-                yield self._done_event(
-                    run_id,
-                    request_id,
-                    status="canceled",
-                    conversation_id=conversation.conversation_id,
-                    user_message_id=user_message.message_id,
-                )
-                return
-            yield {
-                "event": "token",
-                "data": {
-                    "run_id": run_id,
-                    "delta": chunk,
-                    "request_id": request_id,
-                },
-            }
+        if not streamed_answer:
+            for chunk in self._stream_text_chunks(computed.answer):
+                if cancel_checker():
+                    yield self._canceled_event(run_id, request_id, user_message.message_id)
+                    yield self._done_event(
+                        run_id,
+                        request_id,
+                        status="canceled",
+                        conversation_id=conversation.conversation_id,
+                        user_message_id=user_message.message_id,
+                    )
+                    return
+                yield {
+                    "event": "token",
+                    "data": {
+                        "run_id": run_id,
+                        "delta": chunk,
+                        "request_id": request_id,
+                    },
+                }
         assistant_message = self._save_assistant_message(
             conversation_id=conversation.conversation_id,
             computed=computed,
             request_id=request_id,
             parent_message_id=user_message.message_id,
         )
+        self._refresh_conversation_memory(conversation.conversation_id)
         for citation in computed.citations:
             yield {
                 "event": "citation",
@@ -414,6 +518,52 @@ class RagService:
         intent_decision: IntentDecision,
     ) -> _ComputationResult:
         """执行检索与生成计算。"""
+
+        prepared = self._prepare_generation_inputs(
+            kb=kb,
+            question=question,
+            topk=topk,
+            threshold=threshold,
+            rerank_enabled=rerank_enabled,
+            filters=filters,
+            debug=debug,
+            normalized_question=normalized_question,
+            dialog_state=dialog_state,
+            intent_decision=intent_decision,
+        )
+        if isinstance(prepared, _ComputationResult):
+            return prepared
+
+        generate_start = time.perf_counter()
+        if self._settings.vllm_enabled:
+            answer = self._llm_client.generate(
+                question=prepared.normalized_question,
+                context=prepared.context,
+            )
+            answer = self._ensure_citations_in_answer(answer, prepared.citations)
+        else:
+            answer = self._build_answer(prepared.citations)
+        generate_ms = int((time.perf_counter() - generate_start) * 1000)
+        return self._build_generated_result(
+            prepared=prepared,
+            answer=answer,
+            generate_ms=generate_ms,
+        )
+
+    def _prepare_generation_inputs(
+        self,
+        kb,
+        question: str,
+        topk: int | None,
+        threshold: float | None,
+        rerank_enabled: bool | None,
+        filters: dict[str, object] | None,
+        debug: bool,
+        normalized_question: str,
+        dialog_state: DialogState,
+        intent_decision: IntentDecision,
+    ) -> _GenerationInputs | _ComputationResult:
+        """执行生成前的检索、拒答与上下文构造。"""
 
         resolved_topk, resolved_threshold, resolved_rerank_enabled = self._resolve_qa_config(
             kb=kb,
@@ -556,32 +706,48 @@ class RagService:
             )
 
         citations = self._build_citations(context_result.hits, debug)
-        generate_start = time.perf_counter()
-        if self._settings.vllm_enabled:
-            answer = self._llm_client.generate(
-                question=normalized_question,
-                context=context_result.context,
-            )
-            answer = self._ensure_citations_in_answer(answer, citations)
-        else:
-            answer = self._build_answer(citations)
-        answer, suggestions, next_steps = self._apply_freshness_policy(
-            question=normalized_question,
-            answer=answer,
+        slots = dict(intent_decision.slots)
+        slots.setdefault("dialog_turn", str(dialog_state.turn_count))
+        return _GenerationInputs(
+            normalized_question=normalized_question,
+            context=context_result.context,
             citations=citations,
+            retrieve_ms=retrieve_ms,
+            rerank_ms=rerank_ms,
+            context_ms=context_ms,
+            total_start=total_start,
+            topk=resolved_topk,
+            threshold=resolved_threshold,
+            rerank_enabled=resolved_rerank_enabled,
+            hits_for_log=context_result.hits,
+            intent=intent_decision.intent,
+            slots=slots,
         )
-        generate_ms = int((time.perf_counter() - generate_start) * 1000)
+
+    def _build_generated_result(
+        self,
+        prepared: _GenerationInputs,
+        answer: str,
+        generate_ms: int,
+    ) -> _ComputationResult:
+        """应用生成后策略并组装最终问答结果。"""
+
+        answer, suggestions, next_steps = self._apply_freshness_policy(
+            question=prepared.normalized_question,
+            answer=answer,
+            citations=prepared.citations,
+        )
         semantic_refusal_reason = self._get_semantic_refusal_reason(
-            question=normalized_question,
+            question=prepared.normalized_question,
             answer=answer,
         )
         if semantic_refusal_reason is not None:
             suggestions, next_steps = self._build_refusal_guidance(
-                question=normalized_question,
+                question=prepared.normalized_question,
                 refusal_reason=semantic_refusal_reason,
-                hits=context_result.hits,
+                hits=prepared.hits_for_log,
             )
-            total_ms = int((time.perf_counter() - total_start) * 1000)
+            total_ms = int((time.perf_counter() - prepared.total_start) * 1000)
             return _ComputationResult(
                 answer=self._build_refusal_answer(semantic_refusal_reason),
                 refusal=True,
@@ -590,42 +756,40 @@ class RagService:
                 next_steps=next_steps,
                 citations=[],
                 timing={
-                    "retrieve_ms": retrieve_ms,
-                    "rerank_ms": rerank_ms,
-                    "context_ms": context_ms,
+                    "retrieve_ms": prepared.retrieve_ms,
+                    "rerank_ms": prepared.rerank_ms,
+                    "context_ms": prepared.context_ms,
                     "generate_ms": generate_ms,
                     "total_ms": total_ms,
                 },
-                topk=resolved_topk,
-                threshold=resolved_threshold,
-                rerank_enabled=resolved_rerank_enabled,
-                hits_for_log=context_result.hits,
-                intent=intent_decision.intent,
-                slots=intent_decision.slots,
+                topk=prepared.topk,
+                threshold=prepared.threshold,
+                rerank_enabled=prepared.rerank_enabled,
+                hits_for_log=prepared.hits_for_log,
+                intent=prepared.intent,
+                slots=prepared.slots,
             )
-        total_ms = int((time.perf_counter() - total_start) * 1000)
-        slots = dict(intent_decision.slots)
-        slots.setdefault("dialog_turn", str(dialog_state.turn_count))
+        total_ms = int((time.perf_counter() - prepared.total_start) * 1000)
         return _ComputationResult(
             answer=answer,
             refusal=False,
             refusal_reason=None,
             suggestions=suggestions,
             next_steps=next_steps,
-            citations=citations,
+            citations=prepared.citations,
             timing={
-                "retrieve_ms": retrieve_ms,
-                "rerank_ms": rerank_ms,
-                "context_ms": context_ms,
+                "retrieve_ms": prepared.retrieve_ms,
+                "rerank_ms": prepared.rerank_ms,
+                "context_ms": prepared.context_ms,
                 "generate_ms": generate_ms,
                 "total_ms": total_ms,
             },
-            topk=resolved_topk,
-            threshold=resolved_threshold,
-            rerank_enabled=resolved_rerank_enabled,
-            hits_for_log=context_result.hits,
-            intent=intent_decision.intent,
-            slots=slots,
+            topk=prepared.topk,
+            threshold=prepared.threshold,
+            rerank_enabled=prepared.rerank_enabled,
+            hits_for_log=prepared.hits_for_log,
+            intent=prepared.intent,
+            slots=prepared.slots,
         )
 
     def _resolve_qa_config(
@@ -672,7 +836,13 @@ class RagService:
         """读取会话历史并构建对话状态。"""
 
         history_messages = self._conversation_service.list_messages(conversation_id)
-        return build_dialog_state(history_messages)
+        memory = self._conversation_service.get_memory(conversation_id)
+        return build_dialog_state(history_messages, memory)
+
+    def _refresh_conversation_memory(self, conversation_id: str) -> None:
+        """刷新会话轻量记忆。"""
+
+        self._conversation_service.refresh_memory(conversation_id)
 
     def _apply_freshness_policy(
         self,
@@ -875,6 +1045,25 @@ class RagService:
             return content
         markers = "".join(f"[{item.citation_id}]" for item in citations)
         return f"{content}\n\n参考：{markers}"
+
+    def _ensure_citations_for_stream(
+        self,
+        answer: str,
+        citations: list[CitationDTO],
+    ) -> tuple[str, str]:
+        """为流式回答补齐引用编号，并返回需要继续下发的增量。"""
+
+        if not citations:
+            return answer.strip(), ""
+        content = answer.strip()
+        if not content:
+            fallback = self._build_answer(citations)
+            return fallback, fallback
+        if re.search(r"\[\d+\]", content):
+            return content, ""
+        markers = "".join(f"[{item.citation_id}]" for item in citations)
+        delta = f"\n\n参考：{markers}"
+        return f"{content}{delta}", delta
 
     def _build_refusal_answer(self, refusal_reason: str) -> str:
         """根据拒答原因构造用户可读提示。"""

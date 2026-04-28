@@ -26,7 +26,7 @@ const authClient = axios.create({
 
 let refreshPromise: Promise<string | null> | null = null;
 
-async function refreshAccessToken() {
+export async function refreshAccessToken() {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     return null;

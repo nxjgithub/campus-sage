@@ -41,6 +41,7 @@
 - 会话/消息/反馈必须落库，保证服务重启后可追溯。
 - 聊天运行（chat_run）必须落库，记录流式运行状态与取消标记。
 - message 表必须支持会话分支追踪字段：`parent_message_id`、`edited_from_message_id`、`sequence_no`。
+- conversation_memory 只允许保存用于多轮检索改写的轻量摘要、主题锚点和槽位，不得作为回答证据或引用来源。
 
 
 ## 3. 命名规范（强制）

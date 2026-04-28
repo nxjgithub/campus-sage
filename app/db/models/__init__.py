@@ -2,6 +2,7 @@
 
 from app.db.models.citation import CitationRecord
 from app.db.models.chat_run import ChatRunRecord
+from app.db.models.conversation_memory import ConversationMemoryRecord
 from app.db.models.conversation import ConversationRecord
 from app.db.models.document import DocumentRecord
 from app.db.models.eval_item import EvalItemRecord
@@ -22,6 +23,7 @@ from app.db.models.user_role import UserRoleRecord
 __all__ = [
     "CitationRecord",
     "ChatRunRecord",
+    "ConversationMemoryRecord",
     "ConversationRecord",
     "DocumentRecord",
     "EvalItemRecord",

@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from app.db.models import MessageRecord
+from app.db.models import ConversationMemoryRecord, MessageRecord
 from app.rag.dto import CitationDTO, NextStepDTO
 
 _SMALLTALK_KEYWORDS = (
@@ -146,6 +146,9 @@ class DialogState:
     last_user_question: str | None
     pending_clarification: bool
     history_text: str
+    recent_user_questions: list[str] = field(default_factory=list)
+    anchor_question: str | None = None
+    slot_summary: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -170,10 +173,21 @@ class IntentScore:
     score: float
 
 
-def build_dialog_state(messages: list[MessageRecord]) -> DialogState:
+def build_dialog_state(
+    messages: list[MessageRecord],
+    memory: ConversationMemoryRecord | None = None,
+) -> DialogState:
     """根据历史消息构建对话状态。"""
 
     user_questions = [item.content for item in messages if item.role == "user" and item.content.strip()]
+    recent_user_questions = _merge_recent_questions(memory, user_questions)
+    history_text = "\n".join(recent_user_questions[-6:])
+    slot_summary = extract_slots("", history_text)
+    if memory is not None:
+        slot_summary = {**memory.slots, **slot_summary}
+    anchor_question = _pick_anchor_question(user_questions) or (
+        memory.anchor_question if memory is not None else None
+    )
     pending_clarification = False
     if messages:
         last_message = messages[-1]
@@ -183,7 +197,29 @@ def build_dialog_state(messages: list[MessageRecord]) -> DialogState:
         turn_count=len(user_questions),
         last_user_question=user_questions[-1] if user_questions else None,
         pending_clarification=pending_clarification,
-        history_text="\n".join(user_questions[-6:]),
+        history_text=history_text,
+        recent_user_questions=recent_user_questions[-6:],
+        anchor_question=anchor_question,
+        slot_summary=slot_summary,
+    )
+
+
+def build_conversation_memory(
+    conversation_id: str,
+    messages: list[MessageRecord],
+    updated_at: str,
+) -> ConversationMemoryRecord:
+    """从会话消息构造轻量记忆。"""
+
+    state = build_dialog_state(messages)
+    summary = _build_memory_summary(state)
+    return ConversationMemoryRecord(
+        conversation_id=conversation_id,
+        summary=summary,
+        anchor_question=state.anchor_question,
+        slots=state.slot_summary,
+        recent_user_questions=state.recent_user_questions[-6:],
+        updated_at=updated_at,
     )
 
 
@@ -449,15 +485,24 @@ def _need_clarification(
 def _rewrite_followup_query(text: str, state: DialogState) -> str:
     """对追问场景补全检索查询词。"""
 
-    if not state.last_user_question:
+    anchor_question = state.anchor_question or state.last_user_question
+    if not anchor_question:
         return text
     is_short_followup = len(text) <= 12
     has_ambiguous_reference = any(keyword in text for keyword in _AMBIGUOUS_REFERENCES)
     if not (is_short_followup or has_ambiguous_reference):
         return text
-    if text == state.last_user_question:
+    if text == anchor_question:
         return text
-    return f"{state.last_user_question}；补充问题：{text}"
+    parts = [f"历史主题问题：{anchor_question}"]
+    slot_text = _format_slot_summary(state.slot_summary)
+    if slot_text:
+        parts.append(f"历史槽位：{slot_text}")
+    recent_followups = _recent_followups_for_rewrite(state.recent_user_questions, anchor_question, text)
+    if recent_followups:
+        parts.append(f"近期追问：{'；'.join(recent_followups)}")
+    parts.append(f"当前追问：{text}")
+    return "；".join(parts)
 
 
 def _is_underspecified_followup(
@@ -483,6 +528,87 @@ def _has_followup_detail(text: str, current_slots: dict[str, str]) -> bool:
     if any(key in current_slots for key in ("topic", "role", "time_hint")):
         return True
     return any(keyword in text for keyword in _FOLLOWUP_DETAIL_KEYWORDS)
+
+
+def _pick_anchor_question(user_questions: list[str]) -> str | None:
+    """选择最近一个带明确业务主题的问题作为多轮追问锚点。"""
+
+    for question in reversed(user_questions):
+        normalized = _normalize(question)
+        if not normalized:
+            continue
+        slots = extract_slots(normalized, "")
+        if "topic" in slots:
+            return normalized
+        mentions_policy = any(keyword in normalized for keyword in _POLICY_INTENT_KEYWORDS)
+        if mentions_policy and len(normalized) > 12:
+            return normalized
+    return _normalize(user_questions[-1]) if user_questions else None
+
+
+def _format_slot_summary(slots: dict[str, str]) -> str:
+    """格式化历史槽位摘要，用于检索改写。"""
+
+    labels = {
+        "topic": "主题",
+        "role": "身份",
+        "time_hint": "时间",
+    }
+    parts = []
+    for key in ("topic", "role", "time_hint"):
+        value = slots.get(key)
+        if value:
+            parts.append(f"{labels[key]}={value}")
+    return "，".join(parts)
+
+
+def _recent_followups_for_rewrite(
+    recent_questions: list[str],
+    anchor_question: str,
+    current_question: str,
+) -> list[str]:
+    """提取近期追问，避免连续追问只绑定上一句短问题。"""
+
+    followups = []
+    for question in recent_questions[-4:]:
+        normalized = _normalize(question)
+        if not normalized or normalized in {anchor_question, current_question}:
+            continue
+        if len(normalized) <= 16 or _has_followup_detail(normalized, extract_slots(normalized, "")):
+            followups.append(normalized)
+    return followups[-2:]
+
+
+def _merge_recent_questions(
+    memory: ConversationMemoryRecord | None,
+    user_questions: list[str],
+) -> list[str]:
+    """合并已持久化记忆与当前消息中的近期问题。"""
+
+    merged: list[str] = []
+    if memory is not None:
+        merged.extend(item for item in memory.recent_user_questions if item.strip())
+    merged.extend(item for item in user_questions if item.strip())
+    deduped: list[str] = []
+    for item in merged:
+        normalized = _normalize(item)
+        if normalized and normalized not in deduped:
+            deduped.append(normalized)
+    return deduped[-6:]
+
+
+def _build_memory_summary(state: DialogState) -> str | None:
+    """构造用于排障和后续检索改写的轻量摘要。"""
+
+    parts = []
+    if state.anchor_question:
+        parts.append(f"主题问题：{state.anchor_question}")
+    slot_text = _format_slot_summary(state.slot_summary)
+    if slot_text:
+        parts.append(f"槽位：{slot_text}")
+    if state.recent_user_questions:
+        parts.append(f"近期问题：{'；'.join(state.recent_user_questions[-3:])}")
+    return "；".join(parts) if parts else None
 
 
 def _extract_topic(text: str) -> str | None:

@@ -6,7 +6,8 @@ from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
 from app.core.utils import new_id, utc_now_iso
 from app.db.repos.interfaces import ConversationRepositoryProtocol
-from app.db.models import ConversationRecord, MessageRecord
+from app.db.models import ConversationMemoryRecord, ConversationRecord, MessageRecord
+from app.rag.dialog_policy import build_conversation_memory
 
 
 @dataclass(slots=True)
@@ -163,6 +164,22 @@ class ConversationService:
         """列出会话消息。"""
 
         return self._repository.list_messages(conversation_id)
+
+    def get_memory(self, conversation_id: str) -> ConversationMemoryRecord | None:
+        """获取会话轻量记忆。"""
+
+        return self._repository.get_memory(conversation_id)
+
+    def refresh_memory(self, conversation_id: str) -> ConversationMemoryRecord:
+        """根据当前消息刷新会话轻量记忆。"""
+
+        messages = self.list_messages(conversation_id)
+        memory = build_conversation_memory(
+            conversation_id=conversation_id,
+            messages=messages,
+            updated_at=utc_now_iso(),
+        )
+        return self._repository.upsert_memory(memory)
 
     def list_messages_page(
         self, conversation_id: str, before_message_id: str | None, limit: int

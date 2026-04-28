@@ -238,6 +238,7 @@
 
 前端行为约束：
 - 401 时触发一次 refresh 后重试原请求；refresh 失败则清理本地 token 并跳转登录页。
+- 流式问答使用 `fetch` 读取 SSE，也必须遵循同一条 401 refresh 规则；重试成功后继续按 SSE 事件更新消息。
 - `roles` 包含 `admin` 才允许访问 `/admin/*`。
 - `/app/conversations` 需登录，`/app/ask` 可匿名。
 

@@ -62,7 +62,12 @@ def run_mysql_migrations(database: DatabaseProtocol) -> None:
 
     _ensure_migration_table(database)
     current_version = get_current_schema_version(database)
-    allowed_versions = {0, MYSQL_COMMENT_BASE_SCHEMA_VERSION, LATEST_SCHEMA_VERSION}
+    allowed_versions = {
+        0,
+        MYSQL_COMMENT_BASE_SCHEMA_VERSION,
+        MYSQL_COMMENT_SCHEMA_VERSION,
+        LATEST_SCHEMA_VERSION,
+    }
     if current_version not in allowed_versions:
         raise RuntimeError(
             "当前 MySQL schema 仅支持空库初始化或已初始化到最新版本；"
@@ -82,6 +87,8 @@ def run_mysql_migrations(database: DatabaseProtocol) -> None:
             """,
             (migration.version, migration.name, utc_now_iso()),
         )
+    if get_current_schema_version(database) >= MYSQL_COMMENT_SCHEMA_VERSION:
+        _apply_mysql_schema_comments(database)
 
 
 def get_current_schema_version(database: DatabaseProtocol) -> int:
@@ -484,11 +491,37 @@ def _migration_5_add_mysql_schema_comments(database: DatabaseProtocol) -> None:
     return None
 
 
+def _migration_6_add_conversation_memory_schema(database: DatabaseProtocol) -> None:
+    """增加会话轻量记忆表。"""
+
+    _execute_many(
+        database,
+        (
+            """
+            CREATE TABLE IF NOT EXISTS conversation_memory (
+                conversation_id VARCHAR(128) PRIMARY KEY,
+                summary LONGTEXT,
+                anchor_question LONGTEXT,
+                slots_json LONGTEXT NOT NULL,
+                recent_user_questions_json LONGTEXT NOT NULL,
+                updated_at VARCHAR(64) NOT NULL,
+                FOREIGN KEY(conversation_id) REFERENCES conversation(conversation_id)
+            );
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_conversation_memory_updated_at
+            ON conversation_memory(updated_at);
+            """,
+        ),
+    )
+
+
 def _ensure_sqlite_compatibility(database: DatabaseProtocol) -> None:
     """补齐 SQLite 运行时必需字段，兼容旧版本数据库。"""
 
     _ensure_column(database, "message", "suggestions_json", "TEXT")
     _ensure_column(database, "message", "request_id", "TEXT")
+    _migration_6_add_conversation_memory_schema(database)
 
 
 def _ensure_mysql_compatibility(database: DatabaseProtocol) -> None:
@@ -598,6 +631,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(3, "add_auth_schema", _migration_3_add_auth_schema),
     Migration(4, "add_chat_run_schema", _migration_4_add_chat_run_schema),
     Migration(5, "add_mysql_schema_comments", _migration_5_add_mysql_schema_comments),
+    Migration(6, "add_conversation_memory_schema", _migration_6_add_conversation_memory_schema),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
@@ -610,6 +644,7 @@ MYSQL_TABLE_COMMENTS: dict[str, str] = {
     "document": "文档主表，保存上传文件及其入库状态。",
     "ingest_job": "入库任务表，跟踪文档解析、切分、向量化和写入进度。",
     "conversation": "问答会话表，保存用户与知识库之间的会话元数据。",
+    "conversation_memory": "会话轻量记忆表，保存用于多轮检索改写的摘要与槽位。",
     "message": "会话消息表，保存用户问题、助手回答和拒答信息。",
     "citation": "回答引用表，保存助手消息使用的证据片段。",
     "feedback": "用户反馈表，保存对助手回答的评价与修正建议。",
@@ -677,6 +712,14 @@ MYSQL_COLUMN_COMMENTS: dict[str, dict[str, MysqlColumnComment]] = {
         "created_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "创建时间，使用 ISO 字符串。"),
         "updated_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "最近更新时间，使用 ISO 字符串。"),
         "deleted": MysqlColumnComment("TINYINT(1) NOT NULL DEFAULT 0", "软删除标记，1 表示已删除。"),
+    },
+    "conversation_memory": {
+        "conversation_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "关联会话 ID，同时作为主键。"),
+        "summary": MysqlColumnComment("LONGTEXT NULL", "会话轻量摘要，仅用于检索改写，不作为回答证据。"),
+        "anchor_question": MysqlColumnComment("LONGTEXT NULL", "最近明确业务主题问题，用于连续追问锚定。"),
+        "slots_json": MysqlColumnComment("LONGTEXT NOT NULL", "主题、身份、时间等槽位摘要 JSON。"),
+        "recent_user_questions_json": MysqlColumnComment("LONGTEXT NOT NULL", "最近用户问题列表 JSON。"),
+        "updated_at": MysqlColumnComment("VARCHAR(64) NOT NULL", "最近更新时间，使用 ISO 字符串。"),
     },
     "message": {
         "message_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "消息唯一标识。"),
@@ -880,6 +923,19 @@ MYSQL_BOOTSTRAP_STATEMENTS: tuple[str, ...] = (
         KEY idx_conversation_updated_at (updated_at),
         CONSTRAINT fk_conversation_kb
             FOREIGN KEY (kb_id) REFERENCES knowledge_base(kb_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS conversation_memory (
+        conversation_id VARCHAR(128) PRIMARY KEY,
+        summary LONGTEXT NULL,
+        anchor_question LONGTEXT NULL,
+        slots_json LONGTEXT NOT NULL,
+        recent_user_questions_json LONGTEXT NOT NULL,
+        updated_at VARCHAR(64) NOT NULL,
+        KEY idx_conversation_memory_updated_at (updated_at),
+        CONSTRAINT fk_conversation_memory_conversation
+            FOREIGN KEY (conversation_id) REFERENCES conversation(conversation_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     """,
     """

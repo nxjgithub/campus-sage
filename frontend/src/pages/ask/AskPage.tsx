@@ -715,8 +715,12 @@ export function AskPage() {
         setActiveConversationId(run.conversation_id);
         if (hasAccessToken) {
           await loadMessages(run.conversation_id, false);
+          setLocalMessages([]);
         }
       }
+      setComposerStatus(run.status === "failed" ? "failed" : "idle");
+      setStreamRunId(null);
+      setStreamController(null);
       await refreshConversationList();
     } catch {
       return;

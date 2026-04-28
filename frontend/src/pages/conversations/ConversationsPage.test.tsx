@@ -55,6 +55,52 @@ describe("ConversationsPage 引用交互", () => {
     expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 
+  it("点击助手历史消息应打开证据详情弹窗并支持键盘关闭", async () => {
+    const item: ConversationMessage = {
+      message_id: "msg-modal",
+      role: "assistant",
+      content: "这是运营台回答。",
+      citations: [
+        {
+          citation_id: 1,
+          doc_id: "doc-modal",
+          doc_name: "教务手册",
+          chunk_id: "chunk-modal",
+          snippet: "补考申请需要按教务流程提交。",
+          section_path: "考试管理/补考"
+        }
+      ],
+      refusal: false,
+      timing: { total_ms: 120 },
+      request_id: "req_modal",
+      created_at: "2026-02-12T10:05:00Z"
+    };
+
+    render(
+      <AntdApp>
+        <MessageCard
+          item={item}
+          submitting={false}
+          submitted={false}
+          onFeedbackSubmit={vi.fn().mockResolvedValue(undefined)}
+        />
+      </AntdApp>
+    );
+
+    await userEvent.click(screen.getByText("这是运营台回答。"));
+
+    expect(await screen.findByText("证据详情")).toBeInTheDocument();
+    expect(screen.getAllByText("请求 ID：req_modal").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("total_ms: 120ms").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("补考申请需要按教务流程提交。").length).toBeGreaterThan(0);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("证据详情")).not.toBeInTheDocument();
+    });
+  });
+
   it("提交反对反馈时应将结构化字段传给回调", async () => {
     const item: ConversationMessage = {
       message_id: "msg-3",

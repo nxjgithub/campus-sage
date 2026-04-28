@@ -174,6 +174,7 @@ INGEST_QUEUE_DASHBOARD_ENABLED=true
 - `uvicorn app.main:app --reload` 启动时会自动初始化数据库 schema；SQLite 走增量迁移，MySQL 走空库初始化。
 - MySQL 初始化会为每张业务表和每个字段写入中文 `COMMENT`，可在数据库管理工具中直接查看字段含义。
 - 若你本地仍保留旧的 `csage.db`，SQLite 启动后应自动生成 `schema_migration` 表并补齐缺失列。
+- 新版 schema 会自动创建 `conversation_memory` 表，用于多轮追问检索改写；如果表缺失，优先重启后端触发迁移。
 - 可用以下命令快速检查迁移状态：
 ```powershell
 .\.venv\Scripts\python.exe -c "import sqlite3; conn=sqlite3.connect('./data/csage.db'); print(conn.execute('SELECT version, name FROM schema_migration ORDER BY version').fetchall())"

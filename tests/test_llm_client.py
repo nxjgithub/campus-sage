@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from threading import Event
+import time
+
 import pytest
 
 from app.core.error_codes import ErrorCode
@@ -16,6 +19,50 @@ class _FakeResponse:
 
     def json(self) -> dict[str, object]:
         return self._payload
+
+
+class _FakeStreamResponse:
+    def __init__(self, status_code: int, lines: list[str]) -> None:
+        self.status_code = status_code
+        self._lines = lines
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        del exc_type, exc, traceback
+
+    def iter_lines(self):
+        yield from self._lines
+
+    def read(self) -> bytes:
+        return "\n".join(self._lines).encode("utf-8")
+
+
+class _FakeBlockingStreamResponse:
+    def __init__(self) -> None:
+        self.status_code = 200
+        self.entered = Event()
+        self.closed = Event()
+
+    def __enter__(self):
+        self.entered.set()
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        del exc_type, exc, traceback
+
+    def iter_lines(self):
+        while not self.closed.is_set():
+            time.sleep(0.01)
+        return
+        yield ""
+
+    def close(self) -> None:
+        self.closed.set()
+
+    def read(self) -> bytes:
+        return b""
 
 
 def test_vllm_client_calls_openai_compatible_endpoint_with_api_key(monkeypatch) -> None:
@@ -65,6 +112,7 @@ def test_vllm_client_calls_openai_compatible_endpoint_with_api_key(monkeypatch) 
     assert captured["json"] == {
         "model": "deepseek-chat",
         "temperature": 0.2,
+        "stream": False,
         "messages": [
             {
                 "role": "system",
@@ -82,6 +130,83 @@ def test_vllm_client_calls_openai_compatible_endpoint_with_api_key(monkeypatch) 
         ],
     }
     assert answer == "根据证据，答案是教务处负责办理。[1]"
+    reset_settings()
+
+
+def test_vllm_client_stream_generate_parses_openai_sse(monkeypatch) -> None:
+    monkeypatch.setenv("VLLM_BASE_URL", "https://api.deepseek.com/v1/")
+    monkeypatch.setenv("VLLM_MODEL_NAME", "deepseek-chat")
+    monkeypatch.setenv("VLLM_API_KEY", "demo-key")
+    reset_settings()
+    settings = Settings()
+    captured: dict[str, object] = {}
+
+    def fake_stream(
+        method: str,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+        timeout: int,
+        trust_env: bool,
+    ) -> _FakeStreamResponse:
+        captured["method"] = method
+        captured["url"] = url
+        captured["json"] = json
+        captured["headers"] = headers
+        captured["timeout"] = timeout
+        captured["trust_env"] = trust_env
+        return _FakeStreamResponse(
+            200,
+            [
+                'data: {"choices":[{"delta":{"content":"根据"}}]}',
+                'data: {"choices":[{"delta":{"content":"证据"}}]}',
+                "data: [DONE]",
+            ],
+        )
+
+    monkeypatch.setattr("app.rag.llm_client.httpx.stream", fake_stream)
+    client = VllmClient(settings)
+
+    chunks = list(client.stream_generate(question="谁负责办理？", context="[1] 教务处负责办理。"))
+
+    assert captured["method"] == "POST"
+    assert captured["url"] == "https://api.deepseek.com/v1/chat/completions"
+    assert captured["headers"] == {"Authorization": "Bearer demo-key"}
+    assert captured["json"]["stream"] is True
+    assert chunks == ["根据", "证据"]
+    reset_settings()
+
+
+def test_vllm_client_stream_generate_closes_upstream_when_canceled(monkeypatch) -> None:
+    monkeypatch.setenv("VLLM_BASE_URL", "https://api.deepseek.com/v1/")
+    reset_settings()
+    settings = Settings()
+    fake_response = _FakeBlockingStreamResponse()
+
+    def fake_stream(
+        method: str,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+        timeout: int,
+        trust_env: bool,
+    ) -> _FakeBlockingStreamResponse:
+        del method, url, json, headers, timeout, trust_env
+        return fake_response
+
+    monkeypatch.setattr("app.rag.llm_client.httpx.stream", fake_stream)
+    client = VllmClient(settings)
+
+    chunks = list(
+        client.stream_generate(
+            question="测试取消",
+            context="[1] 测试证据",
+            cancel_checker=lambda: fake_response.entered.is_set(),
+        )
+    )
+
+    assert chunks == []
+    assert fake_response.closed.is_set()
     reset_settings()
 
 

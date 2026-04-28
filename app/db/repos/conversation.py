@@ -7,7 +7,13 @@ from typing import Any
 
 from app.db.database import Database
 from app.core.utils import new_id, utc_now_iso
-from app.db.models import CitationRecord, ConversationRecord, FeedbackRecord, MessageRecord
+from app.db.models import (
+    CitationRecord,
+    ConversationMemoryRecord,
+    ConversationRecord,
+    FeedbackRecord,
+    MessageRecord,
+)
 
 
 class ConversationRepository:
@@ -473,6 +479,66 @@ class ConversationRepository:
                 record.status,
                 record.created_at,
             ),
+        )
+        return record
+
+    def get_memory(self, conversation_id: str) -> ConversationMemoryRecord | None:
+        """获取会话轻量记忆。"""
+
+        row = self._db.fetch_one(
+            """
+            SELECT conversation_id, summary, anchor_question, slots_json,
+                   recent_user_questions_json, updated_at
+            FROM conversation_memory
+            WHERE conversation_id = ?;
+            """,
+            (conversation_id,),
+        )
+        if row is None:
+            return None
+        slots = self._loads(row["slots_json"]) or {}
+        recent_user_questions = self._loads(row["recent_user_questions_json"]) or []
+        return ConversationMemoryRecord(
+            conversation_id=row["conversation_id"],
+            summary=row["summary"],
+            anchor_question=row["anchor_question"],
+            slots=slots if isinstance(slots, dict) else {},
+            recent_user_questions=(
+                recent_user_questions if isinstance(recent_user_questions, list) else []
+            ),
+            updated_at=row["updated_at"],
+        )
+
+    def upsert_memory(self, record: ConversationMemoryRecord) -> ConversationMemoryRecord:
+        """新增或更新会话轻量记忆。"""
+
+        exists = self.get_memory(record.conversation_id)
+        params = (
+            record.summary,
+            record.anchor_question,
+            self._dumps(record.slots),
+            self._dumps(record.recent_user_questions),
+            record.updated_at,
+        )
+        if exists is None:
+            self._db.execute(
+                """
+                INSERT INTO conversation_memory (
+                    conversation_id, summary, anchor_question, slots_json,
+                    recent_user_questions_json, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?);
+                """,
+                (record.conversation_id, *params),
+            )
+            return record
+        self._db.execute(
+            """
+            UPDATE conversation_memory
+            SET summary = ?, anchor_question = ?, slots_json = ?,
+                recent_user_questions_json = ?, updated_at = ?
+            WHERE conversation_id = ?;
+            """,
+            (*params, record.conversation_id),
         )
         return record
 

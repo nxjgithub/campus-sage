@@ -23,6 +23,8 @@ os.environ.setdefault("VECTOR_BACKEND", "memory")
 os.environ.setdefault("INGEST_QUEUE_ENABLED", "false")
 os.environ.setdefault("VLLM_ENABLED", "false")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-with-32-bytes-minimum!!")
+# 单元测试固定使用本地 SQLite，避免 .env 中的 MySQL 配置污染测试收集阶段。
+os.environ.setdefault("DATABASE_URL", "sqlite:///./data/test.db")
 
 
 QDRANT_COLLECTIONS_PATH: Final[str] = "/collections"

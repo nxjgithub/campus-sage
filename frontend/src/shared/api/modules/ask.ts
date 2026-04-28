@@ -1,4 +1,4 @@
-import { apiClient } from "../client";
+import { apiClient, refreshAccessToken } from "../client";
 import { ApiErrorShape } from "../errors";
 import { getAccessToken } from "../../auth/token";
 
@@ -302,12 +302,27 @@ export async function askStreamByKb(
   options: AskStreamOptions = {}
 ) {
   const requestId = nextRequestId();
-  const response = await fetch(`${resolveApiBaseUrl()}/kb/${encodeURIComponent(kbId)}/ask/stream`, {
+  const streamUrl = `${resolveApiBaseUrl()}/kb/${encodeURIComponent(kbId)}/ask/stream`;
+  const streamBody = JSON.stringify(payload);
+  let response = await fetch(streamUrl, {
     method: "POST",
     headers: buildStreamHeaders(requestId),
-    body: JSON.stringify(payload),
+    body: streamBody,
     signal: options.signal
   });
+
+  if (response.status === 401) {
+    const nextAccessToken = await refreshAccessToken();
+    if (nextAccessToken) {
+      await response.body?.cancel();
+      response = await fetch(streamUrl, {
+        method: "POST",
+        headers: buildStreamHeaders(requestId),
+        body: streamBody,
+        signal: options.signal
+      });
+    }
+  }
 
   if (!response.ok) {
     let payloadData: {

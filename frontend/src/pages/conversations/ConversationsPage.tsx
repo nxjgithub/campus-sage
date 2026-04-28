@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CheckCircleOutlined,
@@ -16,6 +16,7 @@ import {
   Empty,
   Input,
   List,
+  Modal,
   Segmented,
   Select,
   Space,
@@ -97,10 +98,14 @@ function renderContentWithMarkers(content: string, onMarkerClick: (citationId: n
       <span
         key={`marker_${index}`}
         className="answer-marker"
-        onClick={() => onMarkerClick(chunk.citationId)}
+        onClick={(event) => {
+          event.stopPropagation();
+          onMarkerClick(chunk.citationId);
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
+            event.stopPropagation();
             onMarkerClick(chunk.citationId);
           }
         }}
@@ -111,6 +116,15 @@ function renderContentWithMarkers(content: string, onMarkerClick: (citationId: n
       </span>
     );
   });
+}
+
+function isInteractiveTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(
+    target.closest("button, a, input, textarea, [role='button'], .ant-card, .ant-btn, .ant-input")
+  );
 }
 
 export function MessageCard(props: {
@@ -124,12 +138,32 @@ export function MessageCard(props: {
   const citations = asCitationItems(item.citations);
   const timing = timingEntries(item.timing);
   const [activeCitationId, setActiveCitationId] = useState<number | null>(null);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const citationRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (!evidenceOpen) {
+      return;
+    }
+    const closeOnKeyDown = () => {
+      setEvidenceOpen(false);
+    };
+    window.addEventListener("keydown", closeOnKeyDown);
+    return () => {
+      window.removeEventListener("keydown", closeOnKeyDown);
+    };
+  }, [evidenceOpen]);
 
   return (
     <List.Item>
       <article
         className={item.role === "assistant" ? "conversation-message conversation-message--assistant" : "conversation-message conversation-message--user"}
+        onClick={(event) => {
+          if (item.role !== "assistant" || isInteractiveTarget(event.target)) {
+            return;
+          }
+          setEvidenceOpen(true);
+        }}
       >
         <header className="conversation-message__head">
           <Space size={8} wrap>
@@ -254,6 +288,81 @@ export function MessageCard(props: {
           </Space>
         ) : null}
       </article>
+      {item.role === "assistant" ? (
+        <Modal
+          title="证据详情"
+          open={evidenceOpen}
+          footer={null}
+          width={760}
+          destroyOnHidden
+          onCancel={() => {
+            setEvidenceOpen(false);
+          }}
+        >
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Typography.Text type="secondary">按键或点右上角关闭</Typography.Text>
+            {item.refusal_reason ? (
+              <Card size="small" title="拒答说明">
+                <Typography.Text>{formatRefusalReason(item.refusal_reason)}</Typography.Text>
+              </Card>
+            ) : null}
+            {item.request_id ? (
+              <Typography.Text copyable={{ text: item.request_id }} type="secondary">
+                请求 ID：{item.request_id}
+              </Typography.Text>
+            ) : null}
+            {timing.length > 0 ? (
+              <Card size="small" title="耗时信息">
+                <Space wrap>
+                  {timing.map(([key, ms]) => (
+                    <Tag key={key}>{key}: {ms}ms</Tag>
+                  ))}
+                </Space>
+              </Card>
+            ) : null}
+            <Card size="small" title={`引用证据 (${citations.length})`}>
+              {citations.length === 0 ? (
+                <Typography.Text type="secondary">当前消息暂无引用。</Typography.Text>
+              ) : (
+                <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                  {citations.map((citation) => (
+                    <Card
+                      key={`modal_${citation.chunk_id}_${citation.citation_id}`}
+                      size="small"
+                      className={
+                        citation.citation_id === activeCitationId
+                          ? "citation-card citation-card--active"
+                          : "citation-card"
+                      }
+                    >
+                      <Space direction="vertical" size={4}>
+                        <Typography.Text strong>
+                          [{citation.citation_id}] {citation.doc_name}
+                        </Typography.Text>
+                        <Typography.Text type="secondary">
+                          {citation.section_path
+                            ? `章节：${citation.section_path}`
+                            : `页码：${citation.page_start ?? "-"}-${
+                                citation.page_end ?? citation.page_start ?? "-"
+                              }`}
+                        </Typography.Text>
+                        <Typography.Paragraph style={{ marginBottom: 0 }}>
+                          {citation.snippet}
+                        </Typography.Paragraph>
+                        {citation.source_uri ? (
+                          <Typography.Link href={citation.source_uri} target="_blank" rel="noreferrer">
+                            官方来源
+                          </Typography.Link>
+                        ) : null}
+                      </Space>
+                    </Card>
+                  ))}
+                </Space>
+              )}
+            </Card>
+          </Space>
+        </Modal>
+      ) : null}
     </List.Item>
   );
 }

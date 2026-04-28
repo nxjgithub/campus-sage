@@ -1,11 +1,17 @@
 import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { askStreamByKb, regenerateMessage } from "../../shared/api/modules/ask";
+import {
+  AskStreamEvent,
+  askStreamByKb,
+  cancelChatRun,
+  getChatRun,
+  regenerateMessage
+} from "../../shared/api/modules/ask";
 import {
   createConversation,
   deleteConversation,
@@ -199,6 +205,16 @@ async function fillQuestionInput(question: string) {
   await userEvent.type(await screen.findByPlaceholderText(/请输入你的问题|请输入问题/), question);
 }
 
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("AskPage 聊天交互", () => {
   const scrollIntoViewMock = vi.fn();
   const windowOpenMock = vi.fn();
@@ -255,6 +271,23 @@ describe("AskPage 聊天交互", () => {
     vi.mocked(deleteConversation).mockResolvedValue({
       conversation_id: "conv_new",
       status: "deleted"
+    });
+    vi.mocked(cancelChatRun).mockResolvedValue({
+      run_id: "run_1",
+      status: "running",
+      cancel_flag: true,
+      request_id: "req_cancel"
+    });
+    vi.mocked(getChatRun).mockResolvedValue({
+      run_id: "run_1",
+      status: "succeeded",
+      cancel_flag: false,
+      conversation_id: "conv_1",
+      user_message_id: "msg_user_1",
+      assistant_message_id: "msg_assistant_1",
+      started_at: "2026-02-21T10:00:00Z",
+      finished_at: "2026-02-21T10:00:01Z",
+      request_id: "req_1"
     });
     mockBasicStream();
   });
@@ -616,5 +649,127 @@ describe("AskPage 聊天交互", () => {
       expect(screen.getByText("新回答：考点以最新公告为准。")).toBeInTheDocument();
     });
     expect(screen.queryByText("旧回答：考点在旧地点。")).not.toBeInTheDocument();
+  });
+
+  it("流式生成中点击停止应调用取消接口，并在 canceled done 后标记为已取消", async () => {
+    const deferred = createDeferred();
+    let emitStreamEvent: ((event: AskStreamEvent) => void) | null = null;
+    vi.mocked(askStreamByKb).mockImplementation(async (_kbId, _payload, options) => {
+      emitStreamEvent = options?.onEvent ?? null;
+      emitStreamEvent?.({
+        event: "start",
+        data: { run_id: "run_cancel", conversation_id: "conv_cancel", request_id: "req_cancel" }
+      });
+      return deferred.promise;
+    });
+    vi.mocked(cancelChatRun).mockResolvedValue({
+      run_id: "run_cancel",
+      status: "running",
+      cancel_flag: true,
+      request_id: "req_cancel"
+    });
+
+    renderWithProviders(<AskPage />);
+
+    await fillQuestionInput("请说明补考申请条件");
+    await userEvent.click(screen.getByRole("button", { name: /发送/ }));
+    expect((await screen.findAllByText("生成中")).length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole("button", { name: /停止/ }));
+
+    await waitFor(() => {
+      expect(cancelChatRun).toHaveBeenCalledWith("run_cancel");
+    });
+    expect((await screen.findAllByText("停止中")).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      emitStreamEvent?.({
+        event: "done",
+        data: {
+          run_id: "run_cancel",
+          status: "canceled",
+          conversation_id: "conv_cancel",
+          user_message_id: "msg_user_cancel",
+          message_id: null,
+          request_id: "req_cancel"
+        }
+      });
+      deferred.resolve();
+      await deferred.promise;
+    });
+
+    expect(await screen.findByText("已取消生成。")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("停止中")).not.toBeInTheDocument();
+    });
+  });
+
+  it("流式连接中断后应查询 run 状态并用服务端消息替换本地占位", async () => {
+    mockAccessToken = "token_ask";
+    mockAuthState = {
+      status: "authenticated",
+      user: { user_id: "user_1", email: "admin@example.com", roles: ["admin"], status: "active" },
+      role: "admin",
+      isAuthenticated: true
+    };
+    vi.mocked(askStreamByKb).mockImplementation(async (_kbId, _payload, options) => {
+      options?.onEvent?.({
+        event: "start",
+        data: { run_id: "run_recover", conversation_id: "conv_recover", request_id: "req_recover" }
+      });
+      throw new Error("stream disconnected");
+    });
+    vi.mocked(getChatRun).mockResolvedValue({
+      run_id: "run_recover",
+      status: "succeeded",
+      cancel_flag: false,
+      conversation_id: "conv_recover",
+      user_message_id: "msg_user_recover",
+      assistant_message_id: "msg_assistant_recover",
+      started_at: "2026-02-21T10:00:00Z",
+      finished_at: "2026-02-21T10:00:01Z",
+      request_id: "req_recover"
+    });
+    vi.mocked(fetchConversationMessagesPage).mockImplementation(async (conversationId) => ({
+      items:
+        conversationId === "conv_recover"
+          ? [
+              {
+                message_id: "msg_user_recover",
+                role: "user",
+                content: "补考申请条件是什么？",
+                created_at: "2026-02-21T10:00:00Z",
+                request_id: "req_user_recover"
+              },
+              {
+                message_id: "msg_assistant_recover",
+                parent_message_id: "msg_user_recover",
+                role: "assistant",
+                content: "恢复后的服务端回答。",
+                citations: [],
+                refusal: false,
+                refusal_reason: null,
+                suggestions: [],
+                next_steps: [],
+                timing: { total_ms: 120 },
+                created_at: "2026-02-21T10:00:01Z",
+                request_id: "req_recover"
+              }
+            ]
+          : [],
+      has_more: false,
+      next_before: null
+    }));
+
+    renderWithProviders(<AskPage />);
+
+    await fillQuestionInput("补考申请条件是什么？");
+    await userEvent.click(screen.getByRole("button", { name: /发送/ }));
+
+    await waitFor(() => {
+      expect(getChatRun).toHaveBeenCalledWith("run_recover");
+    });
+    expect(await screen.findByText("恢复后的服务端回答。")).toBeInTheDocument();
+    expect(screen.queryByText("生成已中断。")).not.toBeInTheDocument();
   });
 });

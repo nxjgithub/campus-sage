@@ -449,6 +449,7 @@ Content-Type：`multipart/form-data`
 - 参数不合法时返回 `400 + VALIDATION_FAILED`。
 - 兼容性：若知识库中存在历史非法配置值（如超范围或错误类型），服务端会自动回退到系统默认值继续执行。
 - 多轮策略：服务端会基于会话历史做基础意图分流与追问补全；若问题信息不足，会返回澄清型拒答（`refusal=true` + `next_steps`）。
+- 连续追问策略：服务端会从历史消息中抽取主题锚点、近期追问和槽位摘要来改写检索 query，但不会修改原始用户消息，也不会把会话摘要当作引用证据。
 - 时效策略：当问题包含“最新/当前/今年”等时效诉求时，服务端会检查 `citations.published_at`，必要时在 `answer` 中追加“请核验最新公告”的提示，并通过 `next_steps` 引导到官方来源。
 
 ### 4.2 发起问答（流式 SSE）
@@ -486,6 +487,9 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 ```
 说明：
 - 服务端会周期性发送 `ping` 事件，降低中间层静默断连风险。
+- 当 `VLLM_ENABLED=true` 时，`token` 事件来自 vLLM OpenAI 兼容接口的真实增量输出；当本地未启用 vLLM 时，服务端仍会把兜底答案切片输出，便于无模型环境演示接口状态机。
+- 服务端会在流式结束前校验引用编号；若模型遗漏 `[1][2]`，会补发一段引用编号增量，并以补齐后的最终文本持久化助手消息。
+- 取消生成或检测到断连后，服务端会设置 run 取消标记，并尽量关闭正在读取的上游 vLLM 流，避免继续消耗模型资源。
 - 连接断开后，服务端会标记对应 run 取消（`status=canceled`）。
 
 ### 4.3 获取运行状态
@@ -997,7 +1001,7 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
   "database": {
     "backend": "mysql",
     "target": "127.0.0.1:3307/csage",
-    "schema_version": 4
+    "schema_version": 6
   },
   "services": {
     "vector_backend": "qdrant",

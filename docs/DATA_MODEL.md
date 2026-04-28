@@ -77,7 +77,24 @@
 - index(`updated_at`)
 
 
-## 5. message（消息）
+## 5. conversation_memory（会话轻量记忆）
+字段：
+- `conversation_id`（PK/FK -> conversation.conversation_id）
+- `summary`（text，nullable：轻量摘要，仅用于检索改写）
+- `anchor_question`（text，nullable：最近明确业务主题问题）
+- `slots_json`（text/json：主题、身份、时间等槽位摘要）
+- `recent_user_questions_json`（text/json：最近用户问题列表）
+- `updated_at`（datetime）
+
+约束：
+- 该表只服务多轮 query rewrite，不作为回答证据。
+- 前端和回答引用不得把该表内容展示为 citation。
+
+索引：
+- index(`updated_at`)
+
+
+## 6. message（消息）
 字段：
 - `message_id`（PK，string）
 - `conversation_id`（FK）
@@ -93,7 +110,7 @@
 - index(`created_at`)
 
 
-## 6. citation（引用）
+## 7. citation（引用）
 字段：
 - `citation_row_id`（PK，自增或 UUID）
 - `message_id`（FK -> message.message_id，指向 assistant 消息）
@@ -115,7 +132,7 @@
 - index(`doc_id`)
 
 
-## 7. feedback（反馈）
+## 8. feedback（反馈）
 字段：
 - `feedback_id`（PK，string）
 - `message_id`（FK）
@@ -132,14 +149,14 @@
 - index(`created_at`)
 
 
-## 8. eval_set / eval_item（评测集）
-### 8.1 eval_set
+## 9. eval_set / eval_item（评测集）
+### 9.1 eval_set
 - `eval_set_id`（PK，string）
 - `name`（string）
 - `description`（text，nullable）
 - `created_at`（datetime）
 
-### 8.2 eval_item
+### 9.2 eval_item
 - `eval_item_id`（PK，string）
 - `eval_set_id`（FK）
 - `question`（text）
@@ -153,8 +170,8 @@
 - index(`eval_set_id`)
 
 
-## 9. eval_run / eval_result（评测运行与结果）
-### 9.1 eval_run
+## 10. eval_run / eval_result（评测运行与结果）
+### 10.1 eval_run
 - `run_id`（PK，string）
 - `eval_set_id`（FK）
 - `kb_id`（FK）
@@ -164,7 +181,7 @@
 - `metrics_json`（text/json：recall_at_k/mrr/avg_ms/p95_ms）
 - `created_at`（datetime）
 
-### 9.2 eval_result（逐条结果，可选）
+### 10.2 eval_result（逐条结果，可选）
 - `run_result_id`（PK，string）
 - `run_id`（FK）
 - `eval_item_id`（FK）
@@ -179,8 +196,8 @@
 - index(`eval_item_id`)
 
 
-## 10. user / role / user_role（用户与角色）
-### 10.1 user
+## 11. user / role / user_role（用户与角色）
+### 11.1 user
 - `user_id`（PK，string）
 - `email`（string，唯一）
 - `password_hash`（string）
@@ -193,13 +210,13 @@
 - unique(`email`)
 - index(`status`)
 
-### 10.2 role
+### 11.2 role
 - `role_id`（PK，string）
 - `name`（string，唯一）
 - `permissions_json`（text/json：权限列表）
 - `created_at`（datetime）
 
-### 10.3 user_role
+### 11.3 user_role
 - `user_id`（FK -> user.user_id）
 - `role_id`（FK -> role.role_id）
 - `created_at`（datetime）
@@ -208,7 +225,7 @@
 - PK(`user_id`, `role_id`)
 
 
-## 11. kb_access（知识库访问控制）
+## 12. kb_access（知识库访问控制）
 字段：
 - `user_id`（FK -> user.user_id）
 - `kb_id`（FK -> knowledge_base.kb_id）
@@ -222,7 +239,7 @@
 - index(`kb_id`)
 
 
-## 12. refresh_token（刷新令牌）
+## 13. refresh_token（刷新令牌）
 字段：
 - `token_id`（PK，string）
 - `user_id`（FK -> user.user_id）
