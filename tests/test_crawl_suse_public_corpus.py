@@ -54,6 +54,26 @@ def test_extract_primary_text_prefers_news_list_fragment() -> None:
     assert text == "2026年硕士研究生招生及复试相关问题解答 | 2026-03-01"
 
 
+def test_extract_primary_text_preserves_table_rows() -> None:
+    html = """
+    <html><body>
+    <article>
+      <p>面试安排如下。</p>
+      <table>
+        <tr><th>学院</th><th>地点</th><th>时间</th></tr>
+        <tr><td>计算机学院</td><td>N1S-207<br>N1S-211</td><td>5月18日13:00</td></tr>
+      </table>
+    </article>
+    </body></html>
+    """
+
+    text = extract_primary_text(html, primary_fragment=html)
+
+    assert "学院 | 地点 | 时间" in text
+    assert "计算机学院 | N1S-207 N1S-211 | 5月18日13:00" in text
+    assert "学院\n地点\n时间" not in text
+
+
 def test_parse_site_codes_trims_and_deduplicates() -> None:
     result = parse_site_codes(" jwc , xsc , jwc , yjs ")
 

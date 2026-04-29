@@ -175,8 +175,8 @@ def main() -> None:
     parser.add_argument(
         "--max-detail-pages-per-list",
         type=int,
-        default=6,
-        help="每个列表页最多补抓的详情页数量",
+        default=15,
+        help="每个列表页最多补抓的详情页数量，默认覆盖较深的历史专题公告",
     )
     parser.add_argument(
         "--max-upload-mb",
@@ -393,7 +393,7 @@ def prepare_corpus(
         if not page.body.strip():
             skipped.append(SkipRecord(source_uri=page.source_uri, reason="empty_page"))
             continue
-        if is_list_page(page):
+        if is_list_like_url(page.source_uri) or is_list_page(page):
             enriched_documents, enriched_skipped = enrich_list_page(
                 client=client,
                 page=page,
@@ -408,16 +408,7 @@ def prepare_corpus(
             prepared_documents.extend(enriched_documents)
             skipped.extend(enriched_skipped)
             if not enriched_documents:
-                fallback_documents = persist_list_entries(
-                    page=page,
-                    prepared_dir=prepared_dir,
-                    seen_sources=seen_sources,
-                    seen_page_hashes=seen_page_hashes,
-                )
-                if fallback_documents:
-                    prepared_documents.extend(fallback_documents)
-                else:
-                    skipped.append(SkipRecord(source_uri=page.source_uri, reason="list_page_without_detail"))
+                skipped.append(SkipRecord(source_uri=page.source_uri, reason="list_page_without_detail"))
             continue
 
         prepared = persist_article_page(
@@ -497,6 +488,20 @@ def is_list_page(page: SavedPage) -> bool:
     if dated_lines and len(dated_lines) >= max(4, int(len(lines) * 0.7)):
         return True
     return page.title.strip() in GENERIC_TITLES and len(lines) >= 6 and all(len(line) <= 120 for line in lines)
+
+
+def is_list_like_url(source_uri: str) -> bool:
+    """识别栏目列表页，避免把列表页当作正文证据入库。"""
+
+    path = urlparse(source_uri).path.lower()
+    return re.search(r"/list\d*\.(?:htm|html|psp|jsp|php)$", path) is not None
+
+
+def is_root_site_url(source_uri: str) -> bool:
+    """识别站点首页，避免门户页作为知识库证据。"""
+
+    path = urlparse(source_uri).path.strip("/")
+    return not path
 
 
 def looks_like_notice_line(line: str) -> bool:
@@ -712,7 +717,13 @@ def persist_article_page(
 
     normalized_body = normalize_text_block(body)
     normalized_title = normalize_text(title) or build_title_from_url(source_uri)
-    if len(normalized_body) < 120:
+    if is_list_like_url(source_uri):
+        return None
+    if is_root_site_url(source_uri):
+        return None
+    if len(normalized_body) < 180:
+        return None
+    if is_low_quality_body(normalized_body):
         return None
     if source_uri in seen_sources:
         return None
@@ -729,13 +740,6 @@ def persist_article_page(
     content = "\n".join(
         [
             f"# {normalized_title}",
-            "",
-            f"- 来源：{source_uri}",
-            f"- 站点：{site_code}",
-            "- 语料类型：正文页",
-            f"- 清洗时间：{datetime.now(timezone.utc).isoformat()}",
-            "",
-            "## 正文",
             "",
             normalized_body,
             "",
@@ -1080,14 +1084,135 @@ def normalize_text_block(value: str) -> str:
     lines = [normalize_text(line) for line in value.splitlines()]
     cleaned_lines: list[str] = []
     for line in lines:
+        if is_noise_line(line):
+            continue
         if not line:
             if cleaned_lines and cleaned_lines[-1]:
                 cleaned_lines.append("")
+            continue
+        if should_merge_with_previous(cleaned_lines, line):
+            cleaned_lines[-1] = merge_line(cleaned_lines[-1], line)
             continue
         cleaned_lines.append(line)
     while cleaned_lines and not cleaned_lines[-1]:
         cleaned_lines.pop()
     return "\n".join(cleaned_lines).strip()
+
+
+def is_noise_line(line: str) -> bool:
+    """过滤从网页按钮或清洗头部继承来的无效短行。"""
+
+    return line in {
+        "[下载]",
+        "[Docx阅读]",
+        "[PDF阅读]",
+        "[阅读]",
+        "下载",
+        "Docx阅读",
+        "PDF阅读",
+    }
+
+
+def is_low_quality_body(value: str) -> bool:
+    """过滤表格严重破碎或几乎只有短字段堆叠的正文。"""
+
+    lines = [line.strip() for line in value.splitlines() if line.strip()]
+    if not lines:
+        return True
+    short_noise_count = sum(1 for line in lines if is_short_noise_fragment(line))
+    if short_noise_count >= 80:
+        return True
+    return short_noise_count >= 25 and short_noise_count / len(lines) >= 0.18
+
+
+def is_short_noise_fragment(line: str) -> bool:
+    """识别由网页表格拆散出的孤立数字、标点、序号或短字段。"""
+
+    return re.fullmatch(
+        r"[0-9０-９]{1,4}|[一二三四五六七八九十百千万]+|[（）()、，。；：.!?]+|\d+[.．]|https?://\S+",
+        line,
+    ) is not None
+
+
+def should_merge_with_previous(cleaned_lines: list[str], line: str) -> bool:
+    """判断当前短行是否应并回上一行，修复网页抽取产生的软换行。"""
+
+    if not cleaned_lines or not cleaned_lines[-1]:
+        return False
+    previous = cleaned_lines[-1]
+    if is_table_like_line(previous) or is_table_like_line(line):
+        return False
+    if previous.endswith(("：", ":")) and re.fullmatch(r"\d+[.．、]+", line):
+        return False
+    if previous.endswith(("（", "(", "第", "至", "从", "和", "、")):
+        return True
+    if line in {"（", "("}:
+        return True
+    if previous.endswith(("代码", "代码前")) and re.match(r"^\d", line):
+        return True
+    if previous.endswith("前") and re.match(r"^\d", line):
+        return True
+    if re.match(r"^[一二三四五六七八九十百]+、", previous) and len(previous) <= 12 and len(line) <= 12:
+        return True
+    if line in {"）", ")", "，", "。", "；", "：", "、", ".", "．"}:
+        return True
+    if line.startswith(("）", ")", "，", "。", "；", "：", "、")):
+        return True
+    if line in {"年", "月", "日", "日至", "至"}:
+        return True
+    if re.fullmatch(r"\d{1,4}", previous) and re.match(r"^(?:年|月|日|日至|至|[.．、])", line):
+        return True
+    if re.fullmatch(r"\d{4}", previous) and re.match(r"^[\u4e00-\u9fff]", line) and len(line) <= 40:
+        return True
+    if re.search(r"\d$", previous) and re.match(r"^(?:年|月|日|日前|周岁|元|分|人|级|届)", line):
+        return True
+    if re.search(r"\d{4}年$|\d{1,2}月$", previous) and re.fullmatch(r"\d{1,2}", line):
+        return True
+    if re.fullmatch(r"\d+[.．、]+", previous):
+        return True
+    if re.fullmatch(r"[一二三四五六七八九十百]+[、.．]", previous) and len(line) <= 40:
+        return True
+    if re.fullmatch(r"[（(]?\d+[）)]?", previous) and len(line) <= 12:
+        return True
+    if re.fullmatch(r"https?://\S+", line) and previous.endswith(("（", "(")):
+        return True
+    return False
+
+
+def merge_line(previous: str, line: str) -> str:
+    """按中文正文习惯合并被网页抽取拆开的短行。"""
+
+    if line in {"（", "("}:
+        return f"{previous}{line}"
+    if line in {"，", "。", "；", "：", "、", "）", ")", ".", "．"}:
+        return f"{previous}{line}"
+    if line.startswith(("）", ")", "，", "。", "；", "：", "、")):
+        return f"{previous}{line}"
+    if previous.endswith(("（", "(", "第", "至", "从", "和", "、")):
+        return f"{previous}{line}"
+    if previous.endswith(("代码", "代码前", "前")) and re.match(r"^\d", line):
+        return f"{previous}{line}"
+    if re.match(r"^[一二三四五六七八九十百]+、", previous) and len(previous) <= 12 and len(line) <= 12:
+        return f"{previous}{line}"
+    if line in {"年", "月", "日", "日至", "至"}:
+        return f"{previous}{line}"
+    if re.fullmatch(r"\d{1,4}", previous) and re.match(r"^(?:年|月|日|日至|至|[.．、])", line):
+        return f"{previous}{line}"
+    if re.fullmatch(r"\d{4}", previous) and re.match(r"^[\u4e00-\u9fff]", line) and len(line) <= 40:
+        return f"{previous}{line}"
+    if re.search(r"\d$", previous) and re.match(r"^(?:年|月|日|日前|周岁|元|分|人|级|届)", line):
+        return f"{previous}{line}"
+    if re.search(r"\d{4}年$|\d{1,2}月$", previous) and re.fullmatch(r"\d{1,2}", line):
+        return f"{previous}{line}"
+    if re.fullmatch(r"\d+[.．、]+", previous):
+        return f"{previous}{line}"
+    return f"{previous}{line}"
+
+
+def is_table_like_line(line: str) -> bool:
+    """识别已经按行保留的表格文本，避免清洗时把相邻表格行粘连。"""
+
+    return " | " in line
 
 
 def extract_first_date(value: str) -> str | None:

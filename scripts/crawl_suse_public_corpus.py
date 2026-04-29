@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html as html_lib
 import json
 import mimetypes
 import re
@@ -187,11 +188,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    output_dir = (
-        Path(args.output_dir)
-        if args.output_dir
-        else ROOT_DIR / "data" / "crawl" / f"suse_public_{_timestamp_slug()}"
-    )
+    output_dir = Path(args.output_dir) if args.output_dir else ROOT_DIR / "data" / "crawl" / f"suse_public_{_timestamp_slug()}"
+    if not output_dir.is_absolute():
+        output_dir = ROOT_DIR / output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     sites = build_default_sites(
@@ -660,10 +659,18 @@ def extract_primary_text(html: str, *, primary_fragment: str | None) -> str:
         if news_lines:
             return "\n".join(news_lines)
     fragment = primary_fragment or html
+    table_lines = _extract_table_lines(fragment)
+    if table_lines:
+        fragment = re.sub(r"<table\b.*?</table>", "\n", fragment, flags=re.I | re.S)
     parser = HtmlCorpusParser()
     parser.feed(fragment)
     text = parser.text
-    return _clean_extracted_text(text)
+    cleaned = _clean_extracted_text(text)
+    if table_lines:
+        parts = [cleaned] if cleaned else []
+        parts.append("\n".join(table_lines))
+        return _clean_extracted_text("\n".join(parts))
+    return cleaned
 
 
 def extract_content_links(
@@ -856,6 +863,37 @@ def _extract_news_list_lines(fragment: str) -> list[str]:
             continue
         lines.append(f"{title} | {date_text}".strip(" |"))
     return _dedupe_adjacent(lines)
+
+
+def _extract_table_lines(fragment: str) -> list[str]:
+    """把正文表格抽成按行保留字段关系的文本。"""
+
+    tables = re.findall(r"<table\b.*?</table>", fragment, re.I | re.S)
+    lines: list[str] = []
+    for table in tables:
+        row_lines: list[str] = []
+        for row in re.findall(r"<tr\b.*?</tr>", table, re.I | re.S):
+            cells = re.findall(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", row, re.I | re.S)
+            values = [_clean_table_cell(cell) for cell in cells]
+            values = [value for value in values if value]
+            if len(values) < 2:
+                continue
+            row_lines.append(" | ".join(values))
+        if row_lines:
+            if lines:
+                lines.append("")
+            lines.extend(_dedupe_adjacent(row_lines))
+    return lines
+
+
+def _clean_table_cell(cell_html: str) -> str:
+    """清洗单元格文本，避免表格字段被拆成孤立短行。"""
+
+    text = re.sub(r"<(?:script|style|noscript)\b.*?</(?:script|style|noscript)>", " ", cell_html, flags=re.I | re.S)
+    text = re.sub(r"<br\s*/?>", " ", text, flags=re.I)
+    text = re.sub(r"</(?:p|div|li)>", " ", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return _normalize_whitespace(html_lib.unescape(text))
 
 
 def _clean_extracted_text(text: str) -> str:

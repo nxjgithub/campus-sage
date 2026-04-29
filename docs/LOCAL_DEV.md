@@ -36,10 +36,12 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-补充：PDF 解析依赖 `pypdf`，若解析失败请确认已安装：
+补充：PDF 解析基础依赖 `pypdf`，表格增强解析依赖 `pdfplumber`，若解析失败请确认已安装：
 ```powershell
-.\.venv\Scripts\python.exe -m pip install pypdf
+.\.venv\Scripts\python.exe -m pip install pypdf pdfplumber
 ```
+
+解析器会将 DOCX/HTML 表格转换为按行保留字段关系的文本（用 `|` 分隔单元格）。PDF 表格在 `pdfplumber` 可用且 PDF 文本层正常时会追加同样的表格行；扫描件或字体映射异常的 PDF 无法稳定还原，解析器会过滤明显的 `/Gxx` 字体映射乱码页，避免无效片段进入向量库。
 
 ## 3.1 重要提示：禁止 pip 安装到用户目录（强制）
 有些环境的 pip 被配置为默认 `--user`，会把依赖装到：
@@ -294,7 +296,11 @@ $env:VLLM_ENABLED="false"
 ```
 补充说明：
 - 该脚本会自动过滤空页、重复页、不可入库格式和超大附件，只保留当前后端支持的 `PDF/DOCX/HTML/Markdown/TXT`。
-- 对列表页会再次访问公开详情页，尽量补齐正文级语料；若详情页中引用公开附件，也会一并下载并按可入库规则筛选。
+- 对列表页会再次访问公开详情页，默认每个列表页最多补抓 15 条详情，尽量覆盖较深的历史专题公告；若详情页中引用公开附件，也会一并下载并按可入库规则筛选。
+- 清洗后的 Markdown 正文只保留标题与正文内容，不再把 `来源/站点/语料类型/清洗时间` 写入可检索正文；这些来源信息以 `prepare_report.json` 与上传接口的 `source_uri` 字段为准。
+- 栏目列表页只作为详情页发现入口；若无法补抓到正文详情，不再生成标题级兜底语料，避免引用指向列表页或把目录摘要当证据。
+- 清洗阶段会合并常见网页软换行，并过滤表格严重破碎的低质量正文，降低入库后 snippet 出现孤立页码、数字或按钮文案的概率。
+- 抓取阶段会将 HTML 表格抽取为按行保留字段关系的文本（用 `|` 分隔单元格），适合转专业面试安排、研究生调剂公告等表格型页面后续检索。
 - 清洗结果默认写入 `data/prepared/<crawl_dir_name>_kb_ready/`，并生成 `prepare_report.json` 与 `import_report.json` 便于追踪。
 - 若你只想先检查清洗结果、不立即导入，可追加 `--skip-import`。
 

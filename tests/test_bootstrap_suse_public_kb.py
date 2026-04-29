@@ -10,6 +10,7 @@ from scripts.bootstrap_suse_public_kb import (
     is_ingestable_file,
     is_opaque_attachment_name,
     is_list_page,
+    normalize_text_block,
     parse_saved_page,
     resolve_crawl_dir,
 )
@@ -167,6 +168,30 @@ def test_is_ingestable_file_accepts_markdown(tmp_path: Path) -> None:
     file_path.write_text("# 标题\n\n这是可解析的 Markdown 正文。", encoding="utf-8")
 
     assert is_ingestable_file(file_path) is True
+
+
+def test_normalize_text_block_merges_soft_breaks_but_keeps_table_rows() -> None:
+    raw_text = "\n".join(
+        [
+            "二、",
+            "调剂原则：",
+            "1.",
+            "符合调入专业的报考条件。",
+            "统考数学一、二、三及理学自命题数学(",
+            "科目代码",
+            "601-609)",
+            "视为相同。",
+            "学院 | 地点 | 时间",
+            "计算机学院 | N1S-207 | 5月18日13:00",
+        ]
+    )
+
+    result = normalize_text_block(raw_text)
+
+    assert "二、调剂原则：" in result
+    assert "1.符合调入专业的报考条件。" in result
+    assert "科目代码601-609)" in result
+    assert "学院 | 地点 | 时间\n计算机学院 | N1S-207 | 5月18日13:00" in result
 
 
 def parse_saved_page_from_text(record: CrawledRecord, body: str) -> SavedPage:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
+import re
 from typing import Any
 from xml.etree import ElementTree as ET
 from zipfile import BadZipFile, ZipFile
@@ -11,6 +12,7 @@ from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
 
 _WORD_NAMESPACE = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+_WORD_NS = _WORD_NAMESPACE["w"]
 
 
 @dataclass(slots=True)
@@ -74,11 +76,14 @@ class DocumentParser:
             return [ParsedPage(page_number=1, text=text)] if text.strip() else []
 
         reader = self._load_pdf_reader(path)
+        table_lines_by_page = self._extract_pdf_table_lines_by_page(path)
         pages: list[ParsedPage] = []
         for index, page in enumerate(reader.pages, start=1):
             text = page.extract_text() or ""
-            if text.strip():
-                pages.append(ParsedPage(page_number=index, text=text))
+            table_lines = table_lines_by_page.get(index, [])
+            combined = "\n".join(part for part in (text.strip(), "\n".join(table_lines).strip()) if part)
+            if combined.strip():
+                pages.append(ParsedPage(page_number=index, text=combined))
         return pages
 
     def _parse_docx(self, path: Path) -> list[ParsedPage]:
@@ -112,12 +117,19 @@ class DocumentParser:
                 status_code=400,
             ) from exc
 
+        body = root.find(".//w:body", _WORD_NAMESPACE)
+        if body is None:
+            return []
+
         blocks: list[tuple[int | None, str]] = []
-        for paragraph in root.findall(".//w:body/w:p", _WORD_NAMESPACE):
-            text = self._extract_docx_paragraph_text(paragraph)
-            if not text:
+        for child in body:
+            if child.tag == self._word_tag("p"):
+                text = self._extract_docx_paragraph_text(child)
+                if text:
+                    blocks.append((self._extract_docx_heading_level(child), text))
                 continue
-            blocks.append((self._extract_docx_heading_level(paragraph), text))
+            if child.tag == self._word_tag("tbl"):
+                blocks.extend((None, line) for line in self._extract_docx_table_lines(child))
         return self._build_structured_pages(blocks)
 
     def _parse_html(self, content: bytes) -> list[ParsedPage]:
@@ -191,6 +203,8 @@ class DocumentParser:
 
         cleaned: list[ParsedPage] = []
         for page in pages:
+            if self._is_glyph_garbage(page.text):
+                continue
             text = self._normalize_line(page.text)
             if not text:
                 continue
@@ -229,11 +243,56 @@ class DocumentParser:
                 status_code=400,
             ) from exc
 
+    def _extract_pdf_table_lines_by_page(self, path: Path) -> dict[int, list[str]]:
+        """使用可选依赖抽取 PDF 表格，失败时退回普通文本解析。"""
+
+        try:
+            import pdfplumber  # type: ignore
+        except ImportError:
+            return {}
+
+        table_lines_by_page: dict[int, list[str]] = {}
+        try:
+            with pdfplumber.open(path) as document:
+                for page_index, page in enumerate(document.pages, start=1):
+                    lines: list[str] = []
+                    for table in page.extract_tables() or []:
+                        for row in table:
+                            values = [self._normalize_table_cell(cell) for cell in row]
+                            values = [value for value in values if value]
+                            if len(values) >= 2:
+                                lines.append(" | ".join(values))
+                    if lines:
+                        table_lines_by_page[page_index] = self._dedupe_adjacent_lines(lines)
+        except Exception:
+            return {}
+        return table_lines_by_page
+
     def _extract_docx_paragraph_text(self, paragraph: ET.Element) -> str:
         """提取 DOCX 段落文本。"""
 
         texts = [node.text or "" for node in paragraph.findall(".//w:t", _WORD_NAMESPACE)]
         return self._normalize_line("".join(texts))
+
+    def _extract_docx_table_lines(self, table: ET.Element) -> list[str]:
+        """提取 DOCX 表格行，使用 Markdown 风格保留列关系。"""
+
+        lines: list[str] = []
+        for row in table.findall("./w:tr", _WORD_NAMESPACE):
+            values = [self._extract_docx_cell_text(cell) for cell in row.findall("./w:tc", _WORD_NAMESPACE)]
+            values = [value for value in values if value]
+            if len(values) >= 2:
+                lines.append(" | ".join(values))
+        return self._dedupe_adjacent_lines(lines)
+
+    def _extract_docx_cell_text(self, cell: ET.Element) -> str:
+        """提取 DOCX 单元格文本，避免表格内容被拆成孤立短行。"""
+
+        paragraphs = [
+            self._extract_docx_paragraph_text(paragraph)
+            for paragraph in cell.findall(".//w:p", _WORD_NAMESPACE)
+        ]
+        return self._normalize_table_cell(" ".join(paragraph for paragraph in paragraphs if paragraph))
 
     def _extract_docx_heading_level(self, paragraph: ET.Element) -> int | None:
         """识别 DOCX 段落的标题级别。"""
@@ -266,6 +325,32 @@ class DocumentParser:
             return ""
         return "\n".join(part.strip() for part in text.splitlines() if part.strip()).strip()
 
+    def _normalize_table_cell(self, text: str | None) -> str:
+        """统一表格单元格文本，保持同一单元格内容在一行内。"""
+
+        return re.sub(r"\s+", " ", text or "").strip()
+
+    def _dedupe_adjacent_lines(self, lines: list[str]) -> list[str]:
+        """去除相邻重复行，降低抽表和正文文本重复带来的噪声。"""
+
+        deduped: list[str] = []
+        for line in lines:
+            if deduped and deduped[-1] == line:
+                continue
+            deduped.append(line)
+        return deduped
+
+    def _is_glyph_garbage(self, text: str) -> bool:
+        """识别 PDF 字体映射失败产生的 /Gxx 占位乱码。"""
+
+        glyph_tokens = re.findall(r"/G[0-9A-Fa-f]{2,}", text or "")
+        return len(glyph_tokens) >= 20
+
+    def _word_tag(self, name: str) -> str:
+        """构造 WordprocessingML 命名空间标签。"""
+
+        return f"{{{_WORD_NS}}}{name}"
+
 
 class _StructuredHtmlParser(HTMLParser):
     """HTML 结构化提取器。"""
@@ -276,6 +361,10 @@ class _StructuredHtmlParser(HTMLParser):
         self._current_tag: str | None = None
         self._current_text: list[str] = []
         self._skip_depth = 0
+        self._table_depth = 0
+        self._row_cells: list[str] = []
+        self._cell_text: list[str] = []
+        self._in_table_cell = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         """处理开始标签。"""
@@ -285,6 +374,19 @@ class _StructuredHtmlParser(HTMLParser):
             self._skip_depth += 1
             return
         if self._skip_depth:
+            return
+        if tag_lower == "table":
+            self._flush()
+            self._table_depth += 1
+            return
+        if self._table_depth:
+            if tag_lower == "tr":
+                self._row_cells = []
+                return
+            if tag_lower in {"td", "th"}:
+                self._cell_text = []
+                self._in_table_cell = True
+                return
             return
         if tag_lower in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "li"}:
             self._flush()
@@ -299,6 +401,23 @@ class _StructuredHtmlParser(HTMLParser):
             return
         if self._skip_depth:
             return
+        if self._table_depth:
+            if tag_lower in {"td", "th"} and self._in_table_cell:
+                text = self._normalize_text(" ".join(self._cell_text))
+                if text:
+                    self._row_cells.append(text)
+                self._cell_text = []
+                self._in_table_cell = False
+                return
+            if tag_lower == "tr":
+                if len(self._row_cells) >= 2:
+                    self.blocks.append((None, " | ".join(self._row_cells)))
+                self._row_cells = []
+                return
+            if tag_lower == "table":
+                self._table_depth = max(0, self._table_depth - 1)
+                return
+            return
         if self._current_tag == tag_lower:
             self._flush()
             self._current_tag = None
@@ -307,6 +426,9 @@ class _StructuredHtmlParser(HTMLParser):
         """收集正文文本。"""
 
         if self._skip_depth:
+            return
+        if self._table_depth and self._in_table_cell:
+            self._cell_text.append(data)
             return
         self._current_text.append(data)
 
@@ -317,7 +439,7 @@ class _StructuredHtmlParser(HTMLParser):
         super().close()
 
     def _flush(self) -> None:
-        text = " ".join(part.strip() for part in self._current_text if part.strip()).strip()
+        text = self._normalize_text(" ".join(part.strip() for part in self._current_text if part.strip()))
         self._current_text.clear()
         if not text:
             return
@@ -325,3 +447,8 @@ class _StructuredHtmlParser(HTMLParser):
         if self._current_tag and self._current_tag.startswith("h") and self._current_tag[1:].isdigit():
             heading_level = int(self._current_tag[1:])
         self.blocks.append((heading_level, text))
+
+    def _normalize_text(self, text: str) -> str:
+        """统一 HTML 抽取出的行内空白。"""
+
+        return re.sub(r"\s+", " ", text or "").strip()
