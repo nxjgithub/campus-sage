@@ -62,7 +62,7 @@
 ### 4.2.1 Docker Compose / TEI 补充配置
 - `EMBEDDING_BASE_URL_INTERNAL`：容器内 API / Worker 访问 Embedding 服务的地址，默认 `http://tei:80/v1`
 - `EMBEDDING_API_PATH_INTERNAL`：容器内 Embedding 接口路径，默认 `/embeddings`
-- `NO_PROXY_INTERNAL`：容器内跳过代理的主机列表，默认 `mysql,qdrant,tei,redis,localhost,127.0.0.1`
+- `NO_PROXY_INTERNAL`：容器内跳过代理的主机列表，默认 `mysql,qdrant,tei,redis,minio,localhost,127.0.0.1`
 - `TEI_MODEL_ID`：TEI 容器加载的模型 ID，默认 `BAAI/bge-m3`
 - `TEI_SERVED_MODEL_NAME`：TEI 对外声明的模型名，默认 `bge-m3`
 - `TEI_MAX_CLIENT_BATCH_SIZE`：TEI 单次请求最大批量，默认 `8`
@@ -70,7 +70,7 @@
 - `HF_TOKEN`：Hugging Face 访问令牌，拉取私有模型时使用，可为空
 
 说明：
-- `tei` 服务会在 Compose 中显式清空 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 及其小写形式，并设置 `NO_PROXY=*`。这是为了避免 Docker Desktop 继承宿主机失效代理后，TEI 无法从 Hugging Face 下载或加载模型。
+- `tei` 与 `minio-init` 服务会在 Compose 中显式清空 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 及其小写形式。`api/worker` 的 `NO_PROXY_INTERNAL` 必须包含 `minio`，否则启用 S3 图片存储时，容器内访问 MinIO 可能被错误转发到宿主机代理。
 - 如果你的网络环境必须通过代理访问 Hugging Face，应先确保 Docker 容器内代理地址真实可达，再按需调整 `docker-compose.yml` 中 `tei.environment` 的代理变量。
 
 ### 4.3 Rerank（可选）
@@ -117,8 +117,20 @@
 
 ## 6. 上传与存储
 - `STORAGE_DIR`：默认 `./data/storage`
+- `ASSET_STORAGE_BACKEND`：图片资产存储后端，`local` 或 `s3`，默认 `local`
+- `S3_ENDPOINT_URL`：S3/MinIO Endpoint，本地 MinIO 示例 `http://127.0.0.1:9002`
+- `S3_ENDPOINT_URL_INTERNAL`：Docker Compose 内部 Endpoint，默认 `http://minio:9000`
+- `S3_REGION`：S3 区域，默认 `us-east-1`
+- `S3_BUCKET`：图片资产 Bucket，默认 `campus-sage-assets`
+- `S3_PREFIX`：图片资产对象前缀，默认 `campus-sage`
+- `S3_ACCESS_KEY_ID`：S3/MinIO Access Key
+- `S3_SECRET_ACCESS_KEY`：S3/MinIO Secret Key
+- `S3_USE_SSL`：是否使用 HTTPS，默认 `false`
+- `S3_FORCE_PATH_STYLE`：是否使用 Path Style，MinIO 建议 `true`
 - `UPLOAD_MAX_MB`：默认 30
 - `UPLOAD_ALLOWED_EXTS`：默认 `pdf`（MVP 建议先只支持 pdf）
+
+说明：`ASSET_STORAGE_BACKEND=s3` 时，DOCX 提取出的图片资产会写入 S3/MinIO；前端仍通过 `GET /api/v1/assets/{asset_id}` 鉴权访问，后端代理读取对象存储并返回图片流。`local` 模式保留本地文件读取，兼容既有演示数据。
 
 ## 7. 任务队列（RQ + Redis）
 - `REDIS_URL`：默认 `redis://127.0.0.1:6379/0`

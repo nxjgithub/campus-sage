@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 
 from app.api.v1.deps import (
     get_authorization_service,
@@ -220,12 +220,13 @@ def get_asset(
     asset_id: str,
     current_user: CurrentUser = Depends(require_permission(Permission.DOC_READ)),
     staged_service: StagedDocumentService = Depends(get_staged_document_service),
-) -> FileResponse:
+) -> Response:
     """读取图片资产原文件。"""
 
     del current_user
-    path = staged_service.find_asset_path(asset_id)
-    return FileResponse(path)
+    asset = staged_service.get_asset(asset_id)
+    headers = {"Content-Disposition": f'inline; filename="{asset.file_name}"'}
+    return Response(content=asset.content, media_type=asset.media_type, headers=headers)
 
 
 @router.post("/kb/{kb_id}/documents", response_model=DocumentUploadResponse)

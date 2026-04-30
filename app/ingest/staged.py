@@ -19,6 +19,7 @@ from app.core.settings import Settings
 from app.core.utils import new_id, utc_now_iso
 from app.ingest.chunker import Chunk, Chunker
 from app.ingest.parser import DocumentParser, ParsedPage
+from app.storage.asset_store import AssetObjectStore, StoredAsset
 
 _REL_NS = {
     "rel": "http://schemas.openxmlformats.org/package/2006/relationships",
@@ -82,6 +83,7 @@ class StagedDocumentService:
         self._settings = settings
         self._parser = DocumentParser()
         self._chunker = Chunker(settings.chunk_size, settings.chunk_overlap)
+        self._asset_store = AssetObjectStore(settings)
 
     def create_staged_document(
         self,
@@ -268,7 +270,7 @@ class StagedDocumentService:
         return chunks
 
     def copy_to_document_storage(self, staged_doc_id: str, target_file: Path) -> None:
-        """把暂存源文件和资产复制到正式文档目录。"""
+        """把暂存源文件和资产复制到正式文档目录，并同步对象存储。"""
 
         manifest = self.get_manifest(staged_doc_id)
         source = Path(manifest["file_path"])
@@ -281,6 +283,30 @@ class StagedDocumentService:
                 continue
             asset_target.mkdir(parents=True, exist_ok=True)
             shutil.copy2(staged_asset, asset_target / staged_asset.name)
+            self._asset_store.put_asset(
+                asset_id=str(asset["asset_id"]),
+                file_name=str(staged_asset.name),
+                media_type=str(asset.get("media_type") or self._guess_media_type(staged_asset.suffix)),
+                content=staged_asset.read_bytes(),
+            )
+
+    def get_asset(self, asset_id: str) -> StoredAsset:
+        """按资产 ID 读取图片内容，优先读取对象存储，兼容本地旧资产。"""
+
+        stored = self._asset_store.get_asset(asset_id)
+        if stored is not None:
+            if self._is_valid_image_bytes(stored.content, stored.media_type):
+                return stored
+            raise AppError(
+                code=ErrorCode.DOCUMENT_NOT_FOUND,
+                message="图片资产格式不合法",
+                detail={"asset_id": asset_id},
+                status_code=404,
+            )
+        path = self.find_asset_path(asset_id)
+        content = path.read_bytes()
+        media_type = self._guess_media_type(path.suffix)
+        return StoredAsset(content=content, media_type=media_type, file_name=path.name)
 
     def find_asset_path(self, asset_id: str) -> Path:
         """按资产 ID 查找图片文件。"""
@@ -499,6 +525,12 @@ class StagedDocumentService:
                     file_name = f"{asset_id}{suffix}"
                     relative_path = f"assets/{file_name}"
                     (asset_dir / file_name).write_bytes(data)
+                    self._asset_store.put_asset(
+                        asset_id=asset_id,
+                        file_name=file_name,
+                        media_type=media_type,
+                        content=data,
+                    )
                     assets.append(
                         StagedAsset(
                             asset_id=asset_id,

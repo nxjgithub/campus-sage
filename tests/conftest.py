@@ -21,6 +21,8 @@ if str(ROOT) not in sys.path:
 os.environ.setdefault("EMBEDDING_BACKEND", "simple")
 os.environ.setdefault("VECTOR_BACKEND", "memory")
 os.environ.setdefault("INGEST_QUEUE_ENABLED", "false")
+os.environ.setdefault("INGEST_REQUIRE_HTTP_EMBEDDING", "false")
+os.environ.setdefault("ASSET_STORAGE_BACKEND", "local")
 os.environ.setdefault("VLLM_ENABLED", "false")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-with-32-bytes-minimum!!")
 # 单元测试固定使用本地 SQLite，避免 .env 中的 MySQL 配置污染测试收集阶段。

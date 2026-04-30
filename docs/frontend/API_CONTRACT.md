@@ -76,7 +76,8 @@
   - 用途：确认预览结果并创建正式入库任务
   - 成功：返回 `doc + job`
 - `GET /assets/{asset_id}`
-  - 用途：读取图片资产原图；前端预览时应通过统一 `apiClient` 携带认证请求 blob
+  - 用途：读取图片资产原图；前端预览和问答引用复核时应通过统一 `apiClient` 携带认证请求 blob
+  - 说明：后端可能从本地存储或 S3/MinIO 读取，但前端只依赖该鉴权代理接口
 - `GET /kb/{kb_id}/documents`
   - 用途：文档列表
 - `GET /documents/{doc_id}`
@@ -142,7 +143,7 @@
   - `page_start/page_end` 或 `section_path`
   - `snippet`
   - 若存在 `source_uri`，应提供“官方来源”跳转入口
-  - 若存在 `asset_id/asset_url`，应展示图片资产编号或原图复核入口
+  - 若存在 `asset_id/asset_url`，应展示图片资产编号和“查看原图”入口，并通过 `asset_url` 拉取图片 blob 后预览
   - 调试模式下 `score` 可能有值，生产态可为 `null`。
 
 - `POST /kb/{kb_id}/ask/stream`

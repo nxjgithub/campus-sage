@@ -65,7 +65,7 @@
 - `created_at: str`
     - 写入时间（ISO8601）
 - `asset_id / asset_type / asset_label / asset_url`
-    - 可选，命中分块关联图片资产时写入；图片原文件不作为向量本体，只通过文本分块和 metadata 建立可引用入口
+    - 可选，命中分块关联图片资产时写入；图片原文件不作为向量本体，只通过文本分块和 metadata 建立可引用入口。`asset_url` 应指向后端鉴权代理接口，不要求暴露对象存储真实地址
 
 ### 2.3 不允许的行为（禁止）
 - 不允许缺失 Required 字段

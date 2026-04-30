@@ -36,6 +36,7 @@ import { CitationItem } from "../../shared/api/modules/ask";
 import { fetchKbList } from "../../shared/api/modules/kb";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { FeedbackAction } from "../../shared/components/FeedbackAction";
+import { CitationAssetButton } from "../../shared/components/CitationAssetButton";
 import { RefusalNextStepsCard } from "../../shared/components/RefusalNextStepsCard";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import { splitCitationMarkers } from "../../shared/utils/citation";
@@ -268,6 +269,17 @@ export function MessageCard(props: {
                         <Typography.Paragraph style={{ marginBottom: 0 }}>
                           {citation.snippet}
                         </Typography.Paragraph>
+                        {citation.asset_id ? (
+                          <Space wrap size={8}>
+                            <Tag color="blue">{citation.asset_label || "图片资产"}</Tag>
+                            {citation.asset_url ? (
+                              <CitationAssetButton
+                                assetUrl={citation.asset_url}
+                                label={citation.asset_label || "图片证据"}
+                              />
+                            ) : null}
+                          </Space>
+                        ) : null}
                         {citation.source_uri ? (
                           <Typography.Link href={citation.source_uri} target="_blank" rel="noreferrer">
                             官方来源
@@ -349,6 +361,17 @@ export function MessageCard(props: {
                         <Typography.Paragraph style={{ marginBottom: 0 }}>
                           {citation.snippet}
                         </Typography.Paragraph>
+                        {citation.asset_id ? (
+                          <Space wrap size={8}>
+                            <Tag color="blue">{citation.asset_label || "图片资产"}</Tag>
+                            {citation.asset_url ? (
+                              <CitationAssetButton
+                                assetUrl={citation.asset_url}
+                                label={citation.asset_label || "图片证据"}
+                              />
+                            ) : null}
+                          </Space>
+                        ) : null}
                         {citation.source_uri ? (
                           <Typography.Link href={citation.source_uri} target="_blank" rel="noreferrer">
                             官方来源

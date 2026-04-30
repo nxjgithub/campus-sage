@@ -51,6 +51,7 @@ import {
 import { useAuth } from "../../shared/auth/auth";
 import { getAccessToken } from "../../shared/auth/token";
 import { FeedbackAction } from "../../shared/components/FeedbackAction";
+import { CitationAssetButton } from "../../shared/components/CitationAssetButton";
 import { PortalSwitch } from "../../shared/components/PortalSwitch";
 import { RefusalNextStepsCard } from "../../shared/components/RefusalNextStepsCard";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
@@ -1841,9 +1842,15 @@ export function AskPage() {
                               {citation.snippet}
                             </Typography.Paragraph>
                             {citation.asset_id ? (
-                              <Tag color="blue">
-                                {citation.asset_label || "图片资产"} · 可在文档预览中查看原图
-                              </Tag>
+                              <Space wrap size={8}>
+                                <Tag color="blue">{citation.asset_label || "图片资产"}</Tag>
+                                {citation.asset_url ? (
+                                  <CitationAssetButton
+                                    assetUrl={citation.asset_url}
+                                    label={citation.asset_label || "图片证据"}
+                                  />
+                                ) : null}
+                              </Space>
                             ) : null}
                             {citation.source_uri ? (
                               <Typography.Link href={citation.source_uri} target="_blank" rel="noreferrer">

@@ -122,6 +122,18 @@ class Settings(BaseSettings):
     chunk_overlap: int = Field(default=100, description="分块重叠（字符数）")
 
     storage_dir: str = Field(default="./data/storage", description="本地文件存储目录")
+    asset_storage_backend: Literal["local", "s3"] = Field(
+        default="local",
+        description="图片资产存储后端（local/s3）",
+    )
+    s3_endpoint_url: str | None = Field(default=None, description="S3/MinIO Endpoint")
+    s3_region: str = Field(default="us-east-1", description="S3 区域")
+    s3_bucket: str = Field(default="campus-sage-assets", description="图片资产 Bucket")
+    s3_prefix: str = Field(default="campus-sage", description="图片资产对象前缀")
+    s3_access_key_id: str | None = Field(default=None, description="S3 Access Key")
+    s3_secret_access_key: str | None = Field(default=None, description="S3 Secret Key")
+    s3_use_ssl: bool = Field(default=False, description="S3 Endpoint 是否使用 HTTPS")
+    s3_force_path_style: bool = Field(default=True, description="是否强制 Path Style")
     upload_max_mb: int = Field(default=30, description="上传最大大小（MB）")
     upload_allowed_exts: str = Field(
         default="pdf,docx,html,htm,md,txt",
@@ -227,6 +239,11 @@ class Settings(BaseSettings):
             errors.append(
                 f"生产环境要求 JWT_SECRET_KEY 至少 {JWT_SECRET_MIN_LENGTH} 个字符。"
             )
+        if self.asset_storage_backend == "s3":
+            if not self.s3_bucket.strip():
+                errors.append("生产环境启用 S3 图片存储时必须配置 S3_BUCKET。")
+            if not self.s3_access_key_id or not self.s3_secret_access_key:
+                errors.append("生产环境启用 S3 图片存储时必须配置 S3 访问密钥。")
         return errors
 
     def runtime_warnings(self) -> list[str]:
@@ -241,6 +258,11 @@ class Settings(BaseSettings):
             )
         if not self.allowed_upload_extensions:
             warnings.append("UPLOAD_ALLOWED_EXTS 为空，上传接口将拒绝所有文件。")
+        if self.asset_storage_backend == "s3":
+            if not self.s3_bucket.strip():
+                warnings.append("ASSET_STORAGE_BACKEND=s3 但 S3_BUCKET 为空。")
+            if not self.s3_access_key_id or not self.s3_secret_access_key:
+                warnings.append("ASSET_STORAGE_BACKEND=s3 但 S3 访问密钥未完整配置。")
         return warnings
 
     @field_validator("embedding_dimensions", mode="before")
@@ -257,6 +279,9 @@ class Settings(BaseSettings):
         "vllm_api_key",
         "embedding_api_key",
         "hf_token",
+        "s3_endpoint_url",
+        "s3_access_key_id",
+        "s3_secret_access_key",
         mode="before",
     )
     @classmethod

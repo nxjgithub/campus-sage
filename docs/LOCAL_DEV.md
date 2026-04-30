@@ -45,6 +45,22 @@ py -3.12 -m venv .venv
 
 管理端上传页支持“暂存上传 -> 解析预览 -> 分块确认 -> 确认入库”。暂存文件位于 `data/storage/_staged/<staged_doc_id>/`，DOCX 内嵌图片会保存为图片资产并在预览页展示。未配置 OCR 时，图片资产只提供原图复核与图片编号引用；图片中的文字不会自动进入正文语义检索。
 
+如需把图片资产切换到 MinIO/S3 兼容对象存储：
+```powershell
+docker compose --profile object-storage up -d minio minio-init
+```
+随后在 `.env` 中设置：
+```dotenv
+ASSET_STORAGE_BACKEND=s3
+S3_ENDPOINT_URL=http://127.0.0.1:9002
+S3_ENDPOINT_URL_INTERNAL=http://minio:9000
+S3_BUCKET=campus-sage-assets
+S3_ACCESS_KEY_ID=campus_sage_minio
+S3_SECRET_ACCESS_KEY=campus_sage_minio_secret
+S3_FORCE_PATH_STYLE=true
+```
+前端仍通过 `/api/v1/assets/{asset_id}` 打开图片，后端会鉴权后代理读取对象存储。
+
 ## 3.1 重要提示：禁止 pip 安装到用户目录（强制）
 有些环境的 pip 被配置为默认 `--user`，会把依赖装到：
 `C:\Users\用户名\AppData\Roaming\Python\Python312\site-packages`

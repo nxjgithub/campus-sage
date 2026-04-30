@@ -268,7 +268,7 @@ Content-Type：`multipart/form-data`
 
 `GET /api/v1/assets/{asset_id}`
 
-说明：读取暂存或正式文档中的图片资产原图，供预览和引用复核使用。
+说明：读取暂存或正式文档中的图片资产原图，供预览和引用复核使用。图片资产可存放在本地 `STORAGE_DIR` 或 S3/MinIO 对象存储中；接口保持鉴权代理形态，不向前端暴露长期公开对象地址。
 
 ### 3.3 获取文档列表
 `GET /api/v1/kb/{kb_id}/documents`
