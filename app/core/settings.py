@@ -150,6 +150,10 @@ class Settings(BaseSettings):
         default=10, description="失败任务告警阈值"
     )
     ingest_queue_dead_max: int = Field(default=200, description="死信队列保留上限")
+    ingest_require_http_embedding: bool = Field(
+        default=False,
+        description="入库是否强制使用 HTTP Embedding 服务",
+    )
 
     debug_mode: bool = Field(default=False, description="调试模式")
     enable_swagger: bool = Field(default=True, description="是否启用 Swagger")

@@ -33,6 +33,10 @@ export interface CitationItem {
   chunk_id: string;
   snippet: string;
   score?: number | null;
+  asset_id?: string | null;
+  asset_type?: string | null;
+  asset_label?: string | null;
+  asset_url?: string | null;
 }
 
 export type NextStepAction =

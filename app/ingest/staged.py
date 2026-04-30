@@ -1,0 +1,757 @@
+"""暂存文档预览服务。"""
+
+from __future__ import annotations
+
+import binascii
+from dataclasses import asdict, dataclass
+import json
+from pathlib import Path
+import shutil
+from typing import Any
+from urllib.parse import urlparse
+from xml.etree import ElementTree as ET
+from zipfile import BadZipFile, ZIP_DEFLATED, ZIP_STORED, ZipFile, ZipInfo
+import zlib
+
+from app.core.error_codes import ErrorCode
+from app.core.errors import AppError
+from app.core.settings import Settings
+from app.core.utils import new_id, utc_now_iso
+from app.ingest.chunker import Chunk, Chunker
+from app.ingest.parser import DocumentParser, ParsedPage
+
+_REL_NS = {
+    "rel": "http://schemas.openxmlformats.org/package/2006/relationships",
+    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+}
+_WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+@dataclass(slots=True)
+class StagedAsset:
+    """暂存文档中的图片资产。"""
+
+    asset_id: str
+    label: str
+    file_name: str
+    media_type: str
+    relative_path: str
+    url: str
+    order_index: int
+    source: str
+
+
+@dataclass(slots=True)
+class StagedChunk:
+    """预览阶段可编辑/禁用的分块。"""
+
+    chunk_id: str
+    chunk_index: int
+    text: str
+    page_start: int | None
+    page_end: int | None
+    section_path: str | None
+    enabled: bool
+    source_kind: str
+    asset_id: str | None = None
+    asset_label: str | None = None
+    asset_url: str | None = None
+
+
+@dataclass(slots=True)
+class StagedPreviewBlock:
+    """预览阶段用于还原原文档版式的结构块。"""
+
+    block_type: str
+    order_index: int
+    text: str | None = None
+    level: int | None = None
+    rows: list[list[str]] | None = None
+    page_number: int | None = None
+    section_path: str | None = None
+    asset_id: str | None = None
+    asset_label: str | None = None
+    asset_url: str | None = None
+
+
+class StagedDocumentService:
+    """管理暂存上传、解析预览和预览结果。"""
+
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+        self._parser = DocumentParser()
+        self._chunker = Chunker(settings.chunk_size, settings.chunk_overlap)
+
+    def create_staged_document(
+        self,
+        kb_id: str,
+        filename: str | None,
+        doc_name: str | None,
+        doc_version: str | None,
+        published_at: str | None,
+        source_uri: str | None,
+    ) -> dict[str, Any]:
+        """创建暂存记录，文件内容由路由层随后写入。"""
+
+        name = doc_name or filename or "document"
+        extension = Path(filename or name).suffix.lower().lstrip(".")
+        if extension not in set(self._settings.allowed_upload_extensions):
+            raise AppError(
+                code=ErrorCode.FILE_TYPE_NOT_ALLOWED,
+                message="文件类型不允许",
+                detail={"ext": extension},
+                status_code=400,
+            )
+        staged_doc_id = new_id("stg")
+        root = self._staged_root(staged_doc_id)
+        root.mkdir(parents=True, exist_ok=False)
+        original_path = root / f"source.{extension}"
+        manifest = {
+            "staged_doc_id": staged_doc_id,
+            "kb_id": kb_id,
+            "doc_name": name,
+            "doc_version": doc_version,
+            "published_at": published_at,
+            "source_uri": self._normalize_source_uri(source_uri),
+            "filename": filename or name,
+            "extension": extension,
+            "source_type": self._resolve_source_type(extension),
+            "status": "uploaded",
+            "file_path": str(original_path),
+            "assets": [],
+            "pages": [],
+            "preview_blocks": [],
+            "chunks": [],
+            "warnings": [],
+            "created_at": utc_now_iso(),
+            "updated_at": utc_now_iso(),
+        }
+        self._write_manifest(staged_doc_id, manifest)
+        return manifest
+
+    def get_upload_path(self, staged_doc_id: str) -> Path:
+        """返回暂存源文件路径。"""
+
+        return Path(self.get_manifest(staged_doc_id)["file_path"])
+
+    def build_preview(self, staged_doc_id: str) -> dict[str, Any]:
+        """解析暂存文件并生成可预览的页面、图片与分块。"""
+
+        manifest = self.get_manifest(staged_doc_id)
+        file_path = Path(manifest["file_path"])
+        if not file_path.exists():
+            raise AppError(
+                code=ErrorCode.DOCUMENT_NOT_FOUND,
+                message="暂存文件不存在",
+                detail={"staged_doc_id": staged_doc_id},
+                status_code=404,
+            )
+
+        assets = self._extract_assets(staged_doc_id, file_path)
+        pages: list[ParsedPage] = []
+        warnings: list[str] = []
+        try:
+            pages = self._parser.parse(file_path)
+        except AppError as exc:
+            if assets:
+                warnings.append(f"未提取到正文文本，仅发现 {len(assets)} 个图片资产")
+            else:
+                raise exc
+
+        preview_blocks = self._build_preview_blocks(file_path, pages, assets)
+        chunks = self._build_staged_chunks(pages, assets)
+        if assets:
+            warnings.append("图片已作为原始资产保存；未配置 OCR 时只能按图片编号引用")
+        if not chunks:
+            warnings.append("当前预览无可入库文本分块，确认入库前需要补充 OCR 或正文")
+
+        manifest.update(
+            {
+                "status": "previewed",
+                "assets": [asdict(asset) for asset in assets],
+                "pages": [
+                    {
+                        "page_number": page.page_number,
+                        "text": page.text,
+                        "section_path": page.section_path,
+                    }
+                    for page in pages
+                ],
+                "preview_blocks": [asdict(block) for block in preview_blocks],
+                "chunks": [asdict(chunk) for chunk in chunks],
+                "warnings": warnings,
+                "updated_at": utc_now_iso(),
+            }
+        )
+        self._write_manifest(staged_doc_id, manifest)
+        return manifest
+
+    def get_manifest(self, staged_doc_id: str) -> dict[str, Any]:
+        """读取暂存 manifest。"""
+
+        path = self._manifest_path(staged_doc_id)
+        if not path.exists():
+            raise AppError(
+                code=ErrorCode.DOCUMENT_NOT_FOUND,
+                message="暂存文档不存在",
+                detail={"staged_doc_id": staged_doc_id},
+                status_code=404,
+            )
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def update_chunk(
+        self,
+        staged_doc_id: str,
+        chunk_id: str,
+        enabled: bool | None,
+        text: str | None,
+    ) -> dict[str, Any]:
+        """更新暂存分块的启用状态或文本。"""
+
+        manifest = self.get_manifest(staged_doc_id)
+        updated = False
+        for chunk in manifest.get("chunks", []):
+            if chunk.get("chunk_id") != chunk_id:
+                continue
+            if enabled is not None:
+                chunk["enabled"] = enabled
+            if text is not None:
+                normalized = text.strip()
+                if not normalized:
+                    raise AppError(
+                        code=ErrorCode.VALIDATION_FAILED,
+                        message="分块文本不能为空",
+                        detail={"chunk_id": chunk_id},
+                        status_code=400,
+                    )
+                chunk["text"] = normalized
+            updated = True
+            break
+        if not updated:
+            raise AppError(
+                code=ErrorCode.DOCUMENT_NOT_FOUND,
+                message="暂存分块不存在",
+                detail={"staged_doc_id": staged_doc_id, "chunk_id": chunk_id},
+                status_code=404,
+            )
+        manifest["updated_at"] = utc_now_iso()
+        self._write_manifest(staged_doc_id, manifest)
+        return manifest
+
+    def enabled_chunks(self, staged_doc_id: str) -> list[Chunk]:
+        """把启用的暂存分块转换为入库分块。"""
+
+        manifest = self.get_manifest(staged_doc_id)
+        chunks: list[Chunk] = []
+        for fallback_index, item in enumerate(manifest.get("chunks", [])):
+            if not item.get("enabled", True):
+                continue
+            metadata = {
+                "source_kind": item.get("source_kind", "text"),
+            }
+            for key in ("asset_id", "asset_label", "asset_url"):
+                if item.get(key):
+                    metadata[key] = item[key]
+            if item.get("asset_id"):
+                metadata["asset_type"] = "image"
+            chunks.append(
+                Chunk(
+                    chunk_index=int(item.get("chunk_index", fallback_index)),
+                    text=str(item.get("text", "")).strip(),
+                    page_start=item.get("page_start"),
+                    page_end=item.get("page_end"),
+                    section_path=item.get("section_path"),
+                    metadata=metadata,
+                )
+            )
+        return chunks
+
+    def copy_to_document_storage(self, staged_doc_id: str, target_file: Path) -> None:
+        """把暂存源文件和资产复制到正式文档目录。"""
+
+        manifest = self.get_manifest(staged_doc_id)
+        source = Path(manifest["file_path"])
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target_file)
+        asset_target = target_file.parent / target_file.stem / "assets"
+        for asset in manifest.get("assets", []):
+            staged_asset = self._staged_root(staged_doc_id) / asset["relative_path"]
+            if not staged_asset.exists():
+                continue
+            asset_target.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(staged_asset, asset_target / staged_asset.name)
+
+    def find_asset_path(self, asset_id: str) -> Path:
+        """按资产 ID 查找图片文件。"""
+
+        storage_root = Path(self._settings.storage_dir).resolve()
+        matches = list(storage_root.rglob(f"{asset_id}.*"))
+        for match in matches:
+            resolved = match.resolve()
+            if (
+                storage_root in resolved.parents
+                and resolved.is_file()
+                and self._is_valid_image_bytes(resolved.read_bytes(), self._guess_media_type(resolved.suffix))
+            ):
+                return resolved
+        raise AppError(
+            code=ErrorCode.DOCUMENT_NOT_FOUND,
+            message="图片资产不存在",
+            detail={"asset_id": asset_id},
+            status_code=404,
+        )
+
+    def _build_staged_chunks(
+        self, pages: list[ParsedPage], assets: list[StagedAsset]
+    ) -> list[StagedChunk]:
+        """构造文本分块，并为图片生成可引用的资产分块。"""
+
+        chunks: list[StagedChunk] = []
+        for chunk in self._chunker.build(pages):
+            chunks.append(
+                StagedChunk(
+                    chunk_id=new_id("pchunk"),
+                    chunk_index=len(chunks),
+                    text=chunk.text,
+                    page_start=chunk.page_start,
+                    page_end=chunk.page_end,
+                    section_path=chunk.section_path,
+                    enabled=True,
+                    source_kind="text",
+                )
+            )
+        for asset in assets:
+            chunks.append(
+                StagedChunk(
+                    chunk_id=new_id("pchunk"),
+                    chunk_index=len(chunks),
+                    text=(
+                        f"{asset.label}：文档内嵌图片 {asset.file_name}。"
+                        "该图片作为原始视觉证据保存，需查看原图确认具体内容。"
+                    ),
+                    page_start=None,
+                    page_end=None,
+                    section_path="图片资产",
+                    enabled=True,
+                    source_kind="image_asset",
+                    asset_id=asset.asset_id,
+                    asset_label=asset.label,
+                    asset_url=asset.url,
+                )
+            )
+        return chunks
+
+    def _build_preview_blocks(
+        self,
+        file_path: Path,
+        pages: list[ParsedPage],
+        assets: list[StagedAsset],
+    ) -> list[StagedPreviewBlock]:
+        """生成用于前端预览的结构块，尽量保持原文档阅读顺序。"""
+
+        if file_path.suffix.lower() == ".docx":
+            blocks = self._build_docx_preview_blocks(file_path, assets)
+            if blocks:
+                return blocks
+        return self._build_text_preview_blocks(pages)
+
+    def _build_docx_preview_blocks(
+        self, file_path: Path, assets: list[StagedAsset]
+    ) -> list[StagedPreviewBlock]:
+        """解析 DOCX 的段落、表格和图片顺序，用于预览还原。"""
+
+        try:
+            with ZipFile(file_path) as archive:
+                rels = self._read_docx_relationships(archive)
+                document_xml = archive.read("word/document.xml")
+        except (BadZipFile, KeyError):
+            return []
+        try:
+            root = ET.fromstring(document_xml)
+        except ET.ParseError:
+            return []
+        body = root.find(".//w:body", {"w": _WORD_NS})
+        if body is None:
+            return []
+
+        asset_by_name = {asset.file_name: asset for asset in assets}
+        blocks: list[StagedPreviewBlock] = []
+        for child in body:
+            if child.tag == self._word_tag("p"):
+                text = self._extract_docx_preview_paragraph_text(child)
+                level = self._extract_docx_heading_level(child)
+                if text:
+                    blocks.append(
+                        StagedPreviewBlock(
+                            block_type="heading" if level else "paragraph",
+                            order_index=len(blocks),
+                            text=text,
+                            level=level,
+                        )
+                    )
+                for target in self._extract_docx_paragraph_image_targets(child, rels):
+                    asset = asset_by_name.get(Path(target).name)
+                    if asset is None:
+                        continue
+                    blocks.append(
+                        StagedPreviewBlock(
+                            block_type="image",
+                            order_index=len(blocks),
+                            asset_id=asset.asset_id,
+                            asset_label=asset.label,
+                            asset_url=asset.url,
+                            text=asset.file_name,
+                        )
+                    )
+                continue
+            if child.tag == self._word_tag("tbl"):
+                rows = self._extract_docx_preview_table_rows(child)
+                if rows:
+                    blocks.append(
+                        StagedPreviewBlock(
+                            block_type="table",
+                            order_index=len(blocks),
+                            rows=rows,
+                        )
+                    )
+        return blocks
+
+    def _build_text_preview_blocks(self, pages: list[ParsedPage]) -> list[StagedPreviewBlock]:
+        """将普通解析页转换为文档式预览块。"""
+
+        blocks: list[StagedPreviewBlock] = []
+        for page in pages:
+            pending_rows: list[list[str]] = []
+            for raw_line in page.text.splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+                if " | " in line:
+                    pending_rows.append([cell.strip() for cell in line.split("|")])
+                    continue
+                if pending_rows:
+                    blocks.append(
+                        StagedPreviewBlock(
+                            block_type="table",
+                            order_index=len(blocks),
+                            rows=pending_rows,
+                            page_number=page.page_number,
+                            section_path=page.section_path,
+                        )
+                    )
+                    pending_rows = []
+                block_type = "heading" if self._is_preview_heading(line) else "paragraph"
+                blocks.append(
+                    StagedPreviewBlock(
+                        block_type=block_type,
+                        order_index=len(blocks),
+                        text=line,
+                        level=2 if block_type == "heading" else None,
+                        page_number=page.page_number,
+                        section_path=page.section_path,
+                    )
+                )
+            if pending_rows:
+                blocks.append(
+                    StagedPreviewBlock(
+                        block_type="table",
+                        order_index=len(blocks),
+                        rows=pending_rows,
+                        page_number=page.page_number,
+                        section_path=page.section_path,
+                    )
+                )
+        return blocks
+
+    def _extract_assets(self, staged_doc_id: str, file_path: Path) -> list[StagedAsset]:
+        """抽取 DOCX 内嵌图片资产。"""
+
+        if file_path.suffix.lower() != ".docx":
+            return []
+        try:
+            with ZipFile(file_path) as archive:
+                rels = self._read_docx_relationships(archive)
+                ordered_targets = self._read_docx_image_targets(archive, rels)
+                if not ordered_targets:
+                    ordered_targets = sorted(
+                        entry.filename
+                        for entry in archive.infolist()
+                        if entry.filename.startswith("word/media/")
+                    )
+                assets: list[StagedAsset] = []
+                asset_dir = self._staged_root(staged_doc_id) / "assets"
+                asset_dir.mkdir(parents=True, exist_ok=True)
+                seen: set[str] = set()
+                for order_index, target in enumerate(ordered_targets, start=1):
+                    if target in seen:
+                        continue
+                    seen.add(target)
+                    data = self._read_zip_member_bytes(archive, target)
+                    if data is None:
+                        continue
+                    source_name = Path(target).name
+                    suffix = Path(source_name).suffix.lower() or ".bin"
+                    media_type = self._guess_media_type(suffix)
+                    if not self._is_valid_image_bytes(data, media_type):
+                        continue
+                    asset_id = new_id("asset")
+                    file_name = f"{asset_id}{suffix}"
+                    relative_path = f"assets/{file_name}"
+                    (asset_dir / file_name).write_bytes(data)
+                    assets.append(
+                        StagedAsset(
+                            asset_id=asset_id,
+                            label=f"图 {len(assets) + 1}",
+                            file_name=source_name,
+                            media_type=media_type,
+                            relative_path=relative_path,
+                            url=f"/api/v1/assets/{asset_id}",
+                            order_index=order_index,
+                            source="docx",
+                        )
+                    )
+                return assets
+        except (BadZipFile, KeyError, ET.ParseError):
+            return []
+
+    def _read_docx_relationships(self, archive: ZipFile) -> dict[str, str]:
+        """读取 DOCX relationship，建立 rId 到媒体文件的映射。"""
+
+        try:
+            rels_xml = archive.read("word/_rels/document.xml.rels")
+        except KeyError:
+            return {}
+        root = ET.fromstring(rels_xml)
+        rels: dict[str, str] = {}
+        for node in root.findall("rel:Relationship", _REL_NS):
+            rel_id = node.attrib.get("Id")
+            target = node.attrib.get("Target", "")
+            if not rel_id or not target.startswith("media/"):
+                continue
+            rels[rel_id] = f"word/{target}"
+        return rels
+
+    def _read_docx_image_targets(self, archive: ZipFile, rels: dict[str, str]) -> list[str]:
+        """按文档出现顺序读取图片目标路径。"""
+
+        try:
+            document_xml = archive.read("word/document.xml")
+        except KeyError:
+            return []
+        root = ET.fromstring(document_xml)
+        targets: list[str] = []
+        for blip in root.findall(".//a:blip", _REL_NS):
+            rel_id = blip.attrib.get(f"{{{_REL_NS['r']}}}embed")
+            target = rels.get(rel_id or "")
+            if target:
+                targets.append(target)
+        return targets
+
+    def _extract_docx_preview_paragraph_text(self, paragraph: ET.Element) -> str:
+        """提取预览段落文本，保留换行和制表符。"""
+
+        parts: list[str] = []
+        for node in paragraph.iter():
+            if node.tag == self._word_tag("t"):
+                parts.append(node.text or "")
+            elif node.tag == self._word_tag("tab"):
+                parts.append("\t")
+            elif node.tag == self._word_tag("br"):
+                parts.append("\n")
+        return "\n".join(part.strip() for part in "".join(parts).splitlines() if part.strip()).strip()
+
+    def _extract_docx_heading_level(self, paragraph: ET.Element) -> int | None:
+        """识别 DOCX 标题级别，供预览层级展示。"""
+
+        style = paragraph.find("./w:pPr/w:pStyle", {"w": _WORD_NS})
+        style_value = style.attrib.get(f"{{{_WORD_NS}}}val", "") if style is not None else ""
+        style_lower = style_value.lower()
+        if style_lower.startswith("heading"):
+            level_text = style_lower.replace("heading", "", 1).strip()
+            if level_text.isdigit():
+                return max(1, min(6, int(level_text)))
+        return None
+
+    def _extract_docx_paragraph_image_targets(
+        self, paragraph: ET.Element, rels: dict[str, str]
+    ) -> list[str]:
+        """提取段落中的图片目标路径。"""
+
+        targets: list[str] = []
+        for blip in paragraph.findall(".//a:blip", _REL_NS):
+            rel_id = blip.attrib.get(f"{{{_REL_NS['r']}}}embed")
+            target = rels.get(rel_id or "")
+            if target and target not in targets:
+                targets.append(target)
+        return targets
+
+    def _read_zip_member_bytes(self, archive: ZipFile, target: str) -> bytes | None:
+        """读取 ZIP 条目；遇到仅 CRC 异常的 Office 图片时尝试保守恢复。"""
+
+        try:
+            return archive.read(target)
+        except KeyError:
+            return None
+        except BadZipFile:
+            try:
+                info = archive.getinfo(target)
+            except KeyError:
+                return None
+            return self._read_zip_member_ignoring_crc(archive, info)
+
+    def _read_zip_member_ignoring_crc(self, archive: ZipFile, info: ZipInfo) -> bytes | None:
+        """绕过错误 CRC 读取媒体条目，仍限制压缩格式和后续图片校验。"""
+
+        if info.flag_bits & 0x1:
+            return None
+        if info.compress_type not in {ZIP_STORED, ZIP_DEFLATED}:
+            return None
+        fp = archive.fp
+        if fp is None:
+            return None
+        current_pos = fp.tell()
+        try:
+            fp.seek(info.header_offset)
+            header = fp.read(30)
+            if len(header) != 30 or header[:4] != b"PK\x03\x04":
+                return None
+            name_length = int.from_bytes(header[26:28], "little")
+            extra_length = int.from_bytes(header[28:30], "little")
+            fp.seek(name_length + extra_length, 1)
+            raw_data = fp.read(info.compress_size)
+            if len(raw_data) != info.compress_size:
+                return None
+            if info.compress_type == ZIP_STORED:
+                return raw_data
+            return zlib.decompress(raw_data, -15)
+        except (OSError, zlib.error):
+            return None
+        finally:
+            fp.seek(current_pos)
+
+    def _extract_docx_preview_table_rows(self, table: ET.Element) -> list[list[str]]:
+        """提取预览表格行，保留列结构。"""
+
+        rows: list[list[str]] = []
+        for row in table.findall("./w:tr", {"w": _WORD_NS}):
+            values = [
+                self._extract_docx_preview_cell_text(cell)
+                for cell in row.findall("./w:tc", {"w": _WORD_NS})
+            ]
+            normalized = [value for value in values if value]
+            if normalized:
+                rows.append(normalized)
+        return rows
+
+    def _extract_docx_preview_cell_text(self, cell: ET.Element) -> str:
+        """提取预览单元格文本。"""
+
+        paragraphs = [
+            self._extract_docx_preview_paragraph_text(paragraph)
+            for paragraph in cell.findall(".//w:p", {"w": _WORD_NS})
+        ]
+        return " ".join(paragraph for paragraph in paragraphs if paragraph).strip()
+
+    def _is_preview_heading(self, text: str) -> bool:
+        """识别普通文本预览中的标题行。"""
+
+        if len(text) > 60:
+            return False
+        prefixes = ("第", "一、", "二、", "三、", "四、", "五、", "六、", "七、", "八、", "九、", "十、")
+        if text.startswith(prefixes):
+            return True
+        if text[:1].isdigit() and (". " in text or "、" in text):
+            return True
+        return False
+
+    def _word_tag(self, name: str) -> str:
+        """构造 WordprocessingML 命名空间标签。"""
+
+        return f"{{{_WORD_NS}}}{name}"
+
+    def _write_manifest(self, staged_doc_id: str, manifest: dict[str, Any]) -> None:
+        """写入 manifest。"""
+
+        self._manifest_path(staged_doc_id).write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _manifest_path(self, staged_doc_id: str) -> Path:
+        return self._staged_root(staged_doc_id) / "manifest.json"
+
+    def _staged_root(self, staged_doc_id: str) -> Path:
+        return Path(self._settings.storage_dir) / "_staged" / staged_doc_id
+
+    def _resolve_source_type(self, extension: str) -> str:
+        if extension == "pdf":
+            return "pdf"
+        if extension == "docx":
+            return "docx"
+        if extension in {"html", "htm"}:
+            return "html"
+        return "text"
+
+    def _normalize_source_uri(self, source_uri: str | None) -> str | None:
+        if source_uri is None:
+            return None
+        normalized = source_uri.strip()
+        if not normalized:
+            return None
+        parsed = urlparse(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise AppError(
+                code=ErrorCode.VALIDATION_FAILED,
+                message="文档来源链接格式不合法",
+                detail={"field": "source_uri", "reason": "must_be_http_or_https"},
+                status_code=400,
+            )
+        return normalized
+
+    def _guess_media_type(self, suffix: str) -> str:
+        if suffix in {".jpg", ".jpeg"}:
+            return "image/jpeg"
+        if suffix == ".png":
+            return "image/png"
+        if suffix == ".gif":
+            return "image/gif"
+        return "application/octet-stream"
+
+    def _is_valid_image_bytes(self, data: bytes, media_type: str) -> bool:
+        """校验常见图片格式，避免损坏图片进入引用资产。"""
+
+        if media_type == "image/png":
+            return self._is_valid_png(data)
+        if media_type == "image/jpeg":
+            return data.startswith(b"\xff\xd8") and data.endswith(b"\xff\xd9")
+        if media_type == "image/gif":
+            return data.startswith((b"GIF87a", b"GIF89a"))
+        return False
+
+    def _is_valid_png(self, data: bytes) -> bool:
+        """按 PNG chunk CRC 校验图片完整性。"""
+
+        if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+            return False
+        offset = 8
+        try:
+            while offset + 12 <= len(data):
+                length = int.from_bytes(data[offset : offset + 4], "big")
+                chunk_type = data[offset + 4 : offset + 8]
+                chunk_data_start = offset + 8
+                chunk_data_end = chunk_data_start + length
+                crc_start = chunk_data_end
+                crc_end = crc_start + 4
+                if crc_end > len(data):
+                    return False
+                expected_crc = int.from_bytes(data[crc_start:crc_end], "big")
+                actual_crc = binascii.crc32(chunk_type + data[chunk_data_start:chunk_data_end])
+                if actual_crc != expected_crc:
+                    return False
+                offset = crc_end
+                if chunk_type == b"IEND":
+                    return offset == len(data)
+        except Exception:
+            return False
+        return False

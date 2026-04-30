@@ -120,6 +120,29 @@ def test_analyze_intent_prefers_policy_query_for_admission_notice() -> None:
     assert decision.slots["topic"] == "招生与报考"
 
 
+def test_analyze_intent_prefers_policy_query_for_holiday_destination_guide() -> None:
+    state = build_dialog_state([])
+    decision = analyze_intent("假期去向登记操作指南是什么", state)
+    assert decision.intent == "policy_query"
+    assert decision.early_refusal is False
+    assert decision.slots["topic"] == "假期去向登记"
+
+
+def test_analyze_intent_uses_generic_campus_service_topic() -> None:
+    state = build_dialog_state([])
+    decision = analyze_intent("自助打印终端操作指南是什么", state)
+    assert decision.intent == "policy_query"
+    assert decision.early_refusal is False
+    assert decision.slots["topic"] == "校园事务"
+
+
+def test_analyze_intent_keeps_clarification_for_generic_short_question() -> None:
+    state = build_dialog_state([])
+    decision = analyze_intent("流程是什么", state)
+    assert decision.intent == "clarification"
+    assert decision.early_refusal is True
+
+
 def test_extract_slots_from_question_and_history() -> None:
     slots = extract_slots(
         question="本科生补考流程是什么？",

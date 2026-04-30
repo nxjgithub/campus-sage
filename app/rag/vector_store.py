@@ -34,6 +34,8 @@ class VectorStore(Protocol):
 
     def upsert(self, kb_id: str, entries: list[VectorEntry]) -> None: ...
 
+    def count_by_chunk_ids(self, kb_id: str, chunk_ids: list[str]) -> int: ...
+
     def delete_by_doc_id(self, kb_id: str, doc_id: str) -> None: ...
 
     def delete_by_kb_id(self, kb_id: str) -> None: ...
@@ -61,6 +63,16 @@ class InMemoryVectorStore:
         with self._lock:
             self._items.setdefault(kb_id, [])
             self._items[kb_id].extend(entries)
+
+    def count_by_chunk_ids(self, kb_id: str, chunk_ids: list[str]) -> int:
+        """按 chunk_id 统计已写入向量数量。"""
+
+        wanted = set(chunk_ids)
+        if not wanted:
+            return 0
+        with self._lock:
+            items = list(self._items.get(kb_id, []))
+        return sum(1 for entry in items if str(entry.payload.get("chunk_id")) in wanted)
 
     def delete_by_doc_id(self, kb_id: str, doc_id: str) -> None:
         """按 doc_id 删除向量。"""
@@ -156,6 +168,17 @@ class QdrantVectorStore:
             raise AppError(
                 code=ErrorCode.VECTOR_UPSERT_FAILED,
                 message="向量库不可用，无法写入",
+                detail={"error": str(exc)},
+                status_code=503,
+            ) from exc
+
+    def count_by_chunk_ids(self, kb_id: str, chunk_ids: list[str]) -> int:
+        try:
+            return self._run_with_retry(lambda: self._count_by_chunk_ids_impl(kb_id, chunk_ids))
+        except Exception as exc:
+            raise AppError(
+                code=ErrorCode.VECTOR_UPSERT_FAILED,
+                message="向量库不可用，无法校验写入结果",
                 detail={"error": str(exc)},
                 status_code=503,
             ) from exc
@@ -323,6 +346,24 @@ class QdrantVectorStore:
             collection_name=self._collection_name(kb_id),
             points_selector=self._rest.Filter(must=[condition]),
         )
+
+    def _count_by_chunk_ids_impl(self, kb_id: str, chunk_ids: list[str]) -> int:
+        """按本次入库的 chunk_id 精确校验向量是否写入。"""
+
+        normalized = [chunk_id for chunk_id in chunk_ids if chunk_id]
+        if not normalized or not self._collection_exists(kb_id):
+            return 0
+        condition = self._rest.FieldCondition(
+            key="chunk_id",
+            match=self._rest.MatchAny(any=normalized),
+        )
+        response = self._client.count(
+            collection_name=self._collection_name(kb_id),
+            count_filter=self._rest.Filter(must=[condition]),
+            exact=True,
+        )
+        count = getattr(response, "count", None)
+        return int(count or 0)
 
     def _delete_by_kb_id_impl(self, kb_id: str) -> None:
         """按 kb_id 删除集合。"""

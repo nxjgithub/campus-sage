@@ -14,6 +14,7 @@ from app.db.database import get_database
 from app.db.repos import RepositoryProvider
 from app.eval.service import EvalService
 from app.ingest.service import DocumentService, KnowledgeBaseService
+from app.ingest.staged import StagedDocumentService
 from app.rag.conversation_service import ConversationService
 from app.rag.chat_run_service import ChatRunService
 from app.rag.feedback_service import FeedbackService
@@ -49,6 +50,14 @@ def get_document_service(
     doc_repo = provider.document()
     job_repo = provider.ingest_job()
     return DocumentService(doc_repo, job_repo, settings)
+
+
+def get_staged_document_service(
+    settings: Settings = Depends(get_settings),
+) -> StagedDocumentService:
+    """获取暂存文档服务。"""
+
+    return StagedDocumentService(settings)
 
 
 def get_rag_service(

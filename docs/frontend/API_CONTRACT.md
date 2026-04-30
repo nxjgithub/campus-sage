@@ -62,6 +62,21 @@
   - 类型：`multipart/form-data`
   - 字段：`file`(必填), `doc_name`, `doc_version`, `published_at`, `source_uri`
   - 成功：返回 `doc + job`
+- `POST /kb/{kb_id}/documents/staged`
+  - 用途：上传到暂存区，不立即入库
+  - 成功：返回 `StagedDocument`
+- `POST /staged-documents/{staged_doc_id}/preview`
+  - 用途：生成解析预览
+  - 返回：`pages/preview_blocks/assets/chunks/warnings`
+  - `preview_blocks[]`：用于文档式预览，按原文顺序返回标题、段落、表格和图片结构块；该字段只影响前端预览，不替代最终入库分块。后端会兼容部分 DOCX 图片条目 CRC 异常但字节完整的文件，成功恢复的图片仍通过 `assets[]` 返回
+- `PATCH /staged-documents/{staged_doc_id}/chunks/{chunk_id}`
+  - 用途：入库前启用/禁用分块，或修正文本文本
+  - 请求：`enabled?: boolean`, `text?: string`
+- `POST /staged-documents/{staged_doc_id}/commit`
+  - 用途：确认预览结果并创建正式入库任务
+  - 成功：返回 `doc + job`
+- `GET /assets/{asset_id}`
+  - 用途：读取图片资产原图；前端预览时应通过统一 `apiClient` 携带认证请求 blob
 - `GET /kb/{kb_id}/documents`
   - 用途：文档列表
 - `GET /documents/{doc_id}`
@@ -127,6 +142,7 @@
   - `page_start/page_end` 或 `section_path`
   - `snippet`
   - 若存在 `source_uri`，应提供“官方来源”跳转入口
+  - 若存在 `asset_id/asset_url`，应展示图片资产编号或原图复核入口
   - 调试模式下 `score` 可能有值，生产态可为 `null`。
 
 - `POST /kb/{kb_id}/ask/stream`

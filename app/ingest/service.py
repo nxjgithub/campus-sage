@@ -15,6 +15,7 @@ from app.db.repos.interfaces import (
     KnowledgeBaseRepositoryProtocol,
 )
 from app.db.models import DocumentRecord, IngestJobRecord, KnowledgeBaseRecord
+from app.ingest.chunker import Chunk
 from app.ingest.dto import PreparedDocument
 from app.ingest.pipeline import IngestCanceled, IngestPipeline
 from app.rag.vector_store import VectorStore, get_vector_store
@@ -469,6 +470,46 @@ class DocumentService:
     def run_pipeline(self, doc_id: str, job_id: str, request_id: str | None) -> None:
         """执行入库流程并更新状态。"""
 
+        self._run_pipeline_impl(
+            doc_id=doc_id,
+            job_id=job_id,
+            request_id=request_id,
+            staged_chunks=None,
+            staged_pages_parsed=None,
+            source_type_override=None,
+        )
+
+    def run_pipeline_from_chunks(
+        self,
+        doc_id: str,
+        job_id: str,
+        request_id: str | None,
+        chunks: list[Chunk],
+        pages_parsed: int,
+        source_type: str,
+    ) -> None:
+        """使用预览确认后的分块执行入库。"""
+
+        self._run_pipeline_impl(
+            doc_id=doc_id,
+            job_id=job_id,
+            request_id=request_id,
+            staged_chunks=chunks,
+            staged_pages_parsed=pages_parsed,
+            source_type_override=source_type,
+        )
+
+    def _run_pipeline_impl(
+        self,
+        doc_id: str,
+        job_id: str,
+        request_id: str | None,
+        staged_chunks: list[Chunk] | None,
+        staged_pages_parsed: int | None,
+        source_type_override: str | None,
+    ) -> None:
+        """执行入库流程并更新状态，支持直接使用预览分块。"""
+
         document = self._doc_repo.get(doc_id)
         job = self._job_repo.get(job_id)
         if document is None or job is None:
@@ -571,18 +612,36 @@ class DocumentService:
                         "error_detail": exc.detail,
                     },
                 )
-            result = self._pipeline.run(
-                kb_id=document.kb_id,
-                doc_id=document.doc_id,
-                doc_name=document.doc_name,
-                doc_version=document.doc_version,
-                published_at=document.published_at,
-                source_uri=document.source_uri,
-                file_path=document.file_path or "",
-                source_type=self._resolve_source_type(file_path.suffix.lower().lstrip(".")),
-                cancel_checker=is_canceled,
-                progress_callback=progress_callback,
+            source_type = source_type_override or self._resolve_source_type(
+                file_path.suffix.lower().lstrip(".")
             )
+            if staged_chunks is None:
+                result = self._pipeline.run(
+                    kb_id=document.kb_id,
+                    doc_id=document.doc_id,
+                    doc_name=document.doc_name,
+                    doc_version=document.doc_version,
+                    published_at=document.published_at,
+                    source_uri=document.source_uri,
+                    file_path=document.file_path or "",
+                    source_type=source_type,
+                    cancel_checker=is_canceled,
+                    progress_callback=progress_callback,
+                )
+            else:
+                result = self._pipeline.run_chunks(
+                    kb_id=document.kb_id,
+                    doc_id=document.doc_id,
+                    doc_name=document.doc_name,
+                    doc_version=document.doc_version,
+                    published_at=document.published_at,
+                    source_uri=document.source_uri,
+                    source_type=source_type,
+                    chunks=staged_chunks,
+                    pages_parsed=staged_pages_parsed or 0,
+                    cancel_checker=is_canceled,
+                    progress_callback=progress_callback,
+                )
             refreshed_job = self._job_repo.get(job_id)
             if refreshed_job is None or refreshed_job.status == "canceled":
                 self._vector_store.delete_by_doc_id(

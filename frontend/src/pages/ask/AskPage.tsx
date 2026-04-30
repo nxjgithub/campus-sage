@@ -1840,6 +1840,11 @@ export function AskPage() {
                             <Typography.Paragraph style={{ marginBottom: 0 }}>
                               {citation.snippet}
                             </Typography.Paragraph>
+                            {citation.asset_id ? (
+                              <Tag color="blue">
+                                {citation.asset_label || "图片资产"} · 可在文档预览中查看原图
+                              </Tag>
+                            ) : null}
                             {citation.source_uri ? (
                               <Typography.Link href={citation.source_uri} target="_blank" rel="noreferrer">
                                 官方来源

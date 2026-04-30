@@ -55,6 +55,8 @@
 - Endpoint 资源命名使用名词，动作使用 HTTP 方法表达：
   - `POST /kb` 创建
   - `POST /kb/{kb_id}/documents` 上传/入库
+  - `POST /kb/{kb_id}/documents/staged` 暂存上传
+  - `POST /staged-documents/{staged_doc_id}/commit` 确认入库
   - `POST /kb/{kb_id}/ask` 问答
   - `GET /kb/{kb_id}/documents` 列表
   - `DELETE /documents/{doc_id}` 删除

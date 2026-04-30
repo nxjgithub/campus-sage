@@ -22,6 +22,10 @@ class CitationDTO(BaseModel):
     chunk_id: str = Field(description="分块ID")
     snippet: str = Field(description="引用片段")
     score: float | None = Field(default=None, description="相似度分数")
+    asset_id: str | None = Field(default=None, description="关联图片资产 ID")
+    asset_type: str | None = Field(default=None, description="关联资产类型")
+    asset_label: str | None = Field(default=None, description="关联图片展示编号")
+    asset_url: str | None = Field(default=None, description="关联图片访问地址")
 
 
 class NextStepDTO(BaseModel):

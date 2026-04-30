@@ -149,6 +149,10 @@ def _citation_from_dto(dto: CitationDTO) -> Citation:
         chunk_id=dto.chunk_id,
         snippet=dto.snippet,
         score=dto.score,
+        asset_id=dto.asset_id,
+        asset_type=dto.asset_type,
+        asset_label=dto.asset_label,
+        asset_url=dto.asset_url,
     )
 
 

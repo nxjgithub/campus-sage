@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import base64
 import io
 from pathlib import Path
-from zipfile import ZipFile
+from zipfile import BadZipFile, ZipFile
 
 from fastapi.testclient import TestClient
 import pytest
@@ -387,6 +388,98 @@ def test_upload_document_docx() -> None:
     assert payload["job"]["status"] in {"queued", "running", "succeeded", "failed"}
 
 
+def test_staged_document_preview_and_commit_docx_image() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post("/api/v1/kb", json={"name": "预览知识库"}, headers=headers).json()[
+        "kb_id"
+    ]
+    files = {
+        "file": (
+            "notice.docx",
+            _build_docx_with_image_bytes(),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    }
+    staged_response = client.post(
+        f"/api/v1/kb/{kb_id}/documents/staged", files=files, headers=headers
+    )
+    assert staged_response.status_code == 200
+    staged_id = staged_response.json()["staged_doc_id"]
+
+    preview_response = client.post(
+        f"/api/v1/staged-documents/{staged_id}/preview", headers=headers
+    )
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert preview["assets"][0]["label"] == "图 1"
+    block_types = [block["block_type"] for block in preview["preview_blocks"]]
+    assert block_types[:3] == ["heading", "paragraph", "table"]
+    assert "image" in block_types
+    table_block = next(block for block in preview["preview_blocks"] if block["block_type"] == "table")
+    assert table_block["rows"] == [["事项", "说明"], ["登录", "统一身份认证"]]
+    assert any(chunk["source_kind"] == "image_asset" for chunk in preview["chunks"])
+
+    image_chunk = next(chunk for chunk in preview["chunks"] if chunk["source_kind"] == "image_asset")
+    update_response = client.patch(
+        f"/api/v1/staged-documents/{staged_id}/chunks/{image_chunk['chunk_id']}",
+        json={"enabled": False},
+        headers=headers,
+    )
+    assert update_response.status_code == 200
+    assert any(
+        chunk["chunk_id"] == image_chunk["chunk_id"] and not chunk["enabled"]
+        for chunk in update_response.json()["chunks"]
+    )
+
+    commit_response = client.post(
+        f"/api/v1/staged-documents/{staged_id}/commit", headers=headers
+    )
+    assert commit_response.status_code == 200
+    payload = commit_response.json()
+    _wait_for_job(client, payload["job"]["job_id"], headers)
+    detail = client.get(f"/api/v1/documents/{payload['doc']['doc_id']}", headers=headers).json()
+    assert detail["status"] == "indexed"
+    assert detail["chunk_count"] >= 1
+
+
+def test_staged_document_preview_extracts_docx_image_with_bad_crc() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    kb_id = client.post("/api/v1/kb", json={"name": "坏CRC图片知识库"}, headers=headers).json()[
+        "kb_id"
+    ]
+    docx_bytes = _build_docx_with_bad_crc_jpeg_bytes()
+    with pytest.raises(BadZipFile):
+        with ZipFile(io.BytesIO(docx_bytes)) as archive:
+            archive.read("word/media/image1.jpeg")
+    files = {
+        "file": (
+            "bad-crc-image.docx",
+            docx_bytes,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    }
+    staged_response = client.post(
+        f"/api/v1/kb/{kb_id}/documents/staged", files=files, headers=headers
+    )
+    assert staged_response.status_code == 200
+    staged_id = staged_response.json()["staged_doc_id"]
+
+    preview_response = client.post(
+        f"/api/v1/staged-documents/{staged_id}/preview", headers=headers
+    )
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert len(preview["assets"]) == 1
+    assert preview["assets"][0]["file_name"] == "image1.jpeg"
+    assert any(block["block_type"] == "image" for block in preview["preview_blocks"])
+
+    image_response = client.get(preview["assets"][0]["url"], headers=headers)
+    assert image_response.status_code == 200
+    assert image_response.content.startswith(b"\xff\xd8")
+
+
 def test_upload_document_too_large() -> None:
     client = TestClient(app)
     headers = _auth_headers(client)
@@ -768,3 +861,127 @@ def _build_docx_bytes(paragraphs: list[str]) -> bytes:
 </w:document>""",
         )
     return buffer.getvalue()
+
+
+def _build_docx_with_image_bytes() -> bytes:
+    """构造包含正文和内嵌图片的 DOCX 测试文件。"""
+
+    image_bytes = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg=="
+    )
+    buffer = io.BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>""",
+        )
+        archive.writestr(
+            "_rels/.rels",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>""",
+        )
+        archive.writestr(
+            "word/_rels/document.xml.rels",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+</Relationships>""",
+        )
+        archive.writestr(
+            "word/document.xml",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>自助打印终端操作指南</w:t></w:r></w:p>
+    <w:p><w:r><w:t>微信扫码后使用统一身份认证登录。</w:t></w:r></w:p>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>事项</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>说明</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>登录</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>统一身份认证</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:r><w:drawing><a:blip r:embed="rId2"/></w:drawing></w:r></w:p>
+  </w:body>
+</w:document>""",
+        )
+        archive.writestr("word/media/image1.png", image_bytes)
+    return buffer.getvalue()
+
+
+def _build_docx_with_bad_crc_jpeg_bytes() -> bytes:
+    """构造图片 CRC 错误但图片字节完整的 DOCX。"""
+
+    image_bytes = b"\xff\xd8\xff\xe0" + (b"\x00" * 1024) + b"\xff\xd9"
+    buffer = io.BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="jpeg" ContentType="image/jpeg"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>""",
+        )
+        archive.writestr(
+            "_rels/.rels",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>""",
+        )
+        archive.writestr(
+            "word/_rels/document.xml.rels",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.jpeg"/>
+</Relationships>""",
+        )
+        archive.writestr(
+            "word/document.xml",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p><w:r><w:t>保密知识竞赛</w:t></w:r></w:p>
+    <w:p><w:r><w:drawing><a:blip r:embed="rId2"/></w:drawing></w:r></w:p>
+  </w:body>
+</w:document>""",
+        )
+        archive.writestr("word/media/image1.jpeg", image_bytes)
+    return _zero_zip_entry_crc(buffer.getvalue(), "word/media/image1.jpeg")
+
+
+def _zero_zip_entry_crc(docx_bytes: bytes, entry_name: str) -> bytes:
+    """把指定 ZIP 条目的 CRC 置零，用于模拟部分 Office 导出的异常文件。"""
+
+    data = bytearray(docx_bytes)
+    name = entry_name.encode("utf-8")
+    local_name_index = data.find(name)
+    assert local_name_index > 0
+    local_header_index = data.rfind(b"PK\x03\x04", 0, local_name_index)
+    assert local_header_index >= 0
+    data[local_header_index + 14 : local_header_index + 18] = b"\x00\x00\x00\x00"
+
+    central_name_index = data.find(name, local_name_index + len(name))
+    assert central_name_index > 0
+    central_header_index = data.rfind(b"PK\x01\x02", 0, central_name_index)
+    assert central_header_index >= 0
+    data[central_header_index + 16 : central_header_index + 20] = b"\x00\x00\x00\x00"
+    return bytes(data)

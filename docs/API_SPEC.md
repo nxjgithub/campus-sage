@@ -246,22 +246,46 @@ Content-Type：`multipart/form-data`
 ```
 说明：入库默认后台执行，返回时 `job.status=queued`，可通过 `GET /api/v1/ingest/jobs/{job_id}` 轮询进度。
 
-### 3.2 获取文档列表
+### 3.2 暂存上传并生成预览
+`POST /api/v1/kb/{kb_id}/documents/staged`
+
+Content-Type：`multipart/form-data`
+
+说明：文件只保存到暂存区，不写入向量库。成功后返回 `staged_doc_id`，前端应继续调用预览接口。
+
+`POST /api/v1/staged-documents/{staged_doc_id}/preview`
+
+说明：解析暂存文件，返回 `pages/preview_blocks/assets/chunks/warnings`。`preview_blocks` 用于前端按标题、段落、表格、图片顺序还原文档预览；DOCX 内嵌图片会保存为图片资产，并生成 `image_asset` 分块；对部分 Office 导出文件中仅 CRC 异常但图片字节完整的媒体条目，服务会尝试恢复读取并继续执行图片格式校验；未配置 OCR 时，该分块只表示“可查看原图”，不代表图片内容已被识别。
+
+`PATCH /api/v1/staged-documents/{staged_doc_id}/chunks/{chunk_id}`
+
+说明：支持更新 `enabled` 或 `text`，用于入库前剔除或修正分块。
+
+`POST /api/v1/staged-documents/{staged_doc_id}/commit`
+
+说明：确认预览结果后创建正式文档和入库任务，只对 `enabled=true` 的分块执行 embedding 与向量写入。
+若启用 `INGEST_REQUIRE_HTTP_EMBEDDING=true`，入库必须使用 HTTP Embedding；向量化失败、HTTP Embedding 未启用或写入后按本次 `chunk_id` 反查数量不一致时，任务进入 `failed`，`error_code` 为 `INGEST_EMBED_FAILED` 或 `VECTOR_UPSERT_FAILED`，前端应提示重试。
+
+`GET /api/v1/assets/{asset_id}`
+
+说明：读取暂存或正式文档中的图片资产原图，供预览和引用复核使用。
+
+### 3.3 获取文档列表
 `GET /api/v1/kb/{kb_id}/documents`
 
-### 3.3 获取文档详情
+### 3.4 获取文档详情
 `GET /api/v1/documents/{doc_id}`
 
-### 3.4 删除文档（联动删除向量）
+### 3.5 删除文档（联动删除向量）
 `DELETE /api/v1/documents/{doc_id}`
 
 说明：必须删除向量库中 `doc_id` 对应的点（按 payload 过滤删除）。
 同时删除该文档关联的入库任务（ingest_job）。
 
-### 3.5 重新入库 / 重建索引
+### 3.6 重新入库 / 重建索引
 `POST /api/v1/documents/{doc_id}/reindex`
 
-### 3.6 获取入库任务状态
+### 3.7 获取入库任务状态
 `GET /api/v1/ingest/jobs/{job_id}`
 
 响应示例：

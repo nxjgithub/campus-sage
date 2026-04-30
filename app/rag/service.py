@@ -1012,6 +1012,10 @@ class RagService:
                     chunk_id=payload.get("chunk_id"),
                     snippet=self._build_snippet(payload.get("text", "")),
                     score=hit.score if debug else None,
+                    asset_id=payload.get("asset_id"),
+                    asset_type=payload.get("asset_type"),
+                    asset_label=payload.get("asset_label"),
+                    asset_url=payload.get("asset_url"),
                 )
             )
         return citations

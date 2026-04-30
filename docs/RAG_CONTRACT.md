@@ -64,6 +64,8 @@
     - 发布日期的 UTC 秒级时间戳（可选，用于向量库范围过滤加速）
 - `created_at: str`
     - 写入时间（ISO8601）
+- `asset_id / asset_type / asset_label / asset_url`
+    - 可选，命中分块关联图片资产时写入；图片原文件不作为向量本体，只通过文本分块和 metadata 建立可引用入口
 
 ### 2.3 不允许的行为（禁止）
 - 不允许缺失 Required 字段
@@ -99,8 +101,17 @@
 - `score: float | null`
     - 可选：用于调试与可解释性（生产可关闭）
     - 建议：仅在 `debug=true` 时返回真实分数，其余场景可置为 null
+- `asset_id: str | null`
+    - 可选：命中分块关联图片资产时返回
+- `asset_type: str | null`
+    - 可选：当前支持 `image`
+- `asset_label: str | null`
+    - 可选：如 `图 1`
+- `asset_url: str | null`
+    - 可选：图片资产复核地址
 
 > 约束：Citation 必须能让用户“复核”来源。至少满足 **doc_name +（page 或 section）+ snippet** 三要素。
+> 若 citation 带 `asset_id`，前端还必须展示图片编号或入口，提示用户查看原图复核。
 
 ### 4.2 答案与引用的关联规则（强制）
 - 推荐答案中以 `[1] [2]` 标注引用编号，或在答案末尾给“要点→引用编号”映射。

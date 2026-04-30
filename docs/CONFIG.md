@@ -135,6 +135,7 @@
 - `INGEST_QUEUE_ALERT_THRESHOLD`：队列告警阈值，默认 200
 - `INGEST_QUEUE_FAILED_ALERT_THRESHOLD`：失败任务告警阈值，默认 10
 - `INGEST_QUEUE_DEAD_MAX`：死信队列保留上限，默认 200
+- `INGEST_REQUIRE_HTTP_EMBEDDING`：是否要求入库必须使用 HTTP Embedding 服务，默认 false；Docker Compose 默认 true。启用后若 `EMBEDDING_BACKEND` 不是 `http`，入库任务会失败并提示重试。
 
 ## 8. 开关与调试
 - `DEBUG_MODE`：true/false

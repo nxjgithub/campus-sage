@@ -52,6 +52,102 @@ def test_pipeline_raises_when_embedding_count_mismatch(monkeypatch: pytest.Monke
     assert not upsert_called["value"]
 
 
+def test_pipeline_requires_http_embedding_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(embedding_backend="simple", ingest_require_http_embedding=True)
+    pipeline = IngestPipeline(settings)
+
+    monkeypatch.setattr(
+        pipeline._parser,
+        "parse",
+        lambda path: [ParsedPage(page_number=1, text="第一段。")],
+    )
+    monkeypatch.setattr(
+        pipeline._chunker,
+        "build",
+        lambda pages: [
+            Chunk(
+                chunk_index=0,
+                text="第一段",
+                page_start=1,
+                page_end=1,
+                section_path=None,
+            )
+        ],
+    )
+    embed_called = {"value": False}
+
+    def _embed_texts(texts: list[str]) -> list[list[float]]:
+        del texts
+        embed_called["value"] = True
+        return [[0.1, 0.2, 0.3]]
+
+    monkeypatch.setattr(pipeline._embedder, "embed_texts", _embed_texts)
+
+    with pytest.raises(AppError) as exc_info:
+        pipeline.run(
+            kb_id="kb_1",
+            doc_id="doc_1",
+            doc_name="demo.pdf",
+            doc_version=None,
+            published_at=None,
+            source_uri=None,
+            file_path="ignored-by-monkeypatch",
+        )
+
+    assert exc_info.value.code == ErrorCode.INGEST_EMBED_FAILED
+    assert exc_info.value.detail == {"embedding_backend": "simple"}
+    assert not embed_called["value"]
+
+
+def test_pipeline_raises_when_vector_verify_count_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings()
+    pipeline = IngestPipeline(settings)
+
+    monkeypatch.setattr(
+        pipeline._parser,
+        "parse",
+        lambda path: [ParsedPage(page_number=1, text="第一段。")],
+    )
+    monkeypatch.setattr(
+        pipeline._chunker,
+        "build",
+        lambda pages: [
+            Chunk(
+                chunk_index=0,
+                text="第一段",
+                page_start=1,
+                page_end=1,
+                section_path=None,
+            )
+        ],
+    )
+    monkeypatch.setattr(pipeline._embedder, "embed_texts", lambda texts: [[0.1, 0.2, 0.3]])
+    monkeypatch.setattr(pipeline._vector_store, "upsert", lambda kb_id, entries: None)
+    monkeypatch.setattr(
+        pipeline._vector_store,
+        "count_by_chunk_ids",
+        lambda kb_id, chunk_ids: 0,
+    )
+
+    with pytest.raises(AppError) as exc_info:
+        pipeline.run(
+            kb_id="kb_1",
+            doc_id="doc_1",
+            doc_name="demo.pdf",
+            doc_version=None,
+            published_at=None,
+            source_uri=None,
+            file_path="ignored-by-monkeypatch",
+        )
+
+    assert exc_info.value.code == ErrorCode.VECTOR_UPSERT_FAILED
+    assert exc_info.value.detail == {"expected": 1, "actual": 0}
+
+
 def test_pipeline_wraps_upsert_app_error_with_source_detail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -142,6 +238,11 @@ def test_pipeline_normalizes_payload_types_before_upsert(
         captured_entries.extend(entries)
 
     monkeypatch.setattr(pipeline._vector_store, "upsert", _capture_upsert)
+    monkeypatch.setattr(
+        pipeline._vector_store,
+        "count_by_chunk_ids",
+        lambda kb_id, chunk_ids: len(chunk_ids),
+    )
 
     result = pipeline.run(
         kb_id=100,  # type: ignore[arg-type]
@@ -203,6 +304,11 @@ def test_pipeline_filters_blank_chunks_before_embedding(
         captured_entries.extend(entries)
 
     monkeypatch.setattr(pipeline._vector_store, "upsert", _capture_upsert)
+    monkeypatch.setattr(
+        pipeline._vector_store,
+        "count_by_chunk_ids",
+        lambda kb_id, chunk_ids: len(chunk_ids),
+    )
 
     result = pipeline.run(
         kb_id="kb_1",

@@ -43,6 +43,8 @@ py -3.12 -m venv .venv
 
 解析器会将 DOCX/HTML 表格转换为按行保留字段关系的文本（用 `|` 分隔单元格）。PDF 表格在 `pdfplumber` 可用且 PDF 文本层正常时会追加同样的表格行；扫描件或字体映射异常的 PDF 无法稳定还原，解析器会过滤明显的 `/Gxx` 字体映射乱码页，避免无效片段进入向量库。
 
+管理端上传页支持“暂存上传 -> 解析预览 -> 分块确认 -> 确认入库”。暂存文件位于 `data/storage/_staged/<staged_doc_id>/`，DOCX 内嵌图片会保存为图片资产并在预览页展示。未配置 OCR 时，图片资产只提供原图复核与图片编号引用；图片中的文字不会自动进入正文语义检索。
+
 ## 3.1 重要提示：禁止 pip 安装到用户目录（强制）
 有些环境的 pip 被配置为默认 `--user`，会把依赖装到：
 `C:\Users\用户名\AppData\Roaming\Python\Python312\site-packages`
@@ -431,8 +433,8 @@ docker compose down
 - Dockerfile 在 `pip install` 构建层会主动清空 `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY`，避免 Docker Desktop 残留的失效代理导致镜像构建失败。
 - 若你必须通过代理访问 PyPI，请先确认 Docker Desktop 的代理地址真实可用；否则应在 Docker Desktop 中关闭全局代理后再执行 `docker compose build`。
 - 若你必须通过代理访问 Hugging Face，请确认该代理在容器内可访问；否则保持 `tei` 的代理变量为空，让容器直接访问外网。
-- 若未配置 Embedding 服务，Compose 默认回退 `EMBEDDING_BACKEND=simple`，便于本地快速跑通。
-- 若你需要 HTTP Embedding，请在 `.env` 中显式设置 `EMBEDDING_BACKEND=http` 与可达的 `EMBEDDING_BASE_URL`。
+- Compose 中 `api/worker` 默认注入 `INGEST_REQUIRE_HTTP_EMBEDDING=true`，入库必须走 HTTP Embedding；若 TEI 不可用或配置回退到 `simple/local`，任务会失败并要求重试。
+- 若只想做不入库的本地单元调试，可在非 Compose 环境设置 `INGEST_REQUIRE_HTTP_EMBEDDING=false` 并使用 `EMBEDDING_BACKEND=simple`。
 - 若 `mysql` 或 `tei` 仍频繁出现 `Exited (137)`，优先增加 Docker Desktop 的内存配额；当前仓库默认参数只做“尽量省内存”的保底，不等于无限压缩资源占用。
 
 ## 13. 本地演示 SOP（DeepSeek + 本地 TEI）
@@ -452,6 +454,7 @@ EMBEDDING_BASE_URL=http://127.0.0.1:8080/v1
 EMBEDDING_API_PATH=/embeddings
 EMBEDDING_MODEL_NAME=BAAI/bge-small-zh-v1.5
 VECTOR_DIM=512
+INGEST_REQUIRE_HTTP_EMBEDDING=true
 
 DATABASE_URL=mysql+pymysql://csage:csage123@127.0.0.1:3307/csage?charset=utf8mb4
 INGEST_QUEUE_ENABLED=true

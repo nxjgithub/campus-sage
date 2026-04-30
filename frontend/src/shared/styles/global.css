@@ -7714,3 +7714,116 @@ body {
     background: #fcfcfa;
   }
 }
+
+.link-button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: #1d4ed8;
+  background: transparent;
+  font: inherit;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: #1e40af;
+  text-decoration: underline;
+}
+
+.asset-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.document-preview-shell {
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.document-preview-page {
+  max-width: 860px;
+  min-height: 420px;
+  margin: 0 auto;
+  padding: 40px 48px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  color: #111827;
+  font-family: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", sans-serif;
+}
+
+.document-preview-heading {
+  margin: 18px 0 10px;
+  color: #0f172a;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.document-preview-heading--1 {
+  font-size: 24px;
+  text-align: center;
+}
+
+.document-preview-heading--2 {
+  font-size: 20px;
+}
+
+.document-preview-heading--3,
+.document-preview-heading--4,
+.document-preview-heading--5,
+.document-preview-heading--6 {
+  font-size: 17px;
+}
+
+.document-preview-paragraph {
+  margin: 8px 0;
+  color: #1f2937;
+  font-size: 15px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+}
+
+.document-preview-table-wrap {
+  overflow-x: auto;
+  margin: 14px 0;
+}
+
+.document-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+  font-size: 14px;
+}
+
+.document-preview-table td {
+  min-width: 120px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  color: #1f2937;
+  line-height: 1.6;
+  vertical-align: top;
+  white-space: pre-wrap;
+}
+
+.document-preview-image {
+  margin: 18px 0;
+  text-align: center;
+}
+
+.document-preview-image .ant-image-img {
+  max-height: 360px;
+  object-fit: contain;
+}
+
+.document-preview-image figcaption {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 13px;
+}

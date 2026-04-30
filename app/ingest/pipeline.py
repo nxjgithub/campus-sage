@@ -100,6 +100,128 @@ class IngestPipeline:
         )
         self._check_cancel(cancel_checker)
 
+        embed_count, upsert_count, embed_ms, upsert_ms = self._embed_and_upsert_chunks(
+            kb_id=kb_id,
+            doc_id=doc_id,
+            doc_name=doc_name,
+            doc_version=doc_version,
+            published_at=published_at,
+            source_uri=source_uri,
+            source_type=source_type,
+            chunks=chunks,
+            pages_parsed=len(pages),
+            parse_ms=parse_ms,
+            chunk_ms=chunk_ms,
+            cancel_checker=cancel_checker,
+            progress_callback=progress_callback,
+        )
+        self._check_cancel(cancel_checker)
+        total_ms = int((time.perf_counter() - total_start) * 1000)
+
+        return IngestResult(
+            pages_parsed=len(pages),
+            chunk_count=len(chunks),
+            embed_count=embed_count,
+            upsert_count=upsert_count,
+            parse_ms=parse_ms,
+            chunk_ms=chunk_ms,
+            embed_ms=embed_ms,
+            upsert_ms=upsert_ms,
+            total_ms=total_ms,
+        )
+
+    def run_chunks(
+        self,
+        kb_id: str,
+        doc_id: str,
+        doc_name: str,
+        doc_version: str | None,
+        published_at: str | None,
+        source_uri: str | None,
+        source_type: str,
+        chunks: list[Chunk],
+        pages_parsed: int,
+        cancel_checker: Callable[[], bool] | None = None,
+        progress_callback: Callable[[str, dict[str, int]], None] | None = None,
+    ) -> IngestResult:
+        """使用预览确认后的分块执行向量化与写入。"""
+
+        self._check_cancel(cancel_checker)
+        total_start = time.perf_counter()
+        sanitized = _sanitize_chunks(chunks)
+        if not sanitized:
+            raise AppError(
+                code=ErrorCode.INGEST_CHUNK_FAILED,
+                message="确认入库时无有效分块",
+                detail={"chunk_count": 0},
+                status_code=400,
+            )
+        self._report_progress(
+            progress_callback,
+            stage="chunk",
+            pages_parsed=pages_parsed,
+            chunks_built=len(sanitized),
+            embeddings_done=0,
+            vectors_upserted=0,
+            stage_ms=0,
+        )
+        embed_count, upsert_count, embed_ms, upsert_ms = self._embed_and_upsert_chunks(
+            kb_id=kb_id,
+            doc_id=doc_id,
+            doc_name=doc_name,
+            doc_version=doc_version,
+            published_at=published_at,
+            source_uri=source_uri,
+            source_type=source_type,
+            chunks=sanitized,
+            pages_parsed=pages_parsed,
+            parse_ms=0,
+            chunk_ms=0,
+            cancel_checker=cancel_checker,
+            progress_callback=progress_callback,
+        )
+        total_ms = int((time.perf_counter() - total_start) * 1000)
+        return IngestResult(
+            pages_parsed=pages_parsed,
+            chunk_count=len(sanitized),
+            embed_count=embed_count,
+            upsert_count=upsert_count,
+            parse_ms=0,
+            chunk_ms=0,
+            embed_ms=embed_ms,
+            upsert_ms=upsert_ms,
+            total_ms=total_ms,
+        )
+
+    def _embed_and_upsert_chunks(
+        self,
+        kb_id: str,
+        doc_id: str,
+        doc_name: str,
+        doc_version: str | None,
+        published_at: str | None,
+        source_uri: str | None,
+        source_type: str,
+        chunks: list[Chunk],
+        pages_parsed: int,
+        parse_ms: int,
+        chunk_ms: int,
+        cancel_checker: Callable[[], bool] | None,
+        progress_callback: Callable[[str, dict[str, int]], None] | None,
+    ) -> tuple[int, int, int, int]:
+        """对分块执行 embedding 与向量写入，供普通入库和预览入库复用。"""
+
+        if (
+            self._settings.ingest_require_http_embedding
+            and self._settings.embedding_backend != "http"
+        ):
+            raise AppError(
+                code=ErrorCode.INGEST_EMBED_FAILED,
+                message="入库要求使用 HTTP Embedding 服务，请启用后重试",
+                detail={"embedding_backend": self._settings.embedding_backend},
+                status_code=503,
+            )
+
         texts = [chunk.text for chunk in chunks]
         embed_start = time.perf_counter()
         try:
@@ -126,7 +248,7 @@ class IngestPipeline:
         self._report_progress(
             progress_callback,
             stage="embed",
-            pages_parsed=len(pages),
+            pages_parsed=pages_parsed,
             chunks_built=len(chunks),
             embeddings_done=len(vectors),
             vectors_upserted=0,
@@ -144,7 +266,80 @@ class IngestPipeline:
                 status_code=500,
             )
 
-        entries = []
+        entries = self._build_vector_entries(
+            kb_id=kb_id,
+            doc_id=doc_id,
+            doc_name=doc_name,
+            doc_version=doc_version,
+            published_at=published_at,
+            source_uri=source_uri,
+            source_type=source_type,
+            chunks=chunks,
+            vectors=vectors,
+        )
+        upsert_start = time.perf_counter()
+        try:
+            self._vector_store.upsert(kb_id=kb_id, entries=entries)
+            verified_count = self._vector_store.count_by_chunk_ids(
+                kb_id=kb_id,
+                chunk_ids=[str(entry.payload["chunk_id"]) for entry in entries],
+            )
+        except AppError as exc:
+            raise AppError(
+                code=ErrorCode.VECTOR_UPSERT_FAILED,
+                message="向量写入失败",
+                detail={
+                    "source_code": exc.code.value,
+                    "source_message": exc.message,
+                    "source_detail": exc.detail,
+                },
+                status_code=exc.status_code,
+            ) from exc
+        except Exception as exc:
+            raise AppError(
+                code=ErrorCode.VECTOR_UPSERT_FAILED,
+                message="向量写入失败",
+                detail={"error": str(exc)},
+                status_code=500,
+            ) from exc
+        if verified_count != len(entries):
+            raise AppError(
+                code=ErrorCode.VECTOR_UPSERT_FAILED,
+                message="向量写入校验失败，请重试入库",
+                detail={"expected": len(entries), "actual": verified_count},
+                status_code=503,
+            )
+        upsert_ms = int((time.perf_counter() - upsert_start) * 1000)
+        self._report_progress(
+            progress_callback,
+            stage="upsert",
+            pages_parsed=pages_parsed,
+            chunks_built=len(chunks),
+            embeddings_done=len(vectors),
+            vectors_upserted=len(entries),
+            stage_ms=upsert_ms,
+            parse_ms=parse_ms,
+            chunk_ms=chunk_ms,
+            embed_ms=embed_ms,
+            upsert_ms=upsert_ms,
+        )
+        return len(vectors), len(entries), embed_ms, upsert_ms
+
+    def _build_vector_entries(
+        self,
+        kb_id: str,
+        doc_id: str,
+        doc_name: str,
+        doc_version: str | None,
+        published_at: str | None,
+        source_uri: str | None,
+        source_type: str,
+        chunks: list[Chunk],
+        vectors: list[list[float]],
+    ) -> list[VectorEntry]:
+        """构建向量写入 payload，并透传预览阶段产生的资产 metadata。"""
+
+        entries: list[VectorEntry] = []
         created_at = utc_now_iso()
         published_at_ts = _parse_timestamp(published_at)
         for fallback_chunk_index, (chunk, vector) in enumerate(
@@ -171,57 +366,12 @@ class IngestPipeline:
                 "tokens": None,
                 "created_at": created_at,
             }
+            if chunk.metadata:
+                for key in ("asset_id", "asset_type", "asset_label", "asset_url", "source_kind"):
+                    if key in chunk.metadata:
+                        payload[key] = chunk.metadata[key]
             entries.append(VectorEntry(vector=vector, payload=payload))
-
-        upsert_start = time.perf_counter()
-        try:
-            self._vector_store.upsert(kb_id=kb_id, entries=entries)
-        except AppError as exc:
-            raise AppError(
-                code=ErrorCode.VECTOR_UPSERT_FAILED,
-                message="向量写入失败",
-                detail={
-                    "source_code": exc.code.value,
-                    "source_message": exc.message,
-                    "source_detail": exc.detail,
-                },
-                status_code=exc.status_code,
-            ) from exc
-        except Exception as exc:
-            raise AppError(
-                code=ErrorCode.VECTOR_UPSERT_FAILED,
-                message="向量写入失败",
-                detail={"error": str(exc)},
-                status_code=500,
-            ) from exc
-        upsert_ms = int((time.perf_counter() - upsert_start) * 1000)
-        self._report_progress(
-            progress_callback,
-            stage="upsert",
-            pages_parsed=len(pages),
-            chunks_built=len(chunks),
-            embeddings_done=len(vectors),
-            vectors_upserted=len(entries),
-            stage_ms=upsert_ms,
-            parse_ms=parse_ms,
-            chunk_ms=chunk_ms,
-            embed_ms=embed_ms,
-            upsert_ms=upsert_ms,
-        )
-        self._check_cancel(cancel_checker)
-        total_ms = int((time.perf_counter() - total_start) * 1000)
-
-        return IngestResult(
-            pages_parsed=len(pages),
-            chunk_count=len(chunks),
-            embed_count=len(vectors),
-            upsert_count=len(entries),
-            parse_ms=parse_ms,
-            chunk_ms=chunk_ms,
-            embed_ms=embed_ms,
-            upsert_ms=upsert_ms,
-            total_ms=total_ms,
-        )
+        return entries
 
     def _check_cancel(self, cancel_checker: Callable[[], bool] | None) -> None:
         """检查是否需要取消入库。"""

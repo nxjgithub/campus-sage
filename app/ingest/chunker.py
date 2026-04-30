@@ -12,6 +12,7 @@ class Chunk:
     page_start: int | None
     page_end: int | None
     section_path: str | None
+    metadata: dict[str, object] | None = None
 
 
 class Chunker:

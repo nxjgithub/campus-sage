@@ -59,6 +59,18 @@ _POLICY_INTENT_KEYWORDS = (
     "政策",
     "公告",
     "通知",
+    "指南",
+    "登记",
+    "离校",
+    "留校",
+    "返校",
+    "填报",
+    "打印",
+    "证明",
+    "请假",
+    "报到",
+    "认证",
+    "缴费",
     "招生",
     "报考",
     "网报",
@@ -75,7 +87,23 @@ _TOPIC_GROUPS: dict[str, tuple[str, ...]] = {
     "奖助学金": ("奖学金", "助学金", "助学贷款"),
     "毕业审核": ("毕业", "论文", "答辩", "学位"),
     "招生与报考": ("招生", "报考", "复试", "网报", "报名", "分数线", "录取", "考点"),
+    "假期去向登记": ("假期去向", "去向登记", "离校", "留校", "返校"),
 }
+
+_CAMPUS_SERVICE_TOPIC_KEYWORDS = (
+    "登记",
+    "服务",
+    "系统",
+    "平台",
+    "指南",
+    "填报",
+    "打印",
+    "证明",
+    "请假",
+    "报到",
+    "认证",
+    "缴费",
+)
 
 _ROLE_KEYWORDS: dict[str, tuple[str, ...]] = {
     "本科生": ("本科生", "本科", "大一", "大二", "大三", "大四"),
@@ -110,6 +138,18 @@ _LIGHTWEIGHT_MODEL_WEIGHTS: dict[str, dict[str, float]] = {
         "政策": 1.0,
         "公告": 1.0,
         "通知": 1.0,
+        "指南": 0.8,
+        "登记": 0.8,
+        "离校": 0.9,
+        "留校": 0.9,
+        "返校": 0.9,
+        "填报": 0.8,
+        "打印": 0.8,
+        "证明": 0.8,
+        "请假": 0.8,
+        "报到": 0.8,
+        "认证": 0.8,
+        "缴费": 0.8,
         "招生": 1.2,
         "报考": 1.2,
         "网报": 1.1,
@@ -617,7 +657,20 @@ def _extract_topic(text: str) -> str | None:
     for topic, keywords in _TOPIC_GROUPS.items():
         if any(keyword in text for keyword in keywords):
             return topic
+    if _looks_like_campus_service_topic(text):
+        return "校园事务"
     return None
+
+
+def _looks_like_campus_service_topic(text: str) -> bool:
+    """识别未枚举但具备明确事项名的校园事务问题。"""
+
+    compact = re.sub(r"\s+", "", text)
+    if len(compact) < 6:
+        return False
+    if any(reference in compact for reference in _AMBIGUOUS_REFERENCES):
+        return False
+    return any(keyword in compact for keyword in _CAMPUS_SERVICE_TOPIC_KEYWORDS)
 
 
 def _extract_role(text: str) -> str | None:
