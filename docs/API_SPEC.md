@@ -84,6 +84,8 @@
 `chunk_id: str`  
 `snippet: str`  
 `score: float | null`
+`asset_id/asset_type/asset_label/asset_url: str | null`（兼容单图字段）
+`assets: List[{asset_id, asset_label, asset_url, media_type, file_name}]`（推荐，多图字段）
 
 > 说明：`score` 用于调试与可解释性，默认可为 null；当请求 `debug=true` 时建议返回真实分数。
 
@@ -255,7 +257,7 @@ Content-Type：`multipart/form-data`
 
 `POST /api/v1/staged-documents/{staged_doc_id}/preview`
 
-说明：解析暂存文件，返回 `pages/preview_blocks/assets/chunks/warnings`。`preview_blocks` 用于前端按标题、段落、表格、图片顺序还原文档预览；DOCX 内嵌图片会保存为图片资产，并生成 `image_asset` 分块；对部分 Office 导出文件中仅 CRC 异常但图片字节完整的媒体条目，服务会尝试恢复读取并继续执行图片格式校验；未配置 OCR 时，该分块只表示“可查看原图”，不代表图片内容已被识别。
+说明：解析暂存文件，返回 `pages/preview_blocks/assets/chunks/warnings`。`preview_blocks` 用于前端按标题、段落、表格、图片顺序还原文档预览；DOCX 内嵌图片会保存为图片资产，并优先绑定到邻近文本分块的 `assets[]`，检索命中文本分块时可同时返回原文图片；对部分 Office 导出文件中仅 CRC 异常但图片字节完整的媒体条目，服务会尝试恢复读取并继续执行图片格式校验；未配置 OCR 时，图片内容不参与语义检索，只作为原图证据复核。
 
 `PATCH /api/v1/staged-documents/{staged_doc_id}/chunks/{chunk_id}`
 

@@ -71,7 +71,7 @@ export function CitationAssetButton({ assetUrl, label }: CitationAssetButtonProp
   );
 }
 
-function normalizeAssetPath(assetUrl: string) {
+export function normalizeAssetPath(assetUrl: string) {
   if (assetUrl.startsWith("/api/v1")) {
     return assetUrl.replace("/api/v1", "") || "/";
   }

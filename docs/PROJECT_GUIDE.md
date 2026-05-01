@@ -99,8 +99,8 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 ## 5. 开发命令参考
 ### 5.1 后端
 - 安装依赖：`.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
-- 启动依赖：`docker compose up -d mysql qdrant redis`
-- 容器化启动后端 + Worker：`docker compose up -d api worker mysql qdrant redis`
+- 启动依赖：`docker compose up -d mysql qdrant redis minio`
+- 容器化启动后端 + Worker：`docker compose up -d api worker mysql qdrant redis minio`
 - 启动 API：`.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
 - 代码检查：`.\.venv\Scripts\python.exe -m ruff check .`
 - 单元测试：`.\.venv\Scripts\python.exe -m pytest -q`
@@ -244,6 +244,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 新增 `scripts/bootstrap_suse_public_kb.py`，可对公开抓取结果做二次清洗、列表页详情补抓、可入库格式筛选，并自动创建知识库完成批量导入。
 - 文档暂存预览新增 `preview_blocks`，前端可按标题、段落、表格、图片顺序还原文档阅读效果，入库分块仍独立可控；DOCX 图片条目仅 CRC 异常但字节完整时，后端会尝试恢复读取并继续做图片格式校验。
 - 图片资产支持 `local` 与 S3/MinIO 对象存储两种后端；问答引用带图片资产时，前端可通过鉴权接口打开原图复核。
+- 图文文档入库时，DOCX 图片会优先绑定到邻近文本分块；检索命中文本证据后，问答页可在 Markdown 回复中直接展示关联图片。
 - `dialog_policy` 已扩展招生/报考与校园事务词域（如“招生/报考/网报/复试/分数线/考点/假期去向登记/离校/留校/返校/自助打印/证明/请假/缴费”），多轮场景下可减少该类问题被误判为澄清拒答。
 - `crawl_suse_public_corpus.py` 已补充标准输出 UTF-8 自适应，降低 Windows 控制台因编码导致的脚本收尾报错风险。
 

@@ -57,6 +57,16 @@ class StagedAssetResponse(BaseModel):
     source: str = Field(description="资产来源")
 
 
+class StagedAssetRefResponse(BaseModel):
+    """暂存分块关联的图片资产引用。"""
+
+    asset_id: str = Field(description="图片资产 ID")
+    asset_label: str = Field(description="图片展示编号")
+    asset_url: str = Field(description="图片访问地址")
+    media_type: str | None = Field(default=None, description="媒体类型")
+    file_name: str | None = Field(default=None, description="原始图片文件名")
+
+
 class StagedPageResponse(BaseModel):
     """暂存解析页面响应。"""
 
@@ -79,6 +89,10 @@ class StagedChunkResponse(BaseModel):
     asset_id: str | None = Field(default=None, description="关联图片资产 ID")
     asset_label: str | None = Field(default=None, description="关联图片展示编号")
     asset_url: str | None = Field(default=None, description="关联图片访问地址")
+    assets: list[StagedAssetRefResponse] | None = Field(
+        default=None,
+        description="关联图片资产列表",
+    )
 
 
 class StagedPreviewBlockResponse(BaseModel):

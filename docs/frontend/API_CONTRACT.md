@@ -68,7 +68,8 @@
 - `POST /staged-documents/{staged_doc_id}/preview`
   - 用途：生成解析预览
   - 返回：`pages/preview_blocks/assets/chunks/warnings`
-  - `preview_blocks[]`：用于文档式预览，按原文顺序返回标题、段落、表格和图片结构块；该字段只影响前端预览，不替代最终入库分块。后端会兼容部分 DOCX 图片条目 CRC 异常但字节完整的文件，成功恢复的图片仍通过 `assets[]` 返回
+  - `preview_blocks[]`：用于文档式预览，按原文顺序返回标题、段落、表格和图片结构块；该字段只影响前端预览，不替代最终入库分块。后端会兼容部分 DOCX 图片条目 CRC 异常但字节完整的文件，成功恢复的图片仍通过文档级 `assets[]` 返回
+  - `chunks[].assets[]`：文本分块关联的图片资产列表；图片不做 OCR 时，仍可随命中的文本证据返回
 - `PATCH /staged-documents/{staged_doc_id}/chunks/{chunk_id}`
   - 用途：入库前启用/禁用分块，或修正文本文本
   - 请求：`enabled?: boolean`, `text?: string`
@@ -114,6 +115,7 @@
     - `message_id`
     - `timing`
   - 行为补充：
+    - 问答页使用流式接口渲染助手回复，增量 token 到达后更新 Markdown 聊天框
     - 服务端会在上下文中附证据编号（`证据1/证据2...`）
     - 模型回答被要求输出引用标记（`[1][2]`）
     - 若模型未输出引用标记，服务端会自动补全参考编号
@@ -143,7 +145,8 @@
   - `page_start/page_end` 或 `section_path`
   - `snippet`
   - 若存在 `source_uri`，应提供“官方来源”跳转入口
-  - 若存在 `asset_id/asset_url`，应展示图片资产编号和“查看原图”入口，并通过 `asset_url` 拉取图片 blob 后预览
+  - 若存在 `assets[]`，应在答案引用位置直接渲染图片缩略图，并提供打开原图能力
+  - 若只存在旧字段 `asset_id/asset_url`，应兼容展示图片资产编号和“查看原图”入口，并通过 `asset_url` 拉取图片 blob 后预览
   - 调试模式下 `score` 可能有值，生产态可为 `null`。
 
 - `POST /kb/{kb_id}/ask/stream`

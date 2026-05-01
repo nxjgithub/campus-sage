@@ -66,6 +66,8 @@
     - 写入时间（ISO8601）
 - `asset_id / asset_type / asset_label / asset_url`
     - 可选，命中分块关联图片资产时写入；图片原文件不作为向量本体，只通过文本分块和 metadata 建立可引用入口。`asset_url` 应指向后端鉴权代理接口，不要求暴露对象存储真实地址
+- `assets: List[{asset_id, asset_label, asset_url, media_type, file_name}]`
+    - 可选，推荐字段。用于表示一个文本分块关联的多张原文图片；检索仍基于 `text`，命中文本分块时把关联图片作为原图证据返回
 
 ### 2.3 不允许的行为（禁止）
 - 不允许缺失 Required 字段
@@ -109,9 +111,12 @@
     - 可选：如 `图 1`
 - `asset_url: str | null`
     - 可选：图片资产复核地址
+- `assets: List[CitationAsset]`
+    - 可选：引用关联的图片资产列表。前端应优先读取该字段，并兼容旧的单图字段
 
 > 约束：Citation 必须能让用户“复核”来源。至少满足 **doc_name +（page 或 section）+ snippet** 三要素。
 > 若 citation 带 `asset_id`，前端还必须展示图片编号或入口，提示用户查看原图复核。
+> 若 citation 带 `assets[]`，前端可在答案引用位置直接渲染图片缩略图，并保留打开原图能力。
 
 ### 4.2 答案与引用的关联规则（强制）
 - 推荐答案中以 `[1] [2]` 标注引用编号，或在答案末尾给“要点→引用编号”映射。

@@ -418,9 +418,8 @@ def test_staged_document_preview_and_commit_docx_image() -> None:
     assert "image" in block_types
     table_block = next(block for block in preview["preview_blocks"] if block["block_type"] == "table")
     assert table_block["rows"] == [["事项", "说明"], ["登录", "统一身份认证"]]
-    assert any(chunk["source_kind"] == "image_asset" for chunk in preview["chunks"])
-
-    image_chunk = next(chunk for chunk in preview["chunks"] if chunk["source_kind"] == "image_asset")
+    image_chunk = next(chunk for chunk in preview["chunks"] if chunk.get("assets"))
+    assert image_chunk["assets"][0]["asset_label"] == "图 1"
     update_response = client.patch(
         f"/api/v1/staged-documents/{staged_id}/chunks/{image_chunk['chunk_id']}",
         json={"enabled": False},
@@ -474,6 +473,7 @@ def test_staged_document_preview_extracts_docx_image_with_bad_crc() -> None:
     assert len(preview["assets"]) == 1
     assert preview["assets"][0]["file_name"] == "image1.jpeg"
     assert any(block["block_type"] == "image" for block in preview["preview_blocks"])
+    assert any(chunk.get("assets") for chunk in preview["chunks"])
 
     image_response = client.get(preview["assets"][0]["url"], headers=headers)
     assert image_response.status_code == 200

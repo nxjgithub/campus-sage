@@ -37,6 +37,15 @@ export interface CitationItem {
   asset_type?: string | null;
   asset_label?: string | null;
   asset_url?: string | null;
+  assets?: CitationAssetItem[] | null;
+}
+
+export interface CitationAssetItem {
+  asset_id: string;
+  asset_label?: string | null;
+  asset_url: string;
+  media_type?: string | null;
+  file_name?: string | null;
 }
 
 export type NextStepAction =

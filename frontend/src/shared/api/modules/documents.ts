@@ -81,6 +81,13 @@ export interface StagedChunk {
   asset_id?: string | null;
   asset_label?: string | null;
   asset_url?: string | null;
+  assets?: Array<{
+    asset_id: string;
+    asset_label?: string | null;
+    asset_url: string;
+    media_type?: string | null;
+    file_name?: string | null;
+  }> | null;
 }
 
 export interface StagedPreviewBlock {

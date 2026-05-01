@@ -136,6 +136,14 @@ def test_analyze_intent_uses_generic_campus_service_topic() -> None:
     assert decision.slots["topic"] == "校园事务"
 
 
+def test_analyze_intent_prefers_retrieval_for_specific_activity_guide() -> None:
+    state = build_dialog_state([])
+    decision = analyze_intent("2025年国家安全知识暨保密知识竞赛的参与操作步骤是什么？", state)
+    assert decision.intent == "policy_query"
+    assert decision.early_refusal is False
+    assert decision.slots["topic"] == "校园事务"
+
+
 def test_analyze_intent_keeps_clarification_for_generic_short_question() -> None:
     state = build_dialog_state([])
     decision = analyze_intent("流程是什么", state)

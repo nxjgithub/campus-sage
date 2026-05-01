@@ -47,7 +47,7 @@ py -3.12 -m venv .venv
 
 如需把图片资产切换到 MinIO/S3 兼容对象存储：
 ```powershell
-docker compose --profile object-storage up -d minio minio-init
+docker compose up -d minio minio-init
 ```
 随后在 `.env` 中设置：
 ```dotenv
@@ -420,7 +420,7 @@ Copy-Item .env.example .env
 
 2) 启动 API + Worker + 依赖服务：
 ```powershell
-docker compose up -d api worker qdrant redis
+docker compose up -d api worker mysql qdrant redis tei minio
 ```
 
 3) 查看服务状态与日志：
@@ -485,7 +485,7 @@ QDRANT_URL=http://127.0.0.1:6333
 ### 13.2 启动服务
 1. 启动容器：
 ```powershell
-docker compose up -d mysql qdrant redis tei api worker
+docker compose up -d mysql qdrant redis tei minio api worker
 ```
 2. 确认服务状态：
 ```powershell
@@ -496,6 +496,7 @@ docker ps
 - `campus-sage-api-1`
 - `campus-sage-worker-1`
 - `campus-sage-tei-1`
+- `campus-sage-minio-1`
 - `campus-sage-qdrant-1`
 - `campus-sage-redis-1`
 

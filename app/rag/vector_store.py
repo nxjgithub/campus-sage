@@ -679,6 +679,8 @@ def _validate_payload(payload: dict[str, Any]) -> None:
     text = payload.get("text")
     if not isinstance(text, str) or not text.strip():
         _raise_payload_type_error("text", text)
+    if "assets" in payload and not _is_asset_list(payload.get("assets")):
+        _raise_payload_type_error("assets", payload.get("assets"))
 
 
 def _raise_payload_type_error(field: str, value: object) -> None:
@@ -713,6 +715,29 @@ def _is_int(value: object) -> bool:
 
 def _is_optional_int(value: object) -> bool:
     return value is None or _is_int(value)
+
+
+def _is_asset_list(value: object) -> bool:
+    """校验图片资产引用列表的基本结构。"""
+
+    if value is None:
+        return True
+    if not isinstance(value, list):
+        return False
+    for item in value:
+        if not isinstance(item, dict):
+            return False
+        if not _is_non_empty_str(item.get("asset_id")):
+            return False
+        if not _is_non_empty_str(item.get("asset_url")):
+            return False
+        if "asset_label" in item and not _is_optional_str(item.get("asset_label")):
+            return False
+        if "media_type" in item and not _is_optional_str(item.get("media_type")):
+            return False
+        if "file_name" in item and not _is_optional_str(item.get("file_name")):
+            return False
+    return True
 
 
 def _parse_timestamp(value: object) -> int | None:

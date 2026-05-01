@@ -24,7 +24,7 @@ from app.rag.dialog_policy import (
     build_dialog_state,
     build_freshness_notice,
 )
-from app.rag.dto import AskResult, CitationDTO, NextStepDTO
+from app.rag.dto import AskResult, CitationAssetDTO, CitationDTO, NextStepDTO
 from app.rag.embedding import Embedder, get_embedder
 from app.rag.llm_client import VllmClient
 from app.rag.retrieval_policy import resolve_search_topk
@@ -998,6 +998,8 @@ class RagService:
         citations = []
         for index, hit in enumerate(hits, start=1):
             payload = hit.payload
+            assets = self._build_citation_assets(payload)
+            first_asset = assets[0] if assets else None
             citations.append(
                 CitationDTO(
                     citation_id=index,
@@ -1012,13 +1014,64 @@ class RagService:
                     chunk_id=payload.get("chunk_id"),
                     snippet=self._build_snippet(payload.get("text", "")),
                     score=hit.score if debug else None,
-                    asset_id=payload.get("asset_id"),
+                    asset_id=(
+                        first_asset.asset_id if first_asset else payload.get("asset_id")
+                    ),
                     asset_type=payload.get("asset_type"),
-                    asset_label=payload.get("asset_label"),
-                    asset_url=payload.get("asset_url"),
+                    asset_label=(
+                        first_asset.asset_label if first_asset else payload.get("asset_label")
+                    ),
+                    asset_url=(
+                        first_asset.asset_url if first_asset else payload.get("asset_url")
+                    ),
+                    assets=assets,
                 )
             )
         return citations
+
+    def _build_citation_assets(self, payload: dict[str, object]) -> list[CitationAssetDTO]:
+        """从向量 payload 中提取引用关联的图片资产列表。"""
+
+        raw_assets = payload.get("assets")
+        assets: list[CitationAssetDTO] = []
+        if isinstance(raw_assets, list):
+            for item in raw_assets:
+                if not isinstance(item, dict):
+                    continue
+                asset_id = item.get("asset_id")
+                asset_url = item.get("asset_url")
+                if not isinstance(asset_id, str) or not isinstance(asset_url, str):
+                    continue
+                assets.append(
+                    CitationAssetDTO(
+                        asset_id=asset_id,
+                        asset_label=str(
+                            item.get("asset_label") or item.get("label") or "图片"
+                        ),
+                        asset_url=asset_url,
+                        media_type=(
+                            str(item.get("media_type"))
+                            if item.get("media_type") is not None
+                            else None
+                        ),
+                        file_name=(
+                            str(item.get("file_name"))
+                            if item.get("file_name") is not None
+                            else None
+                        ),
+                    )
+                )
+        if not assets and payload.get("asset_id") and payload.get("asset_url"):
+            assets.append(
+                CitationAssetDTO(
+                    asset_id=str(payload.get("asset_id")),
+                    asset_label=str(payload.get("asset_label") or "图片"),
+                    asset_url=str(payload.get("asset_url")),
+                    media_type=None,
+                    file_name=None,
+                )
+            )
+        return assets
 
     def _build_snippet(self, text: str) -> str:
         """生成引用片段。"""

@@ -105,6 +105,23 @@ _CAMPUS_SERVICE_TOPIC_KEYWORDS = (
     "缴费",
 )
 
+_SPECIFIC_SUBJECT_KEYWORDS = (
+    "竞赛",
+    "活动",
+    "系统",
+    "平台",
+    "终端",
+    "指南",
+    "通知",
+    "公告",
+    "入口",
+    "网址",
+    "公众号",
+    "自助",
+    "登记",
+    "打印",
+)
+
 _ROLE_KEYWORDS: dict[str, tuple[str, ...]] = {
     "本科生": ("本科生", "本科", "大一", "大二", "大三", "大四"),
     "研究生": ("研究生", "硕士", "博士"),
@@ -388,9 +405,12 @@ def _score_intents(text: str, slots: dict[str, str], state: DialogState) -> list
     has_topic = "topic" in slots
     mentions_policy = any(keyword in text for keyword in _POLICY_INTENT_KEYWORDS)
     has_ambiguous_reference = any(keyword in text for keyword in _AMBIGUOUS_REFERENCES)
+    has_specific_subject = _has_specific_subject(text)
 
     if has_topic:
         rule_scores["policy_query"] += 1.4
+    elif has_specific_subject and mentions_policy:
+        rule_scores["policy_query"] += 1.0
     if mentions_policy:
         rule_scores["policy_query"] += 1.0
     if text.endswith(("吗", "么", "？", "?")):
@@ -511,11 +531,17 @@ def _need_clarification(
     mentions_policy = any(keyword in text for keyword in _POLICY_INTENT_KEYWORDS)
     has_ambiguous_reference = any(keyword in text for keyword in _AMBIGUOUS_REFERENCES)
     has_followup_detail = _has_followup_detail(text, current_slots)
+    has_specific_subject = _has_specific_subject(text)
     if has_ambiguous_reference and not has_topic and not state.last_user_question:
         return True
     if has_ambiguous_reference and not has_topic and not has_followup_detail:
         return True
-    if mentions_policy and not has_topic and not (has_history_topic and has_followup_detail):
+    if (
+        mentions_policy
+        and not has_topic
+        and not has_specific_subject
+        and not (has_history_topic and has_followup_detail)
+    ):
         return True
     if state.pending_clarification and not has_topic and len(text) < 16:
         return True
@@ -659,6 +685,8 @@ def _extract_topic(text: str) -> str | None:
             return topic
     if _looks_like_campus_service_topic(text):
         return "校园事务"
+    if _has_specific_subject(text) and any(keyword in text for keyword in _POLICY_INTENT_KEYWORDS):
+        return "校园事务"
     return None
 
 
@@ -671,6 +699,17 @@ def _looks_like_campus_service_topic(text: str) -> bool:
     if any(reference in compact for reference in _AMBIGUOUS_REFERENCES):
         return False
     return any(keyword in compact for keyword in _CAMPUS_SERVICE_TOPIC_KEYWORDS)
+
+
+def _has_specific_subject(text: str) -> bool:
+    """判断问题是否已经包含可检索的具体事项名。"""
+
+    compact = re.sub(r"\s+", "", text)
+    if len(compact) < 10:
+        return False
+    if re.search(r"\d{2,}", compact):
+        return True
+    return any(keyword in compact for keyword in _SPECIFIC_SUBJECT_KEYWORDS)
 
 
 def _extract_role(text: str) -> str | None:

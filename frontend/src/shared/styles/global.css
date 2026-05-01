@@ -686,6 +686,83 @@ body {
   outline: none;
 }
 
+.citation-marker {
+  height: auto;
+  padding: 0 2px;
+  vertical-align: baseline;
+}
+
+.markdown-message {
+  display: block;
+}
+
+.markdown-message p {
+  margin: 0 0 8px;
+}
+
+.markdown-message p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-message ul,
+.markdown-message ol {
+  margin: 6px 0 8px;
+  padding-left: 22px;
+}
+
+.markdown-message table {
+  width: 100%;
+  margin: 8px 0;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.markdown-message th,
+.markdown-message td {
+  padding: 6px 8px;
+  border: 1px solid var(--line-soft);
+}
+
+.markdown-message code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #f3f4f6;
+}
+
+.markdown-message__citation {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  vertical-align: baseline;
+}
+
+.markdown-message__assets {
+  display: flex;
+  width: 100%;
+  margin: 8px 0 10px;
+}
+
+.markdown-message__asset {
+  max-width: min(100%, 360px);
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.markdown-message__asset .ant-image-img {
+  max-height: 240px;
+  object-fit: contain;
+}
+
+.markdown-message__asset figcaption {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
 .citation-card {
   border-color: var(--line-soft);
   transition: border-color 180ms ease, box-shadow 180ms ease;
@@ -2338,7 +2415,6 @@ body {
 
 .chat-bubble__content {
   margin: 10px 0 !important;
-  white-space: pre-wrap;
   color: #111827;
   line-height: 1.72;
 }
@@ -2625,7 +2701,6 @@ body {
 
 .conversation-message__content {
   margin-bottom: 0 !important;
-  white-space: pre-wrap;
 }
 
 .monitor-health-row {

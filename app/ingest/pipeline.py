@@ -367,7 +367,14 @@ class IngestPipeline:
                 "created_at": created_at,
             }
             if chunk.metadata:
-                for key in ("asset_id", "asset_type", "asset_label", "asset_url", "source_kind"):
+                for key in (
+                    "asset_id",
+                    "asset_type",
+                    "asset_label",
+                    "asset_url",
+                    "assets",
+                    "source_kind",
+                ):
                     if key in chunk.metadata:
                         payload[key] = chunk.metadata[key]
             entries.append(VectorEntry(vector=vector, payload=payload))

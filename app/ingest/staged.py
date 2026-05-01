@@ -44,6 +44,17 @@ class StagedAsset:
 
 
 @dataclass(slots=True)
+class StagedAssetRef:
+    """文本分块关联的图片资产引用。"""
+
+    asset_id: str
+    asset_label: str
+    asset_url: str
+    media_type: str
+    file_name: str
+
+
+@dataclass(slots=True)
 class StagedChunk:
     """预览阶段可编辑/禁用的分块。"""
 
@@ -58,6 +69,7 @@ class StagedChunk:
     asset_id: str | None = None
     asset_label: str | None = None
     asset_url: str | None = None
+    assets: list[dict[str, str]] | None = None
 
 
 @dataclass(slots=True)
@@ -162,7 +174,7 @@ class StagedDocumentService:
                 raise exc
 
         preview_blocks = self._build_preview_blocks(file_path, pages, assets)
-        chunks = self._build_staged_chunks(pages, assets)
+        chunks = self._build_staged_chunks(pages, assets, preview_blocks)
         if assets:
             warnings.append("图片已作为原始资产保存；未配置 OCR 时只能按图片编号引用")
         if not chunks:
@@ -257,6 +269,14 @@ class StagedDocumentService:
                     metadata[key] = item[key]
             if item.get("asset_id"):
                 metadata["asset_type"] = "image"
+            attached_assets = self._normalize_chunk_assets(item.get("assets"))
+            if attached_assets:
+                metadata["assets"] = attached_assets
+                first_asset = attached_assets[0]
+                metadata.setdefault("asset_id", first_asset["asset_id"])
+                metadata.setdefault("asset_label", first_asset["asset_label"])
+                metadata.setdefault("asset_url", first_asset["asset_url"])
+                metadata.setdefault("asset_type", "image")
             chunks.append(
                 Chunk(
                     chunk_index=int(item.get("chunk_index", fallback_index)),
@@ -329,9 +349,17 @@ class StagedDocumentService:
         )
 
     def _build_staged_chunks(
-        self, pages: list[ParsedPage], assets: list[StagedAsset]
+        self,
+        pages: list[ParsedPage],
+        assets: list[StagedAsset],
+        preview_blocks: list[StagedPreviewBlock] | None = None,
     ) -> list[StagedChunk]:
         """构造文本分块，并为图片生成可引用的资产分块。"""
+
+        if preview_blocks:
+            preview_chunks = self._build_preview_ordered_chunks(preview_blocks, assets)
+            if preview_chunks:
+                return preview_chunks
 
         chunks: list[StagedChunk] = []
         for chunk in self._chunker.build(pages):
@@ -364,9 +392,170 @@ class StagedDocumentService:
                     asset_id=asset.asset_id,
                     asset_label=asset.label,
                     asset_url=asset.url,
+                    assets=[asdict(self._asset_ref(asset))],
                 )
             )
         return chunks
+
+    def _build_preview_ordered_chunks(
+        self,
+        preview_blocks: list[StagedPreviewBlock],
+        assets: list[StagedAsset],
+    ) -> list[StagedChunk]:
+        """按预览结构建立文本分块与邻近图片的引用关系。"""
+
+        asset_by_id = {asset.asset_id: asset for asset in assets}
+        chunks: list[StagedChunk] = []
+        pending_assets: list[dict[str, str]] = []
+        current_heading: str | None = None
+
+        for block in preview_blocks:
+            if block.block_type == "heading" and block.text:
+                current_heading = block.text.strip() or current_heading
+            if block.block_type in {"heading", "paragraph", "table"}:
+                text = self._preview_block_text(block)
+                if text:
+                    block_chunks = self._split_preview_block_text(
+                        text=text,
+                        section_path=block.section_path or current_heading,
+                        pending_assets=pending_assets,
+                        start_index=len(chunks),
+                    )
+                    chunks.extend(block_chunks)
+                    pending_assets = []
+                continue
+            if block.block_type == "image" and block.asset_id:
+                asset = asset_by_id.get(block.asset_id)
+                if asset is None:
+                    continue
+                asset_ref = asdict(self._asset_ref(asset))
+                if chunks:
+                    self._append_asset_to_chunk(chunks[-1], asset_ref)
+                else:
+                    pending_assets.append(asset_ref)
+
+        if pending_assets:
+            chunks.extend(self._image_asset_chunks(pending_assets, len(chunks)))
+        return chunks
+
+    def _split_preview_block_text(
+        self,
+        text: str,
+        section_path: str | None,
+        pending_assets: list[dict[str, str]],
+        start_index: int,
+    ) -> list[StagedChunk]:
+        """切分单个预览文本块，并把前置图片绑定到首个文本分块。"""
+
+        parsed_chunks = self._chunker.build(
+            [ParsedPage(page_number=None, text=text, section_path=section_path)]
+        )
+        result: list[StagedChunk] = []
+        for offset, chunk in enumerate(parsed_chunks):
+            attached_assets = pending_assets if offset == 0 and pending_assets else None
+            result.append(
+                StagedChunk(
+                    chunk_id=new_id("pchunk"),
+                    chunk_index=start_index + offset,
+                    text=chunk.text,
+                    page_start=chunk.page_start,
+                    page_end=chunk.page_end,
+                    section_path=chunk.section_path,
+                    enabled=True,
+                    source_kind="text",
+                    assets=attached_assets,
+                    asset_id=attached_assets[0]["asset_id"] if attached_assets else None,
+                    asset_label=(
+                        attached_assets[0]["asset_label"] if attached_assets else None
+                    ),
+                    asset_url=attached_assets[0]["asset_url"] if attached_assets else None,
+                )
+            )
+        return result
+
+    def _image_asset_chunks(
+        self, asset_refs: list[dict[str, str]], start_index: int
+    ) -> list[StagedChunk]:
+        """为没有邻近正文的图片生成兜底分块。"""
+
+        chunks: list[StagedChunk] = []
+        for asset_ref in asset_refs:
+            chunks.append(
+                StagedChunk(
+                    chunk_id=new_id("pchunk"),
+                    chunk_index=start_index + len(chunks),
+                    text=(
+                        f"{asset_ref['asset_label']}：文档内嵌图片 {asset_ref['file_name']}。"
+                        "该图片作为原始视觉证据保存，需查看原图确认具体内容。"
+                    ),
+                    page_start=None,
+                    page_end=None,
+                    section_path="图片资产",
+                    enabled=True,
+                    source_kind="image_asset",
+                    asset_id=asset_ref["asset_id"],
+                    asset_label=asset_ref["asset_label"],
+                    asset_url=asset_ref["asset_url"],
+                    assets=[asset_ref],
+                )
+            )
+        return chunks
+
+    def _append_asset_to_chunk(self, chunk: StagedChunk, asset_ref: dict[str, str]) -> None:
+        """把图片引用追加到已存在的文本分块。"""
+
+        existing = list(chunk.assets or [])
+        if any(item.get("asset_id") == asset_ref["asset_id"] for item in existing):
+            return
+        existing.append(asset_ref)
+        chunk.assets = existing
+        chunk.asset_id = chunk.asset_id or asset_ref["asset_id"]
+        chunk.asset_label = chunk.asset_label or asset_ref["asset_label"]
+        chunk.asset_url = chunk.asset_url or asset_ref["asset_url"]
+
+    def _preview_block_text(self, block: StagedPreviewBlock) -> str:
+        """把预览结构块转换为可向量化的文本。"""
+
+        if block.block_type in {"heading", "paragraph"}:
+            return (block.text or "").strip()
+        if block.block_type == "table" and block.rows:
+            return "\n".join(" | ".join(cell.strip() for cell in row) for row in block.rows)
+        return ""
+
+    def _asset_ref(self, asset: StagedAsset) -> StagedAssetRef:
+        """构造文本分块内的图片引用快照。"""
+
+        return StagedAssetRef(
+            asset_id=asset.asset_id,
+            asset_label=asset.label,
+            asset_url=asset.url,
+            media_type=asset.media_type,
+            file_name=asset.file_name,
+        )
+
+    def _normalize_chunk_assets(self, value: object) -> list[dict[str, str]]:
+        """归一化暂存 manifest 中的图片引用列表。"""
+
+        if not isinstance(value, list):
+            return []
+        normalized: list[dict[str, str]] = []
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            asset_id = item.get("asset_id")
+            asset_url = item.get("asset_url")
+            if not isinstance(asset_id, str) or not isinstance(asset_url, str):
+                continue
+            normalized.append(
+                {
+                    "asset_id": asset_id,
+                    "asset_label": str(item.get("asset_label") or item.get("label") or "图片"),
+                    "asset_url": asset_url,
+                    "media_type": str(item.get("media_type") or "image/jpeg"),
+                    "file_name": str(item.get("file_name") or asset_id),
+                }
+            )
+        return normalized
 
     def _build_preview_blocks(
         self,

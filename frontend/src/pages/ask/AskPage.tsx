@@ -52,11 +52,12 @@ import { useAuth } from "../../shared/auth/auth";
 import { getAccessToken } from "../../shared/auth/token";
 import { FeedbackAction } from "../../shared/components/FeedbackAction";
 import { CitationAssetButton } from "../../shared/components/CitationAssetButton";
+import { MarkdownMessage } from "../../shared/components/MarkdownMessage";
 import { PortalSwitch } from "../../shared/components/PortalSwitch";
 import { RefusalNextStepsCard } from "../../shared/components/RefusalNextStepsCard";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
-import { splitCitationMarkers } from "../../shared/utils/citation";
 import { resolveOfficialSourceUrl } from "../../shared/utils/nextStep";
+import { citationAssets } from "../../shared/utils/citationAssets";
 import { formatRefusalReason } from "../../shared/utils/refusal";
 
 type ComposerStatus = "idle" | "sending" | "streaming" | "stopping" | "failed";
@@ -206,36 +207,6 @@ function compactTime(iso?: string | null) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(time);
-}
-
-function renderWithMarkers(text: string, onMarkerClick: (citationId: number) => void) {
-  const parts = splitCitationMarkers(text);
-  return parts.map((part, index) => {
-    if (part.type === "text") {
-      return <span key={`text_${index}`}>{part.value}</span>;
-    }
-    return (
-      <span
-        key={`marker_${index}`}
-        className="answer-marker"
-        tabIndex={0}
-        role="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onMarkerClick(part.citationId);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            event.stopPropagation();
-            onMarkerClick(part.citationId);
-          }
-        }}
-      >
-        {part.marker}
-      </span>
-    );
-  });
 }
 
 function isAbortError(error: unknown) {
@@ -1621,13 +1592,19 @@ export function AskPage() {
                       </Space>
                       <Typography.Text type="secondary">{compactTime(item.created_at)}</Typography.Text>
                     </header>
-                    <Typography.Paragraph className="chat-bubble__content">
-                      {item.role === "assistant"
-                        ? renderWithMarkers(item.content, (citationId) => {
+                    <div className="chat-bubble__content">
+                      {item.role === "assistant" ? (
+                        <MarkdownMessage
+                          content={item.content}
+                          citations={item.citations}
+                          onCitationClick={(citationId) => {
                             openEvidenceModal(item, citationId);
-                          })
-                        : item.content}
-                    </Typography.Paragraph>
+                          }}
+                        />
+                      ) : (
+                        <Typography.Paragraph>{item.content}</Typography.Paragraph>
+                      )}
+                    </div>
                     {item.refusal ? (
                       <RefusalNextStepsCard
                         nextSteps={item.next_steps}
@@ -1841,13 +1818,17 @@ export function AskPage() {
                             <Typography.Paragraph style={{ marginBottom: 0 }}>
                               {citation.snippet}
                             </Typography.Paragraph>
-                            {citation.asset_id ? (
+                            {citationAssets(citation).length ? (
                               <Space wrap size={8}>
-                                <Tag color="blue">{citation.asset_label || "图片资产"}</Tag>
-                                {citation.asset_url ? (
+                                {citationAssets(citation).map((asset) => (
+                                  <Tag color="blue" key={asset.asset_id}>
+                                    {asset.asset_label || "图片资产"}
+                                  </Tag>
+                                ))}
+                                {citationAssets(citation)[0]?.asset_url ? (
                                   <CitationAssetButton
-                                    assetUrl={citation.asset_url}
-                                    label={citation.asset_label || "图片证据"}
+                                    assetUrl={citationAssets(citation)[0].asset_url}
+                                    label={citationAssets(citation)[0].asset_label || "图片证据"}
                                   />
                                 ) : null}
                               </Space>

@@ -153,6 +153,7 @@ def _citation_from_dto(dto: CitationDTO) -> Citation:
         asset_type=dto.asset_type,
         asset_label=dto.asset_label,
         asset_url=dto.asset_url,
+        assets=[item.model_dump() for item in dto.assets],
     )
 
 

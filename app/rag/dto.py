@@ -26,6 +26,20 @@ class CitationDTO(BaseModel):
     asset_type: str | None = Field(default=None, description="关联资产类型")
     asset_label: str | None = Field(default=None, description="关联图片展示编号")
     asset_url: str | None = Field(default=None, description="关联图片访问地址")
+    assets: list["CitationAssetDTO"] = Field(
+        default_factory=list,
+        description="关联图片资产列表",
+    )
+
+
+class CitationAssetDTO(BaseModel):
+    """引用关联的图片资产。"""
+
+    asset_id: str = Field(description="图片资产 ID")
+    asset_label: str = Field(description="图片展示编号")
+    asset_url: str = Field(description="图片访问地址")
+    media_type: str | None = Field(default=None, description="媒体类型")
+    file_name: str | None = Field(default=None, description="原始图片文件名")
 
 
 class NextStepDTO(BaseModel):

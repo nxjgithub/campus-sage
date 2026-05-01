@@ -130,6 +130,47 @@ def test_compute_answer_expands_candidate_pool_before_rerank() -> None:
     assert result.citations[0].doc_name == "本科生考试管理规定.md"
 
 
+def test_build_citations_returns_attached_assets() -> None:
+    settings = Settings(_env_file=None)
+    service = object.__new__(RagService)
+    service._settings = settings
+
+    citations = service._build_citations(
+        [
+            VectorHit(
+                score=0.88,
+                payload={
+                    "doc_id": "doc_image",
+                    "doc_name": "图文通知.docx",
+                    "doc_version": None,
+                    "published_at": None,
+                    "source_uri": None,
+                    "page_start": None,
+                    "page_end": None,
+                    "section_path": "操作说明",
+                    "chunk_id": "chunk_image",
+                    "chunk_index": 0,
+                    "text": "学生进入系统后按页面提示完成登记。",
+                    "assets": [
+                        {
+                            "asset_id": "asset_1",
+                            "asset_label": "图 1",
+                            "asset_url": "/api/v1/assets/asset_1",
+                            "media_type": "image/jpeg",
+                            "file_name": "image1.jpeg",
+                        }
+                    ],
+                },
+            )
+        ],
+        debug=True,
+    )
+
+    assert citations[0].asset_id == "asset_1"
+    assert citations[0].asset_label == "图 1"
+    assert citations[0].assets[0].asset_url == "/api/v1/assets/asset_1"
+
+
 def test_ask_stream_uses_vllm_delta_stream_before_saving_message() -> None:
     settings = Settings(
         _env_file=None,

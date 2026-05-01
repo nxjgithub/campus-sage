@@ -37,10 +37,11 @@ import { fetchKbList } from "../../shared/api/modules/kb";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { FeedbackAction } from "../../shared/components/FeedbackAction";
 import { CitationAssetButton } from "../../shared/components/CitationAssetButton";
+import { MarkdownMessage } from "../../shared/components/MarkdownMessage";
 import { RefusalNextStepsCard } from "../../shared/components/RefusalNextStepsCard";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
-import { splitCitationMarkers } from "../../shared/utils/citation";
 import { resolveReviewNextStep } from "../../shared/utils/nextStep";
+import { citationAssets } from "../../shared/utils/citationAssets";
 import { formatRefusalReason } from "../../shared/utils/refusal";
 
 type SortOrder = "desc" | "asc";
@@ -87,36 +88,6 @@ function formatDateTime(value?: string | null) {
 
 function summarizeConversation(item: ConversationListItem) {
   return item.last_message_preview || "暂无摘要，进入详情可查看完整消息。";
-}
-
-function renderContentWithMarkers(content: string, onMarkerClick: (citationId: number) => void) {
-  const chunks = splitCitationMarkers(content);
-  return chunks.map((chunk, index) => {
-    if (chunk.type === "text") {
-      return <span key={`text_${index}`}>{chunk.value}</span>;
-    }
-    return (
-      <span
-        key={`marker_${index}`}
-        className="answer-marker"
-        onClick={(event) => {
-          event.stopPropagation();
-          onMarkerClick(chunk.citationId);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            event.stopPropagation();
-            onMarkerClick(chunk.citationId);
-          }
-        }}
-        role="button"
-        tabIndex={0}
-      >
-        {chunk.marker}
-      </span>
-    );
-  });
 }
 
 function isInteractiveTarget(target: EventTarget | null) {
@@ -176,17 +147,23 @@ export function MessageCard(props: {
           </Space>
         </header>
 
-        <Typography.Paragraph className="conversation-message__content">
-          {item.role === "assistant" && citations.length
-            ? renderContentWithMarkers(item.content, (citationId) => {
+        <div className="conversation-message__content">
+          {item.role === "assistant" ? (
+            <MarkdownMessage
+              content={item.content}
+              citations={citations}
+              onCitationClick={(citationId) => {
                 setActiveCitationId(citationId);
                 const target = citationRefs.current[citationId];
                 if (target) {
                   target.scrollIntoView({ behavior: "smooth", block: "center" });
                 }
-              })
-            : item.content}
-        </Typography.Paragraph>
+              }}
+            />
+          ) : (
+            <Typography.Paragraph>{item.content}</Typography.Paragraph>
+          )}
+        </div>
 
         {item.role === "assistant" ? (
           <Space direction="vertical" style={{ width: "100%" }} size={10}>
@@ -269,13 +246,17 @@ export function MessageCard(props: {
                         <Typography.Paragraph style={{ marginBottom: 0 }}>
                           {citation.snippet}
                         </Typography.Paragraph>
-                        {citation.asset_id ? (
+                        {citationAssets(citation).length ? (
                           <Space wrap size={8}>
-                            <Tag color="blue">{citation.asset_label || "图片资产"}</Tag>
-                            {citation.asset_url ? (
+                            {citationAssets(citation).map((asset) => (
+                              <Tag color="blue" key={asset.asset_id}>
+                                {asset.asset_label || "图片资产"}
+                              </Tag>
+                            ))}
+                            {citationAssets(citation)[0]?.asset_url ? (
                               <CitationAssetButton
-                                assetUrl={citation.asset_url}
-                                label={citation.asset_label || "图片证据"}
+                                assetUrl={citationAssets(citation)[0].asset_url}
+                                label={citationAssets(citation)[0].asset_label || "图片证据"}
                               />
                             ) : null}
                           </Space>
@@ -361,13 +342,17 @@ export function MessageCard(props: {
                         <Typography.Paragraph style={{ marginBottom: 0 }}>
                           {citation.snippet}
                         </Typography.Paragraph>
-                        {citation.asset_id ? (
+                        {citationAssets(citation).length ? (
                           <Space wrap size={8}>
-                            <Tag color="blue">{citation.asset_label || "图片资产"}</Tag>
-                            {citation.asset_url ? (
+                            {citationAssets(citation).map((asset) => (
+                              <Tag color="blue" key={asset.asset_id}>
+                                {asset.asset_label || "图片资产"}
+                              </Tag>
+                            ))}
+                            {citationAssets(citation)[0]?.asset_url ? (
                               <CitationAssetButton
-                                assetUrl={citation.asset_url}
-                                label={citation.asset_label || "图片证据"}
+                                assetUrl={citationAssets(citation)[0].asset_url}
+                                label={citationAssets(citation)[0].asset_label || "图片证据"}
                               />
                             ) : null}
                           </Space>

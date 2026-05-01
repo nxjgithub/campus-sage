@@ -130,7 +130,7 @@
 - `UPLOAD_MAX_MB`：默认 30
 - `UPLOAD_ALLOWED_EXTS`：默认 `pdf`（MVP 建议先只支持 pdf）
 
-说明：`ASSET_STORAGE_BACKEND=s3` 时，DOCX 提取出的图片资产会写入 S3/MinIO；前端仍通过 `GET /api/v1/assets/{asset_id}` 鉴权访问，后端代理读取对象存储并返回图片流。`local` 模式保留本地文件读取，兼容既有演示数据。
+说明：`ASSET_STORAGE_BACKEND=s3` 时，DOCX 提取出的图片资产会写入 S3/MinIO；Docker Compose 默认启动本地 MinIO 与 bucket 初始化服务，避免容器内 S3 Endpoint 不可达；前端仍通过 `GET /api/v1/assets/{asset_id}` 鉴权访问，后端代理读取对象存储并返回图片流。`local` 模式保留本地文件读取，兼容既有演示数据。
 
 ## 7. 任务队列（RQ + Redis）
 - `REDIS_URL`：默认 `redis://127.0.0.1:6379/0`
