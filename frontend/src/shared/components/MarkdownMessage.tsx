@@ -70,6 +70,11 @@ function MarkdownText({ value }: { value: string }) {
           <Typography.Link href={href} target="_blank" rel="noreferrer">
             {children}
           </Typography.Link>
+        ),
+        table: ({ children }) => (
+          <div className="markdown-message__table-wrap">
+            <table>{children}</table>
+          </div>
         )
       }}
     >

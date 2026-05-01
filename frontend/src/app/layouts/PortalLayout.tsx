@@ -121,7 +121,7 @@ export function PortalLayout({
   const activeRoute = resolveNavEntry(location.pathname, navItems);
   const activePortal: AppRole = isAdminRoute ? "admin" : "user";
   const routeTitle = activeRoute?.label ?? panelLabel;
-  const desktopSiderWidth = panelRole === "admin" ? 304 : 280;
+  const desktopSiderWidth = panelRole === "admin" ? 272 : 280;
 
   const handlePortalChange = (targetRole: AppRole) => {
     setMobileNavOpen(false);
