@@ -1,14 +1,19 @@
-﻿import { ReactNode } from "react";
+import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchQueueStats, moveDeadJobs } from "../../shared/api/modules/monitor";
+import {
+  fetchQueueStats,
+  fetchRuntimeDiagnostics,
+  moveDeadJobs
+} from "../../shared/api/modules/monitor";
 import { MonitorPage } from "./MonitorPage";
 
 vi.mock("../../shared/api/modules/monitor", () => ({
   fetchQueueStats: vi.fn(),
+  fetchRuntimeDiagnostics: vi.fn(),
   moveDeadJobs: vi.fn()
 }));
 
@@ -42,6 +47,44 @@ describe("MonitorPage 二次确认交互", () => {
       },
       alerts: [],
       request_id: "req-monitor-1"
+    });
+    vi.mocked(fetchRuntimeDiagnostics).mockResolvedValue({
+      app_env: "test",
+      log_level: "INFO",
+      debug_mode: false,
+      enable_swagger: true,
+      database: {
+        backend: "sqlite",
+        target: "test.db",
+        schema_version: 8
+      },
+      services: {
+        vector_backend: "memory",
+        embedding_backend: "fake",
+        vllm_enabled: false,
+        ingest_queue_enabled: false
+      },
+      upload: {
+        max_mb: 50,
+        allowed_exts: [".pdf"]
+      },
+      security: {
+        jwt_default_secret: false,
+        jwt_weak_secret: false
+      },
+      rag_metrics: {
+        sample_size: 0,
+        refusal_count: 0,
+        clarification_count: 0,
+        freshness_warning_count: 0,
+        citation_covered_count: 0,
+        refusal_rate: 0,
+        clarification_rate: 0,
+        freshness_warning_rate: 0,
+        citation_coverage_rate: 0
+      },
+      warnings: [],
+      request_id: "req-runtime-1"
     });
     vi.mocked(moveDeadJobs).mockResolvedValue({
       moved: 3,

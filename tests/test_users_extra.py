@@ -179,6 +179,14 @@ def test_eval_api_flow() -> None:
     assert eval_set.status_code == 200
     eval_set_id = eval_set.json()["eval_set_id"]
 
+    listed_sets = client.get("/api/v1/eval/sets", headers=headers)
+    assert listed_sets.status_code == 200
+    set_items = listed_sets.json()["items"]
+    assert any(
+        item["eval_set_id"] == eval_set_id and item["item_count"] == 1
+        for item in set_items
+    )
+
     run = client.post(
         "/api/v1/eval/runs",
         json={"eval_set_id": eval_set_id, "kb_id": kb_id, "topk": 5},
@@ -193,6 +201,14 @@ def test_eval_api_flow() -> None:
     assert fetched.status_code == 200
     fetched_payload = fetched.json()
     assert fetched_payload["run_id"] == run_id
+
+    listed_runs = client.get("/api/v1/eval/runs?limit=10&offset=0", headers=headers)
+    assert listed_runs.status_code == 200
+    run_items = listed_runs.json()["items"]
+    assert any(
+        item["run_id"] == run_id and item["metrics"]["samples"] == 1
+        for item in run_items
+    )
 
 
 def test_eval_run_rejects_invalid_topk() -> None:

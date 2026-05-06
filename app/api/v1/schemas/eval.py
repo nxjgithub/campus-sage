@@ -35,6 +35,22 @@ class EvalSetResponse(RequestIdMixin):
     created_at: str = Field(description="创建时间")
 
 
+class EvalSetListItem(BaseModel):
+    """评测集列表项。"""
+
+    eval_set_id: str = Field(description="评测集ID")
+    name: str = Field(description="评测集名称")
+    description: str | None = Field(default=None, description="评测集描述")
+    item_count: int = Field(description="样本数量")
+    created_at: str = Field(description="创建时间")
+
+
+class EvalSetListResponse(RequestIdMixin):
+    """评测集列表响应。"""
+
+    items: list[EvalSetListItem] = Field(description="评测集列表")
+
+
 class EvalRunRequest(BaseModel):
     """评测运行请求。"""
 
@@ -66,3 +82,22 @@ class EvalRunResponse(RequestIdMixin):
     rerank_enabled: bool = Field(description="是否启用重排")
     metrics: EvalMetrics | None = Field(default=None, description="评测指标")
     created_at: str = Field(description="创建时间")
+
+
+class EvalRunListItem(BaseModel):
+    """评测运行列表项。"""
+
+    run_id: str = Field(description="运行ID")
+    eval_set_id: str = Field(description="评测集ID")
+    kb_id: str = Field(description="知识库ID")
+    topk: int = Field(description="检索TopK")
+    threshold: float | None = Field(default=None, description="命中阈值")
+    rerank_enabled: bool = Field(description="是否启用重排")
+    metrics: EvalMetrics | None = Field(default=None, description="评测指标")
+    created_at: str = Field(description="创建时间")
+
+
+class EvalRunListResponse(RequestIdMixin):
+    """评测运行列表响应。"""
+
+    items: list[EvalRunListItem] = Field(description="评测运行列表")

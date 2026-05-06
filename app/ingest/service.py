@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Iterable
@@ -69,7 +69,7 @@ class KnowledgeBaseService:
         if record is None or record.deleted:
             raise AppError(
                 code=ErrorCode.KB_NOT_FOUND,
-                message="鐭ヨ瘑搴撲笉瀛樺湪",
+                message="知识库不存在",
                 detail={"kb_id": kb_id},
                 status_code=404,
             )
@@ -209,7 +209,7 @@ class DocumentService:
         if file_size_bytes > self._settings.upload_max_mb * 1024 * 1024:
             raise AppError(
                 code=ErrorCode.FILE_TOO_LARGE,
-                message="鏂囦欢澶у皬瓒呰繃闄愬埗",
+                message="文件大小超过限制",
                 detail={"max_mb": self._settings.upload_max_mb},
                 status_code=400,
             )
@@ -367,7 +367,7 @@ class DocumentService:
         if job.status not in {"failed", "canceled"}:
             raise AppError(
                 code=ErrorCode.INGEST_JOB_NOT_RETRYABLE,
-                message="浠诲姟鐘舵€佷笉鍏佽閲嶈瘯",
+                message="任务状态不允许重试",
                 detail={"job_id": job_id, "status": job.status},
                 status_code=409,
             )
@@ -599,7 +599,7 @@ class DocumentService:
                     kb_id=document.kb_id, doc_id=document.doc_id
                 )
             except AppError as exc:
-                # 鍒犻櫎鏃у悜閲忔槸骞傜瓑娓呯悊鍔ㄤ綔锛岄亣鍒扮灛鏃舵柇杩炴椂璁板綍鍛婅骞剁户缁富娴佺▼銆?
+                # 删除旧向量是幂等清理动作，瞬时断连时记录告警并继续主流程。
                 log_event(
                     self._logger,
                     event="vector_cleanup_skipped",

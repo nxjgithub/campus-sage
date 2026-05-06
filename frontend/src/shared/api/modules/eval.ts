@@ -23,6 +23,11 @@ export interface EvalSetResponse {
   request_id?: string | null;
 }
 
+export interface EvalSetListResponse {
+  items: EvalSetResponse[];
+  request_id?: string | null;
+}
+
 export interface EvalRunPayload {
   eval_set_id: string;
   kb_id: string;
@@ -51,13 +56,35 @@ export interface EvalRunResponse {
   request_id?: string | null;
 }
 
+export interface EvalRunListParams {
+  limit?: number;
+  offset?: number;
+}
+
+export interface EvalRunListResponse {
+  items: EvalRunResponse[];
+  request_id?: string | null;
+}
+
 export async function createEvalSet(payload: EvalSetCreatePayload) {
   const { data } = await apiClient.post<EvalSetResponse>("/eval/sets", payload);
   return data;
 }
 
+export async function fetchEvalSets() {
+  const { data } = await apiClient.get<EvalSetListResponse>("/eval/sets");
+  return data;
+}
+
 export async function runEval(payload: EvalRunPayload) {
   const { data } = await apiClient.post<EvalRunResponse>("/eval/runs", payload);
+  return data;
+}
+
+export async function fetchEvalRuns(params: EvalRunListParams = {}) {
+  const { data } = await apiClient.get<EvalRunListResponse>("/eval/runs", {
+    params
+  });
   return data;
 }
 

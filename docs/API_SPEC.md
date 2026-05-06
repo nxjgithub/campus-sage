@@ -934,7 +934,26 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 }
 ```
 
-### 7.2 运行评测
+### 7.2 列出评测集
+`GET /api/v1/eval/sets`
+
+响应示例：
+```json
+{
+  "items": [
+    {
+      "eval_set_id": "es_001",
+      "name": "教务评测集_v1",
+      "description": null,
+      "item_count": 10,
+      "created_at": "2026-02-12T10:00:00Z"
+    }
+  ],
+  "request_id": "req_xxx"
+}
+```
+
+### 7.3 运行评测
 `POST /api/v1/eval/runs`
 
 请求示例：
@@ -947,7 +966,39 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 - `threshold`（可选）：`0~1`
 - 参数不合法时返回 `400 + VALIDATION_FAILED`。
 
-### 7.3 获取评测结果
+### 7.4 列出评测运行
+`GET /api/v1/eval/runs?limit=50&offset=0`
+
+说明：
+- `limit` 服务端按 `1~100` 归一化。
+- 返回内容按创建时间倒序排列。
+
+响应示例：
+```json
+{
+  "items": [
+    {
+      "run_id": "erun_001",
+      "eval_set_id": "es_001",
+      "kb_id": "kb_123",
+      "topk": 5,
+      "threshold": 0.25,
+      "rerank_enabled": false,
+      "metrics": {
+        "recall_at_k": 0.8,
+        "mrr": 0.6,
+        "avg_ms": 120,
+        "p95_ms": 240,
+        "samples": 10
+      },
+      "created_at": "2026-02-12T10:00:00Z"
+    }
+  ],
+  "request_id": "req_xxx"
+}
+```
+
+### 7.5 获取评测结果
 `GET /api/v1/eval/runs/{run_id}`
 
 响应建议包含：`recall_at_k`、`mrr`、`avg_ms`、`p95_ms`

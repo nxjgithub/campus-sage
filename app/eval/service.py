@@ -81,6 +81,15 @@ class EvalService:
         self._eval_item_repo.create_many(item_records)
         return record, item_records
 
+    def list_eval_sets(self) -> list[tuple[EvalSetRecord, int]]:
+        """列出评测集及样本数量，供管理端选择运行。"""
+
+        records = self._eval_set_repo.list_all()
+        return [
+            (record, len(self._eval_item_repo.list_by_set(record.eval_set_id)))
+            for record in records
+        ]
+
     def run_eval(
         self,
         eval_set_id: str,
@@ -186,6 +195,16 @@ class EvalService:
             )
         metrics = _load_metrics(record.metrics_json)
         return record, metrics
+
+    def list_runs(
+        self, limit: int = 50, offset: int = 0
+    ) -> list[tuple[EvalRunRecord, EvalResult | None]]:
+        """分页列出评测运行记录，避免前端只能依赖本地缓存。"""
+
+        normalized_limit = min(max(limit, 1), 100)
+        normalized_offset = max(offset, 0)
+        records = self._eval_run_repo.list_all(normalized_limit, normalized_offset)
+        return [(record, _load_metrics(record.metrics_json)) for record in records]
 
     def _build_item_records(
         self, eval_set_id: str, items: list[dict[str, object]], created_at: str

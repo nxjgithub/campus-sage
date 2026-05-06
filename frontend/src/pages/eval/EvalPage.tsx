@@ -7,10 +7,16 @@ import {
   SearchOutlined,
   SettingOutlined
 } from "@ant-design/icons";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, Empty, Form, InputNumber, Segmented, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { EvalRunResponse, fetchEvalRun, runEval } from "../../shared/api/modules/eval";
+import {
+  EvalRunResponse,
+  fetchEvalRun,
+  fetchEvalRuns,
+  fetchEvalSets,
+  runEval
+} from "../../shared/api/modules/eval";
 import { fetchKbList } from "../../shared/api/modules/kb";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { CompactPageHero } from "../../shared/components/CompactPageHero";
@@ -30,8 +36,31 @@ import {
   TableDensity
 } from "./evalShared";
 
+function mergeEvalSets(
+  serverItems: RecentEvalSetOption[],
+  localItems: RecentEvalSetOption[]
+) {
+  const merged = new Map<string, RecentEvalSetOption>();
+  [...serverItems, ...localItems].forEach((item) => {
+    merged.set(item.eval_set_id, item);
+  });
+  return [...merged.values()];
+}
+
+function mergeEvalRuns(
+  serverItems: RecentEvalRunOption[],
+  localItems: RecentEvalRunOption[]
+) {
+  const merged = new Map<string, RecentEvalRunOption>();
+  [...serverItems, ...localItems].forEach((item) => {
+    merged.set(item.run_id, item);
+  });
+  return [...merged.values()];
+}
+
 export function EvalPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [runForm] = Form.useForm<EvalRunFormValues>();
   const [fetchRunForm] = Form.useForm<FetchRunFormValues>();
@@ -49,6 +78,16 @@ export function EvalPage() {
   const kbQuery = useQuery({
     queryKey: ["kb", "list"],
     queryFn: fetchKbList
+  });
+
+  const evalSetsQuery = useQuery({
+    queryKey: ["eval", "sets"],
+    queryFn: fetchEvalSets
+  });
+
+  const evalRunsQuery = useQuery({
+    queryKey: ["eval", "runs"],
+    queryFn: () => fetchEvalRuns({ limit: 100, offset: 0 })
   });
 
   useEffect(() => {
@@ -94,6 +133,7 @@ export function EvalPage() {
         evalSetId: data.eval_set_id,
         runId: data.run_id
       });
+      void queryClient.invalidateQueries({ queryKey: ["eval", "runs"] });
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
@@ -118,6 +158,7 @@ export function EvalPage() {
         evalSetId: data.eval_set_id,
         runId: data.run_id
       });
+      void queryClient.invalidateQueries({ queryKey: ["eval", "runs"] });
     },
     onError: (error) => {
       const normalized = normalizeApiError(error);
@@ -127,10 +168,16 @@ export function EvalPage() {
 
   const firstError = useMemo(() => {
     if (kbQuery.isError) return normalizeApiError(kbQuery.error);
+    if (evalSetsQuery.isError) return normalizeApiError(evalSetsQuery.error);
+    if (evalRunsQuery.isError) return normalizeApiError(evalRunsQuery.error);
     if (runEvalMutation.isError) return normalizeApiError(runEvalMutation.error);
     if (fetchRunMutation.isError) return normalizeApiError(fetchRunMutation.error);
     return null;
   }, [
+    evalRunsQuery.error,
+    evalRunsQuery.isError,
+    evalSetsQuery.error,
+    evalSetsQuery.isError,
     fetchRunMutation.error,
     fetchRunMutation.isError,
     kbQuery.error,
@@ -144,9 +191,34 @@ export function EvalPage() {
     () => new Map((kbQuery.data?.items ?? []).map((item) => [item.kb_id, item.name])),
     [kbQuery.data?.items]
   );
+  const evalSets = useMemo(
+    () =>
+      mergeEvalSets(
+        (evalSetsQuery.data?.items ?? []).map((item) => ({
+          eval_set_id: item.eval_set_id,
+          name: item.name,
+          created_at: item.created_at
+        })),
+        recentSets
+      ),
+    [evalSetsQuery.data?.items, recentSets]
+  );
+  const evalRuns = useMemo(
+    () =>
+      mergeEvalRuns(
+        (evalRunsQuery.data?.items ?? []).map((item) => ({
+          run_id: item.run_id,
+          eval_set_id: item.eval_set_id,
+          kb_id: item.kb_id,
+          created_at: item.created_at
+        })),
+        recentRuns
+      ),
+    [evalRunsQuery.data?.items, recentRuns]
+  );
   const evalSetNameMap = useMemo(
-    () => new Map(recentSets.map((item) => [item.eval_set_id, item.name])),
-    [recentSets]
+    () => new Map(evalSets.map((item) => [item.eval_set_id, item.name])),
+    [evalSets]
   );
   const runDetailEvalSetName = runDetail
     ? evalSetNameMap.get(runDetail.eval_set_id) ?? "最近评测集"
@@ -192,8 +264,8 @@ export function EvalPage() {
         title="离线评测中心"
         description="当前页面只负责运行参数与结果查看；评测集设计已拆到独立页面，避免样本录入和结果分析同屏拥挤。"
         stats={[
-          { label: "评测集", value: recentSets.length },
-          { label: "运行", value: recentRuns.length },
+          { label: "评测集", value: evalSets.length },
+          { label: "运行", value: evalRuns.length },
           { label: "Recall@K", value: formatMetric(metrics?.recall_at_k) },
           { label: "P95", value: formatMetric(metrics?.p95_ms) }
         ]}
@@ -228,7 +300,7 @@ export function EvalPage() {
             <div className="density-toolbar density-toolbar--clean">
               <div className="density-toolbar__group">
                 <Typography.Text className="density-meta">
-                  评测集缓存 {recentSets.length}，运行缓存 {recentRuns.length}
+                  评测集 {evalSets.length}，运行 {evalRuns.length}
                 </Typography.Text>
               </div>
               <div className="density-toolbar__group density-toolbar__group--meta">
@@ -291,14 +363,15 @@ export function EvalPage() {
                 <Select
                   showSearch
                   optionFilterProp="label"
-                  placeholder="选择最近创建的评测集"
-                  options={recentSets.map((item) => ({
+                  placeholder="选择评测集"
+                  loading={evalSetsQuery.isLoading}
+                  options={evalSets.map((item) => ({
                     value: item.eval_set_id,
                     label: `${item.name} · ${formatDateTime(item.created_at)}`
                   }))}
                 />
               </Form.Item>
-              {!recentSets.length ? (
+              {!evalSets.length ? (
                 <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
                   请先进入独立创建页录入评测集，再回到这里发起运行。
                 </Typography.Paragraph>
@@ -401,8 +474,9 @@ export function EvalPage() {
                 <Select
                   showSearch
                   optionFilterProp="label"
-                  placeholder="选择最近评测运行"
-                  options={recentRuns.map((item) => ({
+                  placeholder="选择评测运行"
+                  loading={evalRunsQuery.isLoading}
+                  options={evalRuns.map((item) => ({
                     value: item.run_id,
                     label: `${evalSetNameMap.get(item.eval_set_id) ?? "评测运行"} · ${
                       kbNameMap.get(item.kb_id) ?? "未知知识库"
@@ -417,14 +491,14 @@ export function EvalPage() {
                     shape="circle"
                     icon={<SearchOutlined />}
                     loading={fetchRunMutation.isPending}
-                    disabled={!recentRuns.length}
+                    disabled={!evalRuns.length}
                     aria-label="查询评测结果"
                   />
                 </Tooltip>
               </Form.Item>
             </Form>
 
-            {!recentRuns.length ? (
+            {!evalRuns.length ? (
               <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
                 暂无可查询的评测运行，请先执行一次评测。
               </Typography.Paragraph>

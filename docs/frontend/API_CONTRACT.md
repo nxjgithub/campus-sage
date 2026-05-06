@@ -221,6 +221,9 @@
   - 用途：获取队列统计
 - `POST /monitor/queues/ingest/move-dead`
   - 用途：失败任务转死信队列
+- `GET /monitor/runtime`
+  - 用途：获取数据库 schema、关键服务开关、上传配置、安全风险与 RAG 运行指标
+  - 响应必须包含 `request_id`，失败时错误提示继续展示 `request_id`
 
 ## 10. 认证与用户接口
 - `POST /auth/login`
@@ -263,8 +266,13 @@
 - `/app/conversations` 需登录，`/app/ask` 可匿名。
 
 ## 11. 评测接口（管理员）
+- `GET /eval/sets`
+  - 用途：列出服务端评测集，运行页优先使用该列表，本地最近记录只作为兜底
 - `POST /eval/sets`
   - 用途：创建评测集
+- `GET /eval/runs`
+  - 用途：列出服务端评测运行
+  - 查询参数：`limit/offset`
 - `POST /eval/runs`
   - 用途：运行评测
   - 参数约束：`topk` 为 `1~50`，`threshold`（可选）为 `0~1`
@@ -281,6 +289,9 @@
 - `["conversation","messages",conversationId,before,limit]`
 - `["chat","run",runId]`
 - `["monitor","queues"]`
+- `["monitor","runtime"]`
+- `["eval","sets"]`
+- `["eval","runs"]`
 - `["auth","me"]`
 - `["users","list",status,keyword,page,pageSize]`
 - `["users","kb-access",userId]`

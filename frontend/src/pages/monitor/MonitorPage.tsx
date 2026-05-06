@@ -21,7 +21,11 @@ import {
   Typography,
   message
 } from "antd";
-import { fetchQueueStats, moveDeadJobs } from "../../shared/api/modules/monitor";
+import {
+  fetchQueueStats,
+  fetchRuntimeDiagnostics,
+  moveDeadJobs
+} from "../../shared/api/modules/monitor";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { ConfirmAction } from "../../shared/components/ConfirmAction";
 import { CompactPageHero } from "../../shared/components/CompactPageHero";
@@ -71,6 +75,13 @@ function formatSnapshotLabel(index: number) {
   return `T${index + 1}`;
 }
 
+function formatPercent(value?: number) {
+  if (value === undefined) {
+    return "-";
+  }
+  return `${Math.round(value * 100)}%`;
+}
+
 export function MonitorPage() {
   const [lastMoveRequestId, setLastMoveRequestId] = useState<string | null>(null);
   const [queueSnapshots, setQueueSnapshots] = useState<TrendDatum[]>([]);
@@ -80,6 +91,12 @@ export function MonitorPage() {
     queryKey: ["monitor", "queues"],
     queryFn: fetchQueueStats,
     refetchInterval: 10_000
+  });
+
+  const runtimeQuery = useQuery({
+    queryKey: ["monitor", "runtime"],
+    queryFn: fetchRuntimeDiagnostics,
+    refetchInterval: 30_000
   });
 
   const moveMutation = useMutation({
@@ -97,7 +114,10 @@ export function MonitorPage() {
 
   const stats = statsQuery.data?.stats;
   const alerts = statsQuery.data?.alerts ?? [];
+  const runtime = runtimeQuery.data;
+  const runtimeAlerts = runtime?.warnings ?? [];
   const normalizedError = statsQuery.isError ? normalizeApiError(statsQuery.error) : null;
+  const runtimeError = runtimeQuery.isError ? normalizeApiError(runtimeQuery.error) : null;
 
   const totalInQueue = stats
     ? stats.queued +
@@ -185,9 +205,21 @@ export function MonitorPage() {
             { label: "总量", value: totalInQueue },
             { label: "执行中", value: stats?.started ?? 0 },
             { label: "失败", value: stats?.failed_registry ?? 0 },
-            { label: "风险", value: `${riskPercent}%` }
+            { label: "风险", value: `${riskPercent}%` },
+            { label: "Schema", value: runtime?.database.schema_version ?? "-" }
           ]}
         />
+
+        {runtimeError ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="运行时诊断加载失败"
+            description={`${runtimeError.code}${
+              runtimeError.request_id ? `，request_id=${runtimeError.request_id}` : ""
+            }`}
+          />
+        ) : null}
 
         <div className="dashboard-grid">
           <Card className="card-soft" size="small" title="队列结构">
@@ -220,6 +252,84 @@ export function MonitorPage() {
             />
           </Card>
         </div>
+
+        <Card
+          title={
+            <Space size={8}>
+              <SafetyCertificateOutlined />
+              <span>运行时诊断</span>
+            </Space>
+          }
+          className="card-soft"
+          extra={
+            <Space size={8}>
+              <Tag bordered={false} color="blue">
+                30s
+              </Tag>
+              <Tooltip title="刷新运行时诊断">
+                <Button
+                  size="small"
+                  shape="circle"
+                  icon={<ReloadOutlined />}
+                  onClick={() => void runtimeQuery.refetch()}
+                  loading={runtimeQuery.isFetching}
+                  aria-label="刷新运行时诊断"
+                />
+              </Tooltip>
+            </Space>
+          }
+        >
+          <Space direction="vertical" size={18} style={{ width: "100%" }}>
+            <div className="ops-kpi-grid">
+              <div className="ops-kpi-item">
+                <span className="ops-kpi-item__label">运行环境</span>
+                <span className="ops-kpi-item__value">{runtime?.app_env ?? "-"}</span>
+              </div>
+              <div className="ops-kpi-item">
+                <span className="ops-kpi-item__label">数据库</span>
+                <span className="ops-kpi-item__value">{runtime?.database.backend ?? "-"}</span>
+              </div>
+              <div className="ops-kpi-item">
+                <span className="ops-kpi-item__label">向量库</span>
+                <span className="ops-kpi-item__value">
+                  {runtime?.services.vector_backend ?? "-"}
+                </span>
+              </div>
+              <div className="ops-kpi-item">
+                <span className="ops-kpi-item__label">引用覆盖</span>
+                <span className="ops-kpi-item__value">
+                  {formatPercent(runtime?.rag_metrics.citation_coverage_rate)}
+                </span>
+              </div>
+            </div>
+            <Space wrap>
+              <Tag color={runtime?.services.vllm_enabled ? "green" : "default"}>
+                vLLM {runtime?.services.vllm_enabled ? "开启" : "关闭"}
+              </Tag>
+              <Tag color={runtime?.services.ingest_queue_enabled ? "green" : "default"}>
+                入库队列 {runtime?.services.ingest_queue_enabled ? "开启" : "关闭"}
+              </Tag>
+              <Tag color={runtime?.security.jwt_default_secret ? "error" : "success"}>
+                JWT 默认密钥 {runtime?.security.jwt_default_secret ? "是" : "否"}
+              </Tag>
+              <Tag color={runtime?.security.jwt_weak_secret ? "warning" : "success"}>
+                JWT 弱密钥 {runtime?.security.jwt_weak_secret ? "是" : "否"}
+              </Tag>
+              <Tag>拒答率 {formatPercent(runtime?.rag_metrics.refusal_rate)}</Tag>
+              <Tag>样本 {runtime?.rag_metrics.sample_size ?? 0}</Tag>
+              <Tag>上传上限 {runtime?.upload.max_mb ?? "-"} MB</Tag>
+            </Space>
+            {runtimeAlerts.length ? (
+              <div className="monitor-alert-list">
+                {runtimeAlerts.map((item) => (
+                  <Alert key={item} type="warning" showIcon message={item} />
+                ))}
+              </div>
+            ) : (
+              <Alert type="success" showIcon message="运行时诊断暂无告警" />
+            )}
+          </Space>
+        </Card>
 
         <Card
           title={

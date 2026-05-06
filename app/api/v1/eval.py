@@ -13,8 +13,12 @@ from app.api.v1.deps import (
 from app.api.v1.schemas.eval import (
     EvalMetrics,
     EvalRunRequest,
+    EvalRunListItem,
+    EvalRunListResponse,
     EvalRunResponse,
     EvalSetCreateRequest,
+    EvalSetListItem,
+    EvalSetListResponse,
     EvalSetResponse,
 )
 from app.auth.dto import CurrentUser
@@ -25,6 +29,27 @@ from app.eval.service import EvalService
 from app.ingest.service import KnowledgeBaseService
 
 router = APIRouter(prefix="/eval", tags=["Eval"])
+
+
+@router.get("/sets", response_model=EvalSetListResponse)
+def list_eval_sets(
+    request: Request,
+    current_user: CurrentUser = Depends(require_permission(Permission.MONITOR_READ)),
+    service: EvalService = Depends(get_eval_service),
+) -> EvalSetListResponse:
+    """列出评测集。"""
+
+    items = [
+        EvalSetListItem(
+            eval_set_id=record.eval_set_id,
+            name=record.name,
+            description=record.description,
+            item_count=item_count,
+            created_at=record.created_at,
+        )
+        for record, item_count in service.list_eval_sets()
+    ]
+    return EvalSetListResponse(items=items, request_id=request.state.request_id)
 
 
 @router.post("/sets", response_model=EvalSetResponse)
@@ -49,6 +74,32 @@ def create_eval_set(
         created_at=record.created_at,
         request_id=request.state.request_id,
     )
+
+
+@router.get("/runs", response_model=EvalRunListResponse)
+def list_eval_runs(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    current_user: CurrentUser = Depends(require_permission(Permission.MONITOR_READ)),
+    service: EvalService = Depends(get_eval_service),
+) -> EvalRunListResponse:
+    """列出评测运行。"""
+
+    items = [
+        EvalRunListItem(
+            run_id=record.run_id,
+            eval_set_id=record.eval_set_id,
+            kb_id=record.kb_id,
+            topk=record.topk,
+            threshold=record.threshold,
+            rerank_enabled=record.rerank_enabled,
+            metrics=_to_metrics(metrics),
+            created_at=record.created_at,
+        )
+        for record, metrics in service.list_runs(limit=limit, offset=offset)
+    ]
+    return EvalRunListResponse(items=items, request_id=request.state.request_id)
 
 
 @router.post("/runs", response_model=EvalRunResponse)

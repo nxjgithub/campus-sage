@@ -43,3 +43,23 @@ class EvalSetRepository:
             description=row["description"],
             created_at=row["created_at"],
         )
+
+    def list_all(self) -> list[EvalSetRecord]:
+        """按创建时间倒序列出评测集。"""
+
+        rows = self._db.fetch_all(
+            """
+            SELECT eval_set_id, name, description, created_at
+            FROM eval_set
+            ORDER BY created_at DESC, eval_set_id DESC;
+            """
+        )
+        return [
+            EvalSetRecord(
+                eval_set_id=row["eval_set_id"],
+                name=row["name"],
+                description=row["description"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]

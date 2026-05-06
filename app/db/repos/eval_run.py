@@ -60,6 +60,33 @@ class EvalRunRepository:
             created_at=row["created_at"],
         )
 
+    def list_all(self, limit: int, offset: int) -> list[EvalRunRecord]:
+        """按创建时间倒序列出评测运行记录。"""
+
+        rows = self._db.fetch_all(
+            """
+            SELECT run_id, eval_set_id, kb_id, topk, threshold, rerank_enabled,
+                   metrics_json, created_at
+            FROM eval_run
+            ORDER BY created_at DESC, run_id DESC
+            LIMIT ? OFFSET ?;
+            """,
+            (limit, offset),
+        )
+        return [
+            EvalRunRecord(
+                run_id=row["run_id"],
+                eval_set_id=row["eval_set_id"],
+                kb_id=row["kb_id"],
+                topk=row["topk"],
+                threshold=row["threshold"],
+                rerank_enabled=bool(row["rerank_enabled"]),
+                metrics_json=row["metrics_json"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
     def update_metrics(self, run_id: str, metrics_json: str | None) -> None:
         """更新评测运行指标。"""
 
