@@ -60,7 +60,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - Ask 响应新增 `user_message_id` 与 `assistant_created_at`，便于前端稳定渲染。
 - 数据层新增 `chat_run`，message 新增 `parent_message_id`、`edited_from_message_id`、`sequence_no`。
 - 监控路由统一为 `/api/v1/monitor/*`，去除重复挂载路径。
-- chunk 元数据增加页内标题启发式抽取，snippet 清洗稳定性提升。
+- chunk 切片已升级为标题/段落/句子边界优先策略，通知类 PDF 会合并软换行、保留文档标题和页内小节路径；重排器也会优先识别通知类意图短语，降低固定字符硬切和宽泛主题词导致的召回噪声。
 - `app/eval/` 评测模块已落地，支持 Recall@K、MRR、延迟统计。
 - 队列监控已增强：Redis 不可用统一错误、失败告警阈值、死信裁剪。
 - `.env.example` 与核心文档已同步新配置。

@@ -157,7 +157,7 @@ app/db/models/
 2) 创建 Document 记录（status=processing）与 IngestJob（queued）
 3) IngestService 执行：
     - Parser：解析文本（保留页码/标题等定位信息）
-    - Chunker：切分 chunk（chunk_size + overlap）
+    - Chunker：优先按页内标题、段落和句子边界切分 chunk，超长片段再按 chunk_size + overlap 退回窗口切分
     - Embedder：批量 embedding
     - VectorWriter：写入向量库（payload 按 docs/RAG_CONTRACT.md）
 4) 写入成功：
