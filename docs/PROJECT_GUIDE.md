@@ -107,6 +107,8 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 单元测试：`.\.venv\Scripts\python.exe -m pytest -q`
 - 运行评测：`.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --topk 5`
 - 运行参数对比实验：`.\.venv\Scripts\python.exe scripts/run_eval.py --kb-id <kb_id> --eval-file <eval_json> --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true`
+- 运行论文补充实验：`.\.venv\Scripts\python.exe scripts/run_paper_experiments.py`，默认执行分块参数、拒答阈值、重排消融、RAG 与直接大模型对比四组实验，并输出到 `outputs/paper_experiments_<时间戳>/`
+- 使用 Docker 版 TEI + Qdrant 跑论文实验：`.\.venv\Scripts\python.exe scripts/run_paper_experiments.py --embedding-backend http --embedding-base-url http://127.0.0.1:8080/v1 --embedding-api-path /embeddings --model-name BAAI/bge-small-zh-v1.5 --batch-size 2 --vector-backend remote --qdrant-url http://127.0.0.1:6333`
 - 若需要逐题排查召回、阈值与排序问题，可为 `run_eval.py` 追加 `--show-items` 输出明细。
 - `run_eval.py` 输出中现附带 `diagnostics` 摘要，可快速判断是否存在阈值误杀与重排收益。
 - 若评测环境与当前 API 运行参数不同，可为 `run_eval.py` 显式追加 `--embedding-backend`、`--embedding-base-url`、`--vector-backend`、`--qdrant-url` 覆盖项，避免脚本直接沿用 `.env` 导致联调错位。

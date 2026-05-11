@@ -154,6 +154,7 @@ API 层统一捕获并映射 HTTP 状态码
 2. 任何 PR/提交都必须通过：
   - ruff check .
   - pytest -q
+  - `outputs/` 属于实验生成物目录，Ruff 通过 `pyproject.toml` 排除该目录；可维护脚本应放在 `scripts/` 并继续接受检查。
 3. 关键结构建议做“金样测试（Golden Test）”：
   - 固定输入时，至少保证 response 的字段结构稳定（尤其 citations）。
 

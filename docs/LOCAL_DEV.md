@@ -228,6 +228,21 @@ docker compose exec mysql mysql -ucsage -pcsage123 -D csage -e "SELECT version, 
 ```powershell
 .\.venv\Scripts\python.exe scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --compare-topk 3,5,8 --compare-threshold none,0.2,0.3 --compare-rerank false,true
 ```
+执行论文补充实验（分块参数、拒答阈值、重排消融、RAG 与直接大模型对比）：
+```powershell
+.\.venv\Scripts\python.exe scripts/run_paper_experiments.py
+```
+使用 Docker 中的 TEI 与 Qdrant 服务端执行同一组实验：
+```powershell
+.\.venv\Scripts\python.exe scripts/run_paper_experiments.py --embedding-backend http --embedding-base-url http://127.0.0.1:8080/v1 --embedding-api-path /embeddings --model-name BAAI/bge-small-zh-v1.5 --batch-size 2 --vector-backend remote --qdrant-url http://127.0.0.1:6333
+```
+说明：
+- 该脚本默认读取 `outputs/eval_official_20260506/eval_set_official.json` 与 `data/正式文件/`，使用 `BAAI/bge-small-zh-v1.5` 做真实向量化，并将每组分块参数写入独立 Qdrant 集合。
+- 默认模式使用本地 sentence-transformers + Qdrant 本地持久化库；Docker 模式使用 TEI HTTP Embedding + Qdrant 服务端。
+- 输出默认写入 `outputs/paper_experiments_<时间戳>/`，包含 `paper_experiments_report.md`、`paper_experiments_summary.json`、`paper_experiments_metrics.sqlite` 与 `llm_manual_scoring_sheet.csv`。
+- 若只想跑检索类实验、不调用生成模型，可追加 `--skip-llm`；若要调整大模型对比样本数，可使用 `--llm-sample-size 20`。
+- 本地模式首次运行会下载本地向量模型；Docker 模式需先确认 `docker compose up -d mysql qdrant redis tei minio` 已启动，且 `127.0.0.1:8080/6333` 可访问。
+
 如需逐题查看“原始命中/阈值后命中/最终排名”，可追加：
 ```powershell
 .\.venv\Scripts\python.exe scripts/run_eval.py --kb-id kb_123 --eval-file .\data\eval_set.json --topk 5 --rerank-enabled --show-items
@@ -382,8 +397,8 @@ LOCAL_EMBEDDING_NORMALIZE=true
 ```
 
 说明：
-- 该模式依赖 `sentence-transformers`，默认环境未强制安装。
-- 未安装依赖时，服务会返回明确错误提示，便于后续按需落地。
+- 该模式依赖 `sentence-transformers`，当前 `requirements.txt` 已包含该依赖，首次加载模型时会下载权重。
+- 若依赖或模型权重不可用，服务会返回明确错误提示，便于排查本地环境或网络问题。
 
 
 ## 10. 启用 MySQL 与 Qdrant

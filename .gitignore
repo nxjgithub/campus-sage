@@ -54,6 +54,7 @@ cover/
 
 # Local data
 data/
+outputs/
 
 # Translations
 *.mo
