@@ -297,6 +297,9 @@
 - `["users","kb-access",userId]`
 - `["roles","list"]`
 
+## 运行时诊断补充
+- `GET /monitor/runtime` 的 `services` 字段包含 `vector_backend`、`embedding_backend`、`rerank_backend`、`vllm_enabled`、`ingest_queue_enabled`，用于前端展示当前问答链路实际加载的后端配置。
+
 ## 13. 轮询策略约定
 - 入库任务轮询间隔：2 秒。
 - 当状态进入 `succeeded/failed/canceled` 时停止轮询。

@@ -45,6 +45,7 @@ class RuntimeServicesInfo(BaseModel):
 
     vector_backend: str = Field(description="向量库后端")
     embedding_backend: str = Field(description="Embedding 后端")
+    rerank_backend: str = Field(description="重排后端")
     vllm_enabled: bool = Field(description="是否启用生成模型")
     ingest_queue_enabled: bool = Field(description="是否启用入库队列")
 

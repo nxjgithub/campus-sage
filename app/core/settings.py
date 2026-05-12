@@ -97,7 +97,22 @@ class Settings(BaseSettings):
     )
 
     rerank_enabled: bool = Field(default=False, description="是否启用重排")
-    rerank_model_name: str = Field(default="bge-reranker", description="重排模型名")
+    rerank_backend: Literal["simple", "local", "http"] = Field(
+        default="simple", description="重排后端（simple/local/http）"
+    )
+    rerank_model_name: str = Field(
+        default="BAAI/bge-reranker-base", description="重排模型名"
+    )
+    rerank_base_url: str = Field(
+        default="http://127.0.0.1:8081", description="HTTP 重排服务地址"
+    )
+    rerank_api_path: str = Field(default="/rerank", description="HTTP 重排接口路径")
+    rerank_timeout_s: int = Field(default=60, description="重排服务超时秒数")
+    rerank_api_key: str | None = Field(default=None, description="重排服务 API Key")
+    rerank_batch_size: int = Field(default=16, description="本地重排批大小")
+    rerank_fallback_enabled: bool = Field(
+        default=True, description="模型重排失败时是否回退启发式重排"
+    )
 
     rag_topk: int = Field(default=5, description="默认 TopK")
     rag_threshold: float = Field(default=0.25, description="默认拒答阈值")
@@ -278,6 +293,7 @@ class Settings(BaseSettings):
         "qdrant_api_key",
         "vllm_api_key",
         "embedding_api_key",
+        "rerank_api_key",
         "hf_token",
         "s3_endpoint_url",
         "s3_access_key_id",

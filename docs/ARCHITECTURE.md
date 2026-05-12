@@ -207,7 +207,7 @@ app/db/models/
 
 ### 6.2 RAG 关键接口（建议）
 - `Retriever.search(kb_id, query, topk, filters) -> List[Hit]`
-- `Reranker.rerank(query, hits) -> List[Hit]`（可选）
+- `Reranker.rerank(query, hits) -> List[Hit]`（可选；支持启发式、本地 CrossEncoder、HTTP `/rerank` 模型服务）
 - `ContextBuilder.build(hits, max_context_tokens) -> (context, selected_hits)`
 - `RefusalPolicy.check(hits, threshold) -> (refusal, reason, suggestions)`
 - `LLMClient.generate(question, context) -> answer_text`

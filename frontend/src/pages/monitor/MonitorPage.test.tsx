@@ -61,6 +61,7 @@ describe("MonitorPage 二次确认交互", () => {
       services: {
         vector_backend: "memory",
         embedding_backend: "fake",
+        rerank_backend: "simple",
         vllm_enabled: false,
         ingest_queue_enabled: false
       },

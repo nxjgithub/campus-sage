@@ -27,7 +27,7 @@ from app.core.utils import utc_now_iso
 from app.ingest.chunker import Chunker
 from app.ingest.parser import DocumentParser
 from app.rag.embedding import HttpEmbeddingClient
-from app.rag.reranker import SimpleReranker
+from app.rag.reranker import get_reranker
 from app.rag.vector_store import VectorHit
 
 
@@ -437,6 +437,7 @@ def main() -> None:
         shutil.rmtree(qdrant_path)
 
     settings = get_settings()
+    reranker = get_reranker(settings)
     if args.embedding_backend == "http":
         embedding = HttpEmbeddingModel(
             settings=settings,
@@ -473,6 +474,7 @@ def main() -> None:
             questions=[item for item in eval_questions if item.gold_doc_name],
             embedding=embedding,
             vector_store=vector_store,
+            reranker=reranker,
             topk=args.topk,
         )
         threshold_results = run_threshold_experiment(
@@ -480,6 +482,7 @@ def main() -> None:
             questions=eval_questions,
             embedding=embedding,
             vector_store=vector_store,
+            reranker=reranker,
             topk=args.topk,
         )
         rerank_results = run_rerank_experiment(
@@ -487,6 +490,7 @@ def main() -> None:
             questions=[item for item in eval_questions if item.gold_doc_name],
             embedding=embedding,
             vector_store=vector_store,
+            reranker=reranker,
             topk=args.topk,
         )
         llm_results = None
@@ -496,6 +500,7 @@ def main() -> None:
                 questions=select_llm_questions(eval_questions, args.llm_sample_size),
                 embedding=embedding,
                 vector_store=vector_store,
+                reranker=reranker,
                 topk=args.topk,
                 settings=settings,
             )
@@ -519,7 +524,7 @@ def main() -> None:
                 if args.vector_backend == "local"
                 else None
             ),
-            "reranker": "SimpleReranker(title + section_path + keyword coverage)",
+            "reranker": f"{settings.rerank_backend}:{settings.rerank_model_name}",
             "llm_model": settings.vllm_model_name if not args.skip_llm else None,
         },
         "indexed_kbs": [asdict(item) for item in indexed_kbs],
@@ -617,6 +622,7 @@ def run_chunk_experiment(
     questions: list[EvalQuestion],
     embedding: SentenceEmbeddingModel,
     vector_store: LocalQdrantStore,
+    reranker: Any,
     topk: int,
 ) -> list[dict[str, Any]]:
     """实验一：比较不同分块参数。"""
@@ -629,6 +635,7 @@ def run_chunk_experiment(
                 question=item,
                 embedding=embedding,
                 vector_store=vector_store,
+                reranker=reranker,
                 topk=topk,
                 threshold=0.25,
                 rerank_enabled=True,
@@ -656,6 +663,7 @@ def run_threshold_experiment(
     questions: list[EvalQuestion],
     embedding: SentenceEmbeddingModel,
     vector_store: LocalQdrantStore,
+    reranker: Any,
     topk: int,
 ) -> list[dict[str, Any]]:
     """实验二：比较拒答阈值。"""
@@ -668,6 +676,7 @@ def run_threshold_experiment(
                 question=item,
                 embedding=embedding,
                 vector_store=vector_store,
+                reranker=reranker,
                 topk=topk,
                 threshold=threshold,
                 rerank_enabled=True,
@@ -713,6 +722,7 @@ def run_rerank_experiment(
     questions: list[EvalQuestion],
     embedding: SentenceEmbeddingModel,
     vector_store: LocalQdrantStore,
+    reranker: Any,
     topk: int,
 ) -> list[dict[str, Any]]:
     """实验三：比较是否启用重排。"""
@@ -725,6 +735,7 @@ def run_rerank_experiment(
                 question=item,
                 embedding=embedding,
                 vector_store=vector_store,
+                reranker=reranker,
                 topk=topk,
                 threshold=None,
                 rerank_enabled=rerank_enabled,
@@ -750,6 +761,7 @@ def retrieve_case(
     question: EvalQuestion,
     embedding: SentenceEmbeddingModel,
     vector_store: LocalQdrantStore,
+    reranker: Any,
     topk: int,
     threshold: float | None,
     rerank_enabled: bool,
@@ -767,7 +779,7 @@ def retrieve_case(
     threshold_rank = first_match_rank(threshold_hits, question.gold_doc_name)
     final_hits = threshold_hits
     if rerank_enabled:
-        final_hits = SimpleReranker().rerank(question.question, final_hits)
+        final_hits = reranker.rerank(question.question, final_hits)
     final_hits = final_hits[:topk]
     retrieve_ms = int((time.perf_counter() - start) * 1000)
     rank = first_match_rank(final_hits, question.gold_doc_name)
@@ -797,6 +809,7 @@ def run_llm_comparison(
     questions: list[EvalQuestion],
     embedding: SentenceEmbeddingModel,
     vector_store: LocalQdrantStore,
+    reranker: Any,
     topk: int,
     settings,
 ) -> dict[str, Any]:
@@ -814,6 +827,7 @@ def run_llm_comparison(
             question=question,
             embedding=embedding,
             vector_store=vector_store,
+            reranker=reranker,
             topk=topk,
             threshold=0.30,
             rerank_enabled=True,

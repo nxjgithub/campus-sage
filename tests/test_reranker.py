@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from app.rag.reranker import SimpleReranker
+import httpx
+
+from app.core.settings import Settings
+from app.rag.reranker import FallbackReranker, HttpReranker, SimpleReranker
 from app.rag.vector_store import VectorHit
 
 
@@ -98,3 +101,107 @@ def test_rerank_returns_original_hits_for_blank_question() -> None:
     ranked = reranker.rerank("   ", hits)
 
     assert ranked is hits
+
+
+def test_http_reranker_orders_hits_by_model_score(monkeypatch) -> None:
+    settings = Settings(
+        _env_file=None,
+        rerank_backend="http",
+        rerank_base_url="http://rerank.local",
+        rerank_api_path="rerank",
+        rerank_model_name="BAAI/bge-reranker-base",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_post(url, json, headers, timeout, trust_env):
+        captured["url"] = url
+        captured["json"] = json
+        captured["headers"] = headers
+        captured["timeout"] = timeout
+        captured["trust_env"] = trust_env
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"index": 0, "relevance_score": 0.12},
+                    {"index": 1, "relevance_score": 0.91},
+                ]
+            },
+        )
+
+    monkeypatch.setattr("app.rag.reranker.httpx.post", fake_post)
+    hits = [
+        VectorHit(score=0.99, payload={"doc_name": "A", "text": "奖学金说明"}),
+        VectorHit(score=0.10, payload={"doc_name": "B", "text": "转专业申请条件"}),
+    ]
+
+    ranked = HttpReranker(settings).rerank("转专业申请条件", hits)
+
+    assert captured["url"] == "http://rerank.local/rerank"
+    assert captured["json"] == {
+        "model": "BAAI/bge-reranker-base",
+        "query": "转专业申请条件",
+        "texts": ["A\n奖学金说明", "B\n转专业申请条件"],
+        "return_documents": False,
+    }
+    assert ranked[0].payload["doc_name"] == "B"
+
+
+def test_http_reranker_batches_requests(monkeypatch) -> None:
+    settings = Settings(
+        _env_file=None,
+        rerank_backend="http",
+        rerank_base_url="http://rerank.local",
+        rerank_batch_size=2,
+    )
+    batch_sizes: list[int] = []
+
+    def fake_post(url, json, headers, timeout, trust_env):
+        del url, headers, timeout, trust_env
+        batch_sizes.append(len(json["texts"]))
+        if len(batch_sizes) == 1:
+            scores = [
+                {"index": 0, "score": 0.1},
+                {"index": 1, "score": 0.9},
+            ]
+        else:
+            scores = [{"index": 0, "score": 0.5}]
+        return httpx.Response(200, json={"results": scores})
+
+    monkeypatch.setattr("app.rag.reranker.httpx.post", fake_post)
+    hits = [
+        VectorHit(score=0.30, payload={"doc_name": "A", "text": "奖学金"}),
+        VectorHit(score=0.20, payload={"doc_name": "B", "text": "补考"}),
+        VectorHit(score=0.10, payload={"doc_name": "C", "text": "留校"}),
+    ]
+
+    ranked = HttpReranker(settings).rerank("补考", hits)
+
+    assert batch_sizes == [2, 1]
+    assert [hit.payload["doc_name"] for hit in ranked] == ["B", "C", "A"]
+
+
+def test_model_reranker_falls_back_to_simple_when_http_fails(monkeypatch) -> None:
+    settings = Settings(
+        _env_file=None,
+        rerank_backend="http",
+        rerank_base_url="http://rerank.local",
+        rerank_fallback_enabled=True,
+    )
+
+    def fake_post(url, json, headers, timeout, trust_env):
+        del url, json, headers, timeout, trust_env
+        return httpx.Response(503, json={"error": "unavailable"})
+
+    monkeypatch.setattr("app.rag.reranker.httpx.post", fake_post)
+    hits = [
+        VectorHit(score=0.95, payload={"doc_name": "A", "text": "奖学金申请要求"}),
+        VectorHit(score=0.10, payload={"doc_name": "B", "text": "转专业申请条件"}),
+    ]
+
+    ranked = FallbackReranker(
+        HttpReranker(settings),
+        fallback_enabled=True,
+    ).rerank("转专业申请条件", hits)
+
+    assert ranked[0].payload["doc_name"] == "B"

@@ -238,7 +238,8 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 第二阶段后续检索优化可直接基于该脚本做可复现实验，而不必手工一组组跑。
 
 ## 后端近期更新（2026-03 检索优化）
-- `SimpleReranker` 已改为融合正文短语命中、文档标题命中与章节路径命中的启发式重排，适合高校教务类中文问句。
+- 重排已支持三种后端：`simple` 启发式、`local` 本地 `CrossEncoder`、`http` 外部 `/rerank` 服务；接入 bge-reranker 时可配置 `RERANK_BACKEND=local|http` 与 `RERANK_MODEL_NAME=BAAI/bge-reranker-base`。
+- `SimpleReranker` 仍保留为默认后端和模型重排失败时的兜底策略，融合正文短语命中、文档标题命中与章节路径命中，适合无模型环境演示。
 - 重排仍以向量分数作为并列排序兜底，避免仅靠词面命中把明显无关的候选抬到前面。
 - 开启 `rerank_enabled` 时，检索层现会先放大候选池，再执行重排并截回最终 `topk`，避免重排没有足够候选可排。
 - 已补充 `tests/test_reranker.py`，覆盖“正文精确命中优先”“标题/章节命中优先”“空问题不改序”三类回归场景。

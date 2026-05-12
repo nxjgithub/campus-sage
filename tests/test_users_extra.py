@@ -189,7 +189,12 @@ def test_eval_api_flow() -> None:
 
     run = client.post(
         "/api/v1/eval/runs",
-        json={"eval_set_id": eval_set_id, "kb_id": kb_id, "topk": 5},
+        json={
+            "eval_set_id": eval_set_id,
+            "kb_id": kb_id,
+            "topk": 5,
+            "rerank_enabled": False,
+        },
         headers=headers,
     )
     assert run.status_code == 200

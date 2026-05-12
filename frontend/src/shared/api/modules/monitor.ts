@@ -29,6 +29,7 @@ export interface RuntimeDiagnosticsResponse {
   services: {
     vector_backend: string;
     embedding_backend: string;
+    rerank_backend: string;
     vllm_enabled: boolean;
     ingest_queue_enabled: boolean;
   };

@@ -306,6 +306,7 @@ export function MonitorPage() {
               <Tag color={runtime?.services.vllm_enabled ? "green" : "default"}>
                 vLLM {runtime?.services.vllm_enabled ? "开启" : "关闭"}
               </Tag>
+              <Tag color="blue">重排 {runtime?.services.rerank_backend ?? "-"}</Tag>
               <Tag color={runtime?.services.ingest_queue_enabled ? "green" : "default"}>
                 入库队列 {runtime?.services.ingest_queue_enabled ? "开启" : "关闭"}
               </Tag>

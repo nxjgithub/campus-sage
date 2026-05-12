@@ -75,7 +75,16 @@
 
 ### 4.3 Rerank（可选）
 - `RERANK_ENABLED`：true/false
-- `RERANK_MODEL_NAME`：如 `bge-reranker`（示例）
+- `RERANK_BACKEND`：重排后端，`simple` / `local` / `http`，默认 `simple`
+- `RERANK_MODEL_NAME`：默认 `BAAI/bge-reranker-base`；`local` 后端会作为 `CrossEncoder` 模型名，`http` 后端会随请求传给重排服务
+- `RERANK_BASE_URL`：HTTP 重排服务地址，默认 `http://127.0.0.1:8081`
+- `RERANK_BASE_URL_INTERNAL`：Docker Compose 内部 HTTP 重排服务地址，默认 `http://rerank:80`
+- `RERANK_API_PATH`：HTTP 重排接口路径，默认 `/rerank`
+- `RERANK_TIMEOUT_S`：HTTP 重排超时秒数，默认 60
+- `RERANK_API_KEY`：HTTP 重排服务 API Key，可为空
+- `RERANK_BATCH_SIZE`：重排批大小；`local` 后端用于本地 cross-encoder 推理批量，`http` 后端用于分批调用模型服务，默认 8
+- `RERANK_FALLBACK_ENABLED`：模型重排失败时是否回退启发式重排，默认 true
+- `RERANK_MAX_CLIENT_BATCH_SIZE` / `RERANK_MAX_CONCURRENT_REQUESTS`：Docker Compose 中 TEI rerank 服务的批量与并发上限
 
 ## 4.4 认证与安全
 - `JWT_SECRET_KEY`：JWT 密钥（必须修改，且建议至少 32 个字符）
@@ -111,7 +120,10 @@
 - `min_keyword_coverage`：`0~1`
 
 说明：
-- 当 `rerank_enabled=true` 时，系统会先按 `RAG_RERANK_CANDIDATE_MULTIPLIER` 放大检索候选池，再执行启发式重排，最后截回最终 `topk`。
+- 当 `rerank_enabled=true` 时，系统会先按 `RAG_RERANK_CANDIDATE_MULTIPLIER` 放大检索候选池，再按 `RERANK_BACKEND` 执行重排，最后截回最终 `topk`。
+- `RERANK_BACKEND=simple` 使用内置启发式重排；`local` 使用 `sentence-transformers` 的 `CrossEncoder` 加载 `RERANK_MODEL_NAME`；`http` 调用 `RERANK_BASE_URL + RERANK_API_PATH`，请求体为 `{"model","query","texts","return_documents"}`，兼容常见 TEI/Cohere/Jina 风格的分数响应。
+- Docker Compose 已提供 `rerank` 服务，对宿主机暴露 `http://127.0.0.1:8081/rerank`；API/worker 容器内通过 `RERANK_BASE_URL_INTERNAL=http://rerank:80` 访问同一服务。
+- 生产演示接入 `bge-reranker` 时，推荐先设置 `RERANK_BACKEND=http` 并部署独立 rerank 服务；没有 GPU 或模型服务不稳定时保留 `RERANK_FALLBACK_ENABLED=true`，避免问答链路整体失败。
 - 若本地 Embedding 质量一般，可适度提高该候选池；但过大也会带来额外延迟。
 - 通知、公告、指南等 PDF 文档入库时，切片器会把首页标题和“一、二、三”等页内小节写入 `section_path`，并在长小节拆分时尽量保留小节标题作为每个 chunk 的语义锚点。
 - 简单重排器会优先识别 `主要功能`、`参与方式`、`培训对象`、`开课时间`、`课程安排` 等通知类意图短语，避免仅含宽泛主题词的候选压过精确小节。

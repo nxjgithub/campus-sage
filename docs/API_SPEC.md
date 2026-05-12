@@ -1083,6 +1083,7 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
   "services": {
     "vector_backend": "qdrant",
     "embedding_backend": "http",
+    "rerank_backend": "simple",
     "vllm_enabled": false,
     "ingest_queue_enabled": false
   },

@@ -86,6 +86,7 @@ def get_runtime_diagnostics(
         services=RuntimeServicesInfo(
             vector_backend=settings.vector_backend,
             embedding_backend=settings.embedding_backend,
+            rerank_backend=settings.rerank_backend,
             vllm_enabled=settings.vllm_enabled,
             ingest_queue_enabled=settings.ingest_queue_enabled,
         ),

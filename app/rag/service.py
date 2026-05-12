@@ -28,7 +28,7 @@ from app.rag.dto import AskResult, CitationAssetDTO, CitationDTO, NextStepDTO
 from app.rag.embedding import Embedder, get_embedder
 from app.rag.llm_client import VllmClient
 from app.rag.retrieval_policy import resolve_search_topk
-from app.rag.reranker import SimpleReranker
+from app.rag.reranker import get_reranker
 from app.rag.vector_store import VectorHit, VectorStore, get_vector_store
 
 _NO_EVIDENCE_ANSWER_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -89,7 +89,7 @@ class RagService:
         self._vector_store: VectorStore = get_vector_store(settings)
         self._context_builder = ContextBuilder(settings.rag_max_context_tokens)
         self._llm_client = VllmClient(settings)
-        self._reranker = SimpleReranker()
+        self._reranker = get_reranker(settings)
         self._logger = get_logger()
         database = get_database(settings)
         repository = ConversationRepository(database)

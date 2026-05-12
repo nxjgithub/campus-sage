@@ -262,7 +262,25 @@ docker compose exec mysql mysql -ucsage -pcsage123 -D csage -e "SELECT version, 
   - `top1_hit_count`：最终命中排在第 1 位的题数
 - `run_eval.py` 直接读取本地 `.env` / 环境变量，不会自动继承你已启动 API 进程的运行参数。
 - 如果你的 API 是用 `EMBEDDING_BACKEND=simple` 或其他临时覆盖参数跑通的，评测脚本也必须显式传入同样的覆盖参数。
-- 若你正在调优启发式重排，可同时关注 `RAG_RERANK_CANDIDATE_MULTIPLIER` 与 `RAG_RERANK_CANDIDATE_CAP`；系统会先放大候选池，再重排后截回最终 `topk`。
+- 若你正在调优重排，可同时关注 `RAG_RERANK_CANDIDATE_MULTIPLIER` 与 `RAG_RERANK_CANDIDATE_CAP`；系统会先放大候选池，再重排后截回最终 `topk`。
+- 默认 `RERANK_BACKEND=simple` 使用启发式重排。若要本地调用 bge-reranker/cross-encoder，可配置：
+```powershell
+RERANK_ENABLED=true
+RERANK_BACKEND=local
+RERANK_MODEL_NAME=BAAI/bge-reranker-base
+```
+- 若使用独立 HTTP 重排服务，可配置：
+```powershell
+RERANK_ENABLED=true
+RERANK_BACKEND=http
+RERANK_BASE_URL=http://127.0.0.1:8081
+RERANK_BASE_URL_INTERNAL=http://rerank:80
+RERANK_API_PATH=/rerank
+RERANK_MODEL_NAME=BAAI/bge-reranker-base
+```
+- HTTP 重排请求体为 `{"model","query","texts","return_documents"}`；返回值兼容 `results/data` 列表中的 `index + score/relevance_score`。模型服务不可用且 `RERANK_FALLBACK_ENABLED=true` 时，系统会回退到启发式重排。
+- `RERANK_BATCH_SIZE` 会限制单次 HTTP 重排请求的文本数量；TEI rerank 服务默认 `RERANK_MAX_CLIENT_BATCH_SIZE=8`，因此本地 `.env` 建议保持 `RERANK_BATCH_SIZE=8`。
+- Docker Compose 中内置 `rerank` 服务，使用与 embedding 相同的 TEI 镜像加载 `RERANK_MODEL_NAME`。宿主机脚本访问 `http://127.0.0.1:8081/rerank`，API/worker 容器访问 `http://rerank:80/rerank`。
 - 常见排障：
   - 若报 `Embedding 服务不可用`，先检查当前是否仍在使用 `.env` 里的 `EMBEDDING_BACKEND=http` 与 `EMBEDDING_BASE_URL=http://127.0.0.1:8001/v1`。
   - 若你只是想复现本地 demo 基线，可直接追加 `--embedding-backend simple`。

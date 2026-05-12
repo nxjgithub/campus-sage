@@ -12,7 +12,7 @@ from app.eval.dto import (
 from app.eval.metrics import mean_reciprocal_rank, percentile, recall_at_k
 from app.rag.embedding import Embedder, get_embedder
 from app.rag.retrieval_policy import resolve_search_topk
-from app.rag.reranker import SimpleReranker
+from app.rag.reranker import get_reranker
 from app.rag.vector_store import VectorHit, VectorStore, get_vector_store
 
 
@@ -85,7 +85,7 @@ def evaluate_items(
 
     embedder = embedder or get_embedder(settings)
     vector_store = vector_store or get_vector_store(settings)
-    reranker = SimpleReranker()
+    reranker = get_reranker(settings)
 
     results: list[EvalItemResult] = []
     search_topk = resolve_search_topk(
