@@ -1,0 +1,118 @@
+{
+  "name": "CampusSage答辩演示评测集_v1",
+  "description": "与 docs/examples/defense_demo_corpus 配套，用于毕业设计答辩演示的检索、引用、拒答和边界问题验证。",
+  "items": [
+    {
+      "question": "2026届毕业生一次性求职创业补贴的申请对象包括哪些学生？",
+      "gold_doc_name": "2026届毕业生一次性求职创业补贴申请通知.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "求职创业补贴申请需要提交哪些材料？",
+      "gold_doc_name": "2026届毕业生一次性求职创业补贴申请通知.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "2026届毕业生求职创业补贴个人申请截止到哪一天？",
+      "gold_doc_name": "2026届毕业生一次性求职创业补贴申请通知.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "重修报名一般在什么时候开放？",
+      "gold_doc_name": "2025-2026学年重补修与补考确认通知.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "同一学期建议重修课程总学分不超过多少？",
+      "gold_doc_name": "2025-2026学年重补修与补考确认通知.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "学生暑假留校住宿需要提交哪些申请材料？",
+      "gold_doc_name": "学生暑假留校住宿申请与管理规定.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "暑假留校学生个人申请时间是什么时候？",
+      "gold_doc_name": "学生暑假留校住宿申请与管理规定.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "自助打印终端支持哪些登录方式？",
+      "gold_doc_name": "校园自助打印与证明材料办理指南.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "学生发现成绩缺失导致无法打印证明时应该怎么办？",
+      "gold_doc_name": "校园自助打印与证明材料办理指南.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "学生电动车登记需要提交哪些材料？",
+      "gold_doc_name": "校园交通安全与电动车管理办法.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "校园电动车可以带入宿舍充电吗？",
+      "gold_doc_name": "校园交通安全与电动车管理办法.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "毕业论文中期检查通常需要提交哪些材料？",
+      "gold_doc_name": "本科毕业论文过程管理与答辩安排.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "涉及软件系统实现的毕业论文答辩前应准备哪些材料？",
+      "gold_doc_name": "本科毕业论文过程管理与答辩安排.md",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "学校食堂今天午餐有哪些菜？",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "校医院今天下午哪位医生坐诊？",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    },
+    {
+      "question": "明天成都到北京的机票多少钱？",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null
+    }
+  ]
+}

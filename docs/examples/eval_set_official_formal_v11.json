@@ -1,0 +1,1009 @@
+{
+  "name": "CampusSage正式文件扩展评测集V11",
+  "description": "基于 data/正式文件 的真实校园通知、指南、附件和 PDF/DOCX 文档生成，包含知识库内检索问题与知识库外边界问题。",
+  "source_dir": "data\\正式文件",
+  "document_count": 45,
+  "skipped_count": 6,
+  "items": [
+    {
+      "question": "请概述《关于2025-2026学年第1学期重补修手续及补考确认的通知》的核心内容。",
+      "expected": "关于2025-2026学年第1学期重补修手续及补考确认的通知",
+      "gold_doc_name": "1_关于2025-2026学年第1学期重补修手续及补考确认的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于2025-2026学年第1学期重补修手续及补考确认的通知》，重补修手续办理和补考确认有哪些时间或流程要求？",
+      "expected": "关于2025-2026学年第1学期重补修手续及补考确认的通知",
+      "gold_doc_name": "1_关于2025-2026学年第1学期重补修手续及补考确认的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《2025—2026学年暑假学生办理留校相关附件》的核心内容。",
+      "expected": "2025—2026学年暑假学生办理留校相关附件",
+      "gold_doc_name": "2025—2026学年暑假学生办理留校相关附件.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《2025—2026学年暑假学生办理留校相关附件》，暑假留校或假期学生管理需要注意哪些申请、安全和管理要求？",
+      "expected": "2025—2026学年暑假学生办理留校相关附件",
+      "gold_doc_name": "2025—2026学年暑假学生办理留校相关附件.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《2026年度招收军士专业信息查询以下专业符合预报名》的核心内容。",
+      "expected": "2026年度招收军士专业信息查询以下专业符合预报名",
+      "gold_doc_name": "2026年度招收军士专业信息查询以下专业符合预报名.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《2026年度招收军士专业信息查询以下专业符合预报名》，学生应征入伍、义务兵或直招军士相关工作有哪些安排？",
+      "expected": "2026年度招收军士专业信息查询以下专业符合预报名",
+      "gold_doc_name": "2026年度招收军士专业信息查询以下专业符合预报名.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《五一节安全提醒》的核心内容。",
+      "expected": "五一节安全提醒",
+      "gold_doc_name": "五一节安全提醒.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《五一节安全提醒》，校园安全教育、风险防范或应急技能学习有哪些重点要求？",
+      "expected": "五一节安全提醒",
+      "gold_doc_name": "五一节安全提醒.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《保密知识竞赛》的核心内容。",
+      "expected": "保密知识竞赛",
+      "gold_doc_name": "保密知识竞赛.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《保密知识竞赛》，校园安全教育、风险防范或应急技能学习有哪些重点要求？",
+      "expected": "保密知识竞赛",
+      "gold_doc_name": "保密知识竞赛.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《假期去向登记_操作指南（学生）》的核心内容。",
+      "expected": "假期去向登记_操作指南（学生）",
+      "gold_doc_name": "假期去向登记_操作指南（学生）.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《假期去向登记_操作指南（学生）》，相关系统平台的登录、信息维护或操作步骤有哪些注意事项？",
+      "expected": "假期去向登记_操作指南（学生）",
+      "gold_doc_name": "假期去向登记_操作指南（学生）.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《党委宣传部关于组织大学生参加“学宪法 讲宪法”系列活动“宪法卫士”在线学习与答题的通知》的核心内容。",
+      "expected": "党委宣传部关于组织大学生参加“学宪法 讲宪法”系列活动“宪法卫士”在线学习与答题的通知",
+      "gold_doc_name": "党委宣传部关于组织大学生参加“学宪法 讲宪法”系列活动“宪法卫士”在线学习与答题的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《党委宣传部关于组织大学生参加“学宪法 讲宪法”系列活动“宪法卫士”在线学习与答题的通知》，校园文化、学生社区或文明寝室建设相关活动有哪些安排？",
+      "expected": "党委宣传部关于组织大学生参加“学宪法 讲宪法”系列活动“宪法卫士”在线学习与答题的通知",
+      "gold_doc_name": "党委宣传部关于组织大学生参加“学宪法 讲宪法”系列活动“宪法卫士”在线学习与答题的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于举办2024年高校“礼敬中华优秀传统文化”宣传教育活动的通知》的核心内容。",
+      "expected": "关于举办2024年高校“礼敬中华优秀传统文化”宣传教育活动的通知",
+      "gold_doc_name": "关于举办2024年高校“礼敬中华优秀传统文化”宣传教育活动的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于举办2024年高校“礼敬中华优秀传统文化”宣传教育活动的通知》，校园文化、学生社区或文明寝室建设相关活动有哪些安排？",
+      "expected": "关于举办2024年高校“礼敬中华优秀传统文化”宣传教育活动的通知",
+      "gold_doc_name": "关于举办2024年高校“礼敬中华优秀传统文化”宣传教育活动的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于举办2025年大学生网络安全宣传周活动的通知》的核心内容。",
+      "expected": "关于举办2025年大学生网络安全宣传周活动的通知",
+      "gold_doc_name": "关于举办2025年大学生网络安全宣传周活动的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于举办2025年大学生网络安全宣传周活动的通知》，校园安全教育、风险防范或应急技能学习有哪些重点要求？",
+      "expected": "关于举办2025年大学生网络安全宣传周活动的通知",
+      "gold_doc_name": "关于举办2025年大学生网络安全宣传周活动的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于做好2025-2026学年寒假学生教育管理工作的通知(2026.1.19)》的核心内容。",
+      "expected": "关于做好2025-2026学年寒假学生教育管理工作的通知(2026.1.19)",
+      "gold_doc_name": "关于做好2025-2026学年寒假学生教育管理工作的通知(2026.1.19).docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于做好2025-2026学年寒假学生教育管理工作的通知(2026.1.19)》，关于关于做好2025、2026学年寒假学生教育管理工作的通知、2026.1.19，该文件说明了哪些办理事项和注意要求？",
+      "expected": "关于做好2025-2026学年寒假学生教育管理工作的通知(2026.1.19)",
+      "gold_doc_name": "关于做好2025-2026学年寒假学生教育管理工作的通知(2026.1.19).docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于做好2025年暑假学生教育管理工作的通知》的核心内容。",
+      "expected": "关于做好2025年暑假学生教育管理工作的通知",
+      "gold_doc_name": "关于做好2025年暑假学生教育管理工作的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于做好2025年暑假学生教育管理工作的通知》，暑假留校或假期学生管理需要注意哪些申请、安全和管理要求？",
+      "expected": "关于做好2025年暑假学生教育管理工作的通知",
+      "gold_doc_name": "关于做好2025年暑假学生教育管理工作的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于免费统一加挂校园通行证的通知》的核心内容。",
+      "expected": "关于免费统一加挂校园通行证的通知",
+      "gold_doc_name": "关于免费统一加挂校园通行证的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于免费统一加挂校园通行证的通知》，校园交通安全、非机动车通行或通行证办理有哪些要求？",
+      "expected": "关于免费统一加挂校园通行证的通知",
+      "gold_doc_name": "关于免费统一加挂校园通行证的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于切实做好2026届高校毕业生一次性求职创业补贴的通知》的核心内容。",
+      "expected": "关于切实做好2026届高校毕业生一次性求职创业补贴的通知",
+      "gold_doc_name": "关于切实做好2026届高校毕业生一次性求职创业补贴的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于切实做好2026届高校毕业生一次性求职创业补贴的通知》，毕业生就业、求职创业补贴或离校信息填写有哪些办理要求？",
+      "expected": "关于切实做好2026届高校毕业生一次性求职创业补贴的通知",
+      "gold_doc_name": "关于切实做好2026届高校毕业生一次性求职创业补贴的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于启用自助打印终端的通知》的核心内容。",
+      "expected": "关于启用自助打印终端的通知",
+      "gold_doc_name": "关于启用自助打印终端的通知(1).docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于启用自助打印终端的通知》，自助打印终端或证明材料办理支持哪些事项和操作方式？",
+      "expected": "关于启用自助打印终端的通知",
+      "gold_doc_name": "关于启用自助打印终端的通知(1).docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于四川轻化工大学2024-2025学年第一学期日常心理咨询服务公告的通知》的核心内容。",
+      "expected": "关于四川轻化工大学2024-2025学年第一学期日常心理咨询服务公告的通知",
+      "gold_doc_name": "关于四川轻化工大学2024-2025学年第一学期日常心理咨询服务公告的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于四川轻化工大学2024-2025学年第一学期日常心理咨询服务公告的通知》，心理咨询服务或心理知识比赛有哪些安排和参与要求？",
+      "expected": "关于四川轻化工大学2024-2025学年第一学期日常心理咨询服务公告的通知",
+      "gold_doc_name": "关于四川轻化工大学2024-2025学年第一学期日常心理咨询服务公告的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于四川轻化工大学专属版玻尔AI科研平台首门AI科研素养基础课学习的通知》的核心内容。",
+      "expected": "关于四川轻化工大学专属版玻尔AI科研平台首门AI科研素养基础课学习的通知",
+      "gold_doc_name": "关于四川轻化工大学专属版玻尔AI科研平台首门AI科研素养基础课学习的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于四川轻化工大学专属版玻尔AI科研平台首门AI科研素养基础课学习的通知》，相关系统平台的登录、信息维护或操作步骤有哪些注意事项？",
+      "expected": "关于四川轻化工大学专属版玻尔AI科研平台首门AI科研素养基础课学习的通知",
+      "gold_doc_name": "关于四川轻化工大学专属版玻尔AI科研平台首门AI科研素养基础课学习的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于宜宾市“畅游两海”大学生年票及宜宾学生公交ic卡线上办理活动的通知》的核心内容。",
+      "expected": "关于宜宾市“畅游两海”大学生年票及宜宾学生公交ic卡线上办理活动的通知",
+      "gold_doc_name": "关于宜宾市“畅游两海”大学生年票及宜宾学生公交ic卡线上办理活动的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于宜宾市“畅游两海”大学生年票及宜宾学生公交ic卡线上办理活动的通知》，学生证、公交卡、年票或火车优惠卡相关事项如何办理？",
+      "expected": "关于宜宾市“畅游两海”大学生年票及宜宾学生公交ic卡线上办理活动的通知",
+      "gold_doc_name": "关于宜宾市“畅游两海”大学生年票及宜宾学生公交ic卡线上办理活动的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于开展2025年“乐业宜宾”大学生就业冲刺夏令营暨青年求职能力实训营的通知》的核心内容。",
+      "expected": "关于开展2025年“乐业宜宾”大学生就业冲刺夏令营暨青年求职能力实训营的通知",
+      "gold_doc_name": "关于开展2025年“乐业宜宾”大学生就业冲刺夏令营暨青年求职能力实训营的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于开展2025年“乐业宜宾”大学生就业冲刺夏令营暨青年求职能力实训营的通知》，毕业生就业、求职创业补贴或离校信息填写有哪些办理要求？",
+      "expected": "关于开展2025年“乐业宜宾”大学生就业冲刺夏令营暨青年求职能力实训营的通知",
+      "gold_doc_name": "关于开展2025年“乐业宜宾”大学生就业冲刺夏令营暨青年求职能力实训营的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于开展2025年四川轻化工大学大学生创新创业俱乐部创业补贴申报工作的通知》的核心内容。",
+      "expected": "关于开展2025年四川轻化工大学大学生创新创业俱乐部创业补贴申报工作的通知",
+      "gold_doc_name": "关于开展2025年四川轻化工大学大学生创新创业俱乐部创业补贴申报工作的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于开展2025年四川轻化工大学大学生创新创业俱乐部创业补贴申报工作的通知》，毕业生就业、求职创业补贴或离校信息填写有哪些办理要求？",
+      "expected": "关于开展2025年四川轻化工大学大学生创新创业俱乐部创业补贴申报工作的通知",
+      "gold_doc_name": "关于开展2025年四川轻化工大学大学生创新创业俱乐部创业补贴申报工作的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于开展四川轻化工大学“一站式”学生社区形象标识（LOGO）征集活动的通知》的核心内容。",
+      "expected": "关于开展四川轻化工大学“一站式”学生社区形象标识（LOGO）征集活动的通知",
+      "gold_doc_name": "关于开展四川轻化工大学“一站式”学生社区形象标识（LOGO）征集活动的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于开展四川轻化工大学“一站式”学生社区形象标识（LOGO）征集活动的通知》，校园文化、学生社区或文明寝室建设相关活动有哪些安排？",
+      "expected": "关于开展四川轻化工大学“一站式”学生社区形象标识（LOGO）征集活动的通知",
+      "gold_doc_name": "关于开展四川轻化工大学“一站式”学生社区形象标识（LOGO）征集活动的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于开展学校2026届毕业生就业意向统计的通知》的核心内容。",
+      "expected": "关于开展学校2026届毕业生就业意向统计的通知",
+      "gold_doc_name": "关于开展学校2026届毕业生就业意向统计的通知(1).docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于开展学校2026届毕业生就业意向统计的通知》，毕业生就业、求职创业补贴或离校信息填写有哪些办理要求？",
+      "expected": "关于开展学校2026届毕业生就业意向统计的通知",
+      "gold_doc_name": "关于开展学校2026届毕业生就业意向统计的通知(1).docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于开展轻风化雨652智慧育人平台系统维护工作的通知》的核心内容。",
+      "expected": "关于开展轻风化雨652智慧育人平台系统维护工作的通知",
+      "gold_doc_name": "关于开展轻风化雨652智慧育人平台系统维护工作的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于开展轻风化雨652智慧育人平台系统维护工作的通知》，相关系统平台的登录、信息维护或操作步骤有哪些注意事项？",
+      "expected": "关于开展轻风化雨652智慧育人平台系统维护工作的通知",
+      "gold_doc_name": "关于开展轻风化雨652智慧育人平台系统维护工作的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于组织学习《地震预警之公共聚集场所》科普视频的温馨提示》的核心内容。",
+      "expected": "关于组织学习《地震预警之公共聚集场所》科普视频的温馨提示",
+      "gold_doc_name": "关于组织学习《地震预警之公共聚集场所》科普视频的温馨提示.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于组织学习《地震预警之公共聚集场所》科普视频的温馨提示》，校园安全教育、风险防范或应急技能学习有哪些重点要求？",
+      "expected": "关于组织学习《地震预警之公共聚集场所》科普视频的温馨提示",
+      "gold_doc_name": "关于组织学习《地震预警之公共聚集场所》科普视频的温馨提示.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于组织学生参加“第十六届国际研究生奖学金信息说明会”的通知》的核心内容。",
+      "expected": "关于组织学生参加“第十六届国际研究生奖学金信息说明会”的通知",
+      "gold_doc_name": "关于组织学生参加“第十六届国际研究生奖学金信息说明会”的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于组织学生参加“第十六届国际研究生奖学金信息说明会”的通知》，关于关于组织学生参加、第十六届国际研究生奖学金信息说明会、的通知，该文件说明了哪些办理事项和注意要求？",
+      "expected": "关于组织学生参加“第十六届国际研究生奖学金信息说明会”的通知",
+      "gold_doc_name": "关于组织学生参加“第十六届国际研究生奖学金信息说明会”的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于组织学生参加四川省高校学生第二届心理知识比赛的通知》的核心内容。",
+      "expected": "关于组织学生参加四川省高校学生第二届心理知识比赛的通知",
+      "gold_doc_name": "关于组织学生参加四川省高校学生第二届心理知识比赛的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于组织学生参加四川省高校学生第二届心理知识比赛的通知》，心理咨询服务或心理知识比赛有哪些安排和参与要求？",
+      "expected": "关于组织学生参加四川省高校学生第二届心理知识比赛的通知",
+      "gold_doc_name": "关于组织学生参加四川省高校学生第二届心理知识比赛的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于组织收看“爱我国防”全民国防教育公益大讲堂的通知》的核心内容。",
+      "expected": "关于组织收看“爱我国防”全民国防教育公益大讲堂的通知",
+      "gold_doc_name": "关于组织收看“爱我国防”全民国防教育公益大讲堂的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于组织收看“爱我国防”全民国防教育公益大讲堂的通知》，校园安全教育、风险防范或应急技能学习有哪些重点要求？",
+      "expected": "关于组织收看“爱我国防”全民国防教育公益大讲堂的通知",
+      "gold_doc_name": "关于组织收看“爱我国防”全民国防教育公益大讲堂的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于维护“轻风化雨652”平台学生信息的通知》的核心内容。",
+      "expected": "关于维护“轻风化雨652”平台学生信息的通知",
+      "gold_doc_name": "关于维护“轻风化雨652”平台学生信息的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于维护“轻风化雨652”平台学生信息的通知》，相关系统平台的登录、信息维护或操作步骤有哪些注意事项？",
+      "expected": "关于维护“轻风化雨652”平台学生信息的通知",
+      "gold_doc_name": "关于维护“轻风化雨652”平台学生信息的通知.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于进一步加强校园交通安全管理的通知》的核心内容。",
+      "expected": "关于进一步加强校园交通安全管理的通知",
+      "gold_doc_name": "关于进一步加强校园交通安全管理的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于进一步加强校园交通安全管理的通知》，校园交通安全、非机动车通行或通行证办理有哪些要求？",
+      "expected": "关于进一步加强校园交通安全管理的通知",
+      "gold_doc_name": "关于进一步加强校园交通安全管理的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《关于防范在QQ群、微信群冒充教师发布有关收费信息实施诈骗的预警提示》的核心内容。",
+      "expected": "关于防范在QQ群、微信群冒充教师发布有关收费信息实施诈骗的预警提示",
+      "gold_doc_name": "关于防范在QQ群、微信群冒充教师发布有关收费信息实施诈骗的预警提示.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《关于防范在QQ群、微信群冒充教师发布有关收费信息实施诈骗的预警提示》，校园安全教育、风险防范或应急技能学习有哪些重点要求？",
+      "expected": "关于防范在QQ群、微信群冒充教师发布有关收费信息实施诈骗的预警提示",
+      "gold_doc_name": "关于防范在QQ群、微信群冒充教师发布有关收费信息实施诈骗的预警提示.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《冬季防火安全提示》的核心内容。",
+      "expected": "冬季防火安全提示",
+      "gold_doc_name": "冬季防火安全提示.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《冬季防火安全提示》，校园安全教育、风险防范或应急技能学习有哪些重点要求？",
+      "expected": "冬季防火安全提示",
+      "gold_doc_name": "冬季防火安全提示.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《四川轻化工大学关于做好2024年暑期洪涝受灾家庭经济困难学生资助工作的通知》的核心内容。",
+      "expected": "四川轻化工大学关于做好2024年暑期洪涝受灾家庭经济困难学生资助工作的通知",
+      "gold_doc_name": "四川轻化工大学关于做好2024年暑期洪涝受灾家庭经济困难学生资助工作的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《四川轻化工大学关于做好2024年暑期洪涝受灾家庭经济困难学生资助工作的通知》，关于四川轻化工大学关于做好2024年暑期洪涝受灾家庭经济困难学生资助工作的通知，该文件说明了哪些办理事项和注意要求？",
+      "expected": "四川轻化工大学关于做好2024年暑期洪涝受灾家庭经济困难学生资助工作的通知",
+      "gold_doc_name": "四川轻化工大学关于做好2024年暑期洪涝受灾家庭经济困难学生资助工作的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《四川轻化工大学关于开展2024年“一站式”学生社区文明寝室评选活动的通知》的核心内容。",
+      "expected": "四川轻化工大学关于开展2024年“一站式”学生社区文明寝室评选活动的通知",
+      "gold_doc_name": "四川轻化工大学关于开展2024年“一站式”学生社区文明寝室评选活动的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《四川轻化工大学关于开展2024年“一站式”学生社区文明寝室评选活动的通知》，校园文化、学生社区或文明寝室建设相关活动有哪些安排？",
+      "expected": "四川轻化工大学关于开展2024年“一站式”学生社区文明寝室评选活动的通知",
+      "gold_doc_name": "四川轻化工大学关于开展2024年“一站式”学生社区文明寝室评选活动的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《四川轻化工大学系统登录+使用手册》的核心内容。",
+      "expected": "四川轻化工大学系统登录+使用手册",
+      "gold_doc_name": "四川轻化工大学系统登录+使用手册.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《四川轻化工大学系统登录+使用手册》，相关系统平台的登录、信息维护或操作步骤有哪些注意事项？",
+      "expected": "四川轻化工大学系统登录+使用手册",
+      "gold_doc_name": "四川轻化工大学系统登录+使用手册.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《学生使用手册》的核心内容。",
+      "expected": "学生使用手册",
+      "gold_doc_name": "学生使用手册.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《学生使用手册》，相关系统平台的登录、信息维护或操作步骤有哪些注意事项？",
+      "expected": "学生使用手册",
+      "gold_doc_name": "学生使用手册.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《学生证（本专科、研究生）期末注意事项》的核心内容。",
+      "expected": "学生证（本专科、研究生）期末注意事项",
+      "gold_doc_name": "学生证（本专科、研究生）期末注意事项.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《学生证（本专科、研究生）期末注意事项》，学生证、公交卡、年票或火车优惠卡相关事项如何办理？",
+      "expected": "学生证（本专科、研究生）期末注意事项",
+      "gold_doc_name": "学生证（本专科、研究生）期末注意事项.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《寒假归乡，共叙团圆——致川轻化全体同学的倡议书》的核心内容。",
+      "expected": "寒假归乡，共叙团圆——致川轻化全体同学的倡议书",
+      "gold_doc_name": "寒假归乡，共叙团圆——致川轻化全体同学的倡议书.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《寒假归乡，共叙团圆——致川轻化全体同学的倡议书》，关于寒假归乡、共叙团圆、致川轻化全体同学的倡议书，该文件说明了哪些办理事项和注意要求？",
+      "expected": "寒假归乡，共叙团圆——致川轻化全体同学的倡议书",
+      "gold_doc_name": "寒假归乡，共叙团圆——致川轻化全体同学的倡议书.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《应征入伍国家资助解读0305》的核心内容。",
+      "expected": "应征入伍国家资助解读0305",
+      "gold_doc_name": "应征入伍国家资助解读0305.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《应征入伍国家资助解读0305》，学生应征入伍、义务兵或直招军士相关工作有哪些安排？",
+      "expected": "应征入伍国家资助解读0305",
+      "gold_doc_name": "应征入伍国家资助解读0305.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《拟于2026届毕业学生线上补采集方法及注意》的核心内容。",
+      "expected": "拟于2026届毕业学生线上补采集方法及注意",
+      "gold_doc_name": "拟于2026届毕业学生线上补采集方法及注意.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《拟于2026届毕业学生线上补采集方法及注意》，毕业生就业、求职创业补贴或离校信息填写有哪些办理要求？",
+      "expected": "拟于2026届毕业学生线上补采集方法及注意",
+      "gold_doc_name": "拟于2026届毕业学生线上补采集方法及注意.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《教思政厅函〔2024〕10号附件1》的核心内容。",
+      "expected": "教思政厅函〔2024〕10号附件1",
+      "gold_doc_name": "教思政厅函〔2024〕10号附件1.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《教思政厅函〔2024〕10号附件1》，关于教思政厅函〔2024〕10号附件1，该文件说明了哪些办理事项和注意要求？",
+      "expected": "教思政厅函〔2024〕10号附件1",
+      "gold_doc_name": "教思政厅函〔2024〕10号附件1.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《校园安全驾驶、骑行承诺书》的核心内容。",
+      "expected": "校园安全驾驶、骑行承诺书",
+      "gold_doc_name": "校园安全驾驶、骑行承诺书.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《校园安全驾驶、骑行承诺书》，校园交通安全、非机动车通行或通行证办理有哪些要求？",
+      "expected": "校园安全驾驶、骑行承诺书",
+      "gold_doc_name": "校园安全驾驶、骑行承诺书.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《老系统  生源信息填写，核对，就业（三方）协议相关提示》的核心内容。",
+      "expected": "老系统  生源信息填写，核对，就业（三方）协议相关提示",
+      "gold_doc_name": "老系统  生源信息填写，核对，就业（三方）协议相关提示.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《老系统  生源信息填写，核对，就业（三方）协议相关提示》，毕业生就业、求职创业补贴或离校信息填写有哪些办理要求？",
+      "expected": "老系统  生源信息填写，核对，就业（三方）协议相关提示",
+      "gold_doc_name": "老系统  生源信息填写，核对，就业（三方）协议相关提示.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《计算机科学与工程学院2024-2025-1学年新生入学温馨提示》的核心内容。",
+      "expected": "计算机科学与工程学院2024-2025-1学年新生入学温馨提示",
+      "gold_doc_name": "计算机科学与工程学院2024-2025-1学年新生入学温馨提示.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《计算机科学与工程学院2024-2025-1学年新生入学温馨提示》，关于计算机科学与工程学院2024、2025、1学年新生入学温馨提示，该文件说明了哪些办理事项和注意要求？",
+      "expected": "计算机科学与工程学院2024-2025-1学年新生入学温馨提示",
+      "gold_doc_name": "计算机科学与工程学院2024-2025-1学年新生入学温馨提示.pdf",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《计算机科学与工程学院2025年暑假留校安全告知书》的核心内容。",
+      "expected": "计算机科学与工程学院2025年暑假留校安全告知书",
+      "gold_doc_name": "计算机科学与工程学院2025年暑假留校安全告知书.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《计算机科学与工程学院2025年暑假留校安全告知书》，暑假留校或假期学生管理需要注意哪些申请、安全和管理要求？",
+      "expected": "计算机科学与工程学院2025年暑假留校安全告知书",
+      "gold_doc_name": "计算机科学与工程学院2025年暑假留校安全告知书.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《轻风化雨652离校信息填写步骤》的核心内容。",
+      "expected": "轻风化雨652离校信息填写步骤",
+      "gold_doc_name": "轻风化雨652离校信息填写步骤(1).docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《轻风化雨652离校信息填写步骤》，毕业生就业、求职创业补贴或离校信息填写有哪些办理要求？",
+      "expected": "轻风化雨652离校信息填写步骤",
+      "gold_doc_name": "轻风化雨652离校信息填写步骤(1).docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "请概述《附件：关于不统一购买学生火车优惠卡的通知》的核心内容。",
+      "expected": "附件：关于不统一购买学生火车优惠卡的通知",
+      "gold_doc_name": "附件：关于不统一购买学生火车优惠卡的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "summary",
+      "source": "official_file"
+    },
+    {
+      "question": "根据《附件：关于不统一购买学生火车优惠卡的通知》，学生证、公交卡、年票或火车优惠卡相关事项如何办理？",
+      "expected": "附件：关于不统一购买学生火车优惠卡的通知",
+      "gold_doc_name": "附件：关于不统一购买学生火车优惠卡的通知.docx",
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "topic_detail",
+      "source": "official_file"
+    },
+    {
+      "question": "今天学校第一食堂午餐每个窗口具体卖什么菜？",
+      "expected": "知识库中没有足够证据，应拒答并建议补充数据或查询官方渠道。",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "out_of_scope",
+      "source": "boundary_case"
+    },
+    {
+      "question": "明天从成都飞北京的最低机票价格是多少？",
+      "expected": "知识库中没有足够证据，应拒答并建议补充数据或查询官方渠道。",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "out_of_scope",
+      "source": "boundary_case"
+    },
+    {
+      "question": "请查询我个人本学期每门课程的具体成绩。",
+      "expected": "知识库中没有足够证据，应拒答并建议补充数据或查询官方渠道。",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "out_of_scope",
+      "source": "boundary_case"
+    },
+    {
+      "question": "学校附近哪家火锅店今晚不用排队？",
+      "expected": "知识库中没有足够证据，应拒答并建议补充数据或查询官方渠道。",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "out_of_scope",
+      "source": "boundary_case"
+    },
+    {
+      "question": "请帮我预约明天上午十点的医院口腔科号源。",
+      "expected": "知识库中没有足够证据，应拒答并建议补充数据或查询官方渠道。",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "out_of_scope",
+      "source": "boundary_case"
+    },
+    {
+      "question": "今年世界杯决赛比分是多少？",
+      "expected": "知识库中没有足够证据，应拒答并建议补充数据或查询官方渠道。",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "out_of_scope",
+      "source": "boundary_case"
+    },
+    {
+      "question": "请给出我校园卡当前余额和最近三笔消费记录。",
+      "expected": "知识库中没有足够证据，应拒答并建议补充数据或查询官方渠道。",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "out_of_scope",
+      "source": "boundary_case"
+    },
+    {
+      "question": "请预测下个月比特币价格会涨到多少。",
+      "expected": "知识库中没有足够证据，应拒答并建议补充数据或查询官方渠道。",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "out_of_scope",
+      "source": "boundary_case"
+    },
+    {
+      "question": "请告诉我某位同学的身份证号码和联系电话。",
+      "expected": "知识库中没有足够证据，应拒答并建议补充数据或查询官方渠道。",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "out_of_scope",
+      "source": "boundary_case"
+    },
+    {
+      "question": "请生成一份无需证明即可领取补贴的内部审批名单。",
+      "expected": "知识库中没有足够证据，应拒答并建议补充数据或查询官方渠道。",
+      "gold_doc_name": null,
+      "gold_doc_id": null,
+      "gold_page_start": null,
+      "gold_page_end": null,
+      "question_type": "out_of_scope",
+      "source": "boundary_case"
+    }
+  ]
+}

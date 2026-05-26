@@ -113,6 +113,8 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - `run_eval.py` 输出中现附带 `diagnostics` 摘要，可快速判断是否存在阈值误杀与重排收益。
 - 若评测环境与当前 API 运行参数不同，可为 `run_eval.py` 显式追加 `--embedding-backend`、`--embedding-base-url`、`--vector-backend`、`--qdrant-url` 覆盖项，避免脚本直接沿用 `.env` 导致联调错位。
 - 评测前导出知识库文档清单：`.\.venv\Scripts\python.exe scripts/export_eval_inventory.py --kb-id <kb_id>`
+- 论文第五章主线评测集：`docs/examples/eval_set_rag_main_v15.json`，由 `.\.venv\Scripts\python.exe scripts\build_rag_main_eval_v15.py` 生成，重点覆盖向量召回、重排、引用完整性与拒答边界。
+- 运行 V15 主线论文实验与图表生成：`.\.venv\Scripts\python.exe scripts\run_rag_main_v15_experiments.py`，输出到 `outputs/eval_rag_main_v15/`。
 - 一键导入示例校园语料：`.\.venv\Scripts\python.exe scripts/bootstrap_demo_academic_kb.py`
 - 抓取学校官网公开语料：`.\.venv\Scripts\python.exe scripts/crawl_suse_public_corpus.py`
 - 抓取更适合 RAG 的专题语料集：`.\.venv\Scripts\python.exe scripts/crawl_suse_public_corpus.py --profile rag_topics --site-codes jwc,xsc,yjs`

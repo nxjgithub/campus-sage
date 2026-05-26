@@ -1,0 +1,452 @@
+{
+  "source_dir": "data\\正式文件",
+  "supported_extensions": [
+    ".docx",
+    ".htm",
+    ".html",
+    ".md",
+    ".pdf",
+    ".txt"
+  ],
+  "document_count": 45,
+  "question_count": 100,
+  "in_scope_question_count": 90,
+  "out_of_scope_question_count": 10,
+  "chunk_size": 500,
+  "chunk_overlap": 100,
+  "total_chunks": 405,
+  "total_chars": 67789,
+  "documents": [
+    {
+      "doc_name": "1_关于2025-2026学年第1学期重补修手续及补考确认的通知.docx",
+      "source_path": "data\\正式文件\\1_关于2025-2026学年第1学期重补修手续及补考确认的通知.docx",
+      "file_size_bytes": 16985,
+      "parsed_units": 1,
+      "chunk_count": 7,
+      "char_count": 975,
+      "title": "关于2025-2026学年第1学期重补修手续及补考确认的通知"
+    },
+    {
+      "doc_name": "2025—2026学年暑假学生办理留校相关附件.docx",
+      "source_path": "data\\正式文件\\2025—2026学年暑假学生办理留校相关附件.docx",
+      "file_size_bytes": 195536,
+      "parsed_units": 1,
+      "chunk_count": 5,
+      "char_count": 821,
+      "title": "2025—2026学年暑假学生办理留校相关附件"
+    },
+    {
+      "doc_name": "2026年度招收军士专业信息查询以下专业符合预报名.docx",
+      "source_path": "data\\正式文件\\2026年度招收军士专业信息查询以下专业符合预报名.docx",
+      "file_size_bytes": 15513,
+      "parsed_units": 1,
+      "chunk_count": 8,
+      "char_count": 303,
+      "title": "2026年度招收军士专业信息查询以下专业符合预报名"
+    },
+    {
+      "doc_name": "五一节安全提醒.docx",
+      "source_path": "data\\正式文件\\五一节安全提醒.docx",
+      "file_size_bytes": 22082,
+      "parsed_units": 1,
+      "chunk_count": 10,
+      "char_count": 3649,
+      "title": "五一节安全提醒"
+    },
+    {
+      "doc_name": "保密知识竞赛.docx",
+      "source_path": "data\\正式文件\\保密知识竞赛.docx",
+      "file_size_bytes": 1777034,
+      "parsed_units": 1,
+      "chunk_count": 1,
+      "char_count": 114,
+      "title": "保密知识竞赛"
+    },
+    {
+      "doc_name": "假期去向登记_操作指南（学生）.docx",
+      "source_path": "data\\正式文件\\假期去向登记_操作指南（学生）.docx",
+      "file_size_bytes": 507128,
+      "parsed_units": 1,
+      "chunk_count": 3,
+      "char_count": 584,
+      "title": "假期去向登记_操作指南（学生）"
+    },
+    {
+      "doc_name": "党委宣传部关于组织大学生参加“学宪法 讲宪法”系列活动“宪法卫士”在线学习与答题的通知.pdf",
+      "source_path": "data\\正式文件\\党委宣传部关于组织大学生参加“学宪法 讲宪法”系列活动“宪法卫士”在线学习与答题的通知.pdf",
+      "file_size_bytes": 599074,
+      "parsed_units": 5,
+      "chunk_count": 18,
+      "char_count": 2676,
+      "title": "党委宣传部关于组织大学生参加“学宪法 讲宪法”系列活动“宪法卫士”在线学习与答题的通知"
+    },
+    {
+      "doc_name": "关于举办2024年高校“礼敬中华优秀传统文化”宣传教育活动的通知.pdf",
+      "source_path": "data\\正式文件\\关于举办2024年高校“礼敬中华优秀传统文化”宣传教育活动的通知.pdf",
+      "file_size_bytes": 243767,
+      "parsed_units": 6,
+      "chunk_count": 18,
+      "char_count": 4239,
+      "title": "关于举办2024年高校“礼敬中华优秀传统文化”宣传教育活动的通知"
+    },
+    {
+      "doc_name": "关于举办2025年大学生网络安全宣传周活动的通知.docx",
+      "source_path": "data\\正式文件\\关于举办2025年大学生网络安全宣传周活动的通知.docx",
+      "file_size_bytes": 548784,
+      "parsed_units": 1,
+      "chunk_count": 5,
+      "char_count": 1528,
+      "title": "关于举办2025年大学生网络安全宣传周活动的通知"
+    },
+    {
+      "doc_name": "关于做好2025-2026学年寒假学生教育管理工作的通知(2026.1.19).docx",
+      "source_path": "data\\正式文件\\关于做好2025-2026学年寒假学生教育管理工作的通知(2026.1.19).docx",
+      "file_size_bytes": 24918,
+      "parsed_units": 1,
+      "chunk_count": 9,
+      "char_count": 1704,
+      "title": "关于做好2025-2026学年寒假学生教育管理工作的通知(2026.1.19)"
+    },
+    {
+      "doc_name": "关于做好2025年暑假学生教育管理工作的通知.docx",
+      "source_path": "data\\正式文件\\关于做好2025年暑假学生教育管理工作的通知.docx",
+      "file_size_bytes": 2998071,
+      "parsed_units": 1,
+      "chunk_count": 36,
+      "char_count": 4919,
+      "title": "关于做好2025年暑假学生教育管理工作的通知"
+    },
+    {
+      "doc_name": "关于免费统一加挂校园通行证的通知.pdf",
+      "source_path": "data\\正式文件\\关于免费统一加挂校园通行证的通知.pdf",
+      "file_size_bytes": 218358,
+      "parsed_units": 5,
+      "chunk_count": 14,
+      "char_count": 2817,
+      "title": "关于免费统一加挂校园通行证的通知"
+    },
+    {
+      "doc_name": "关于切实做好2026届高校毕业生一次性求职创业补贴的通知.docx",
+      "source_path": "data\\正式文件\\关于切实做好2026届高校毕业生一次性求职创业补贴的通知.docx",
+      "file_size_bytes": 279976,
+      "parsed_units": 1,
+      "chunk_count": 11,
+      "char_count": 2465,
+      "title": "关于切实做好2026届高校毕业生一次性求职创业补贴的通知"
+    },
+    {
+      "doc_name": "关于启用自助打印终端的通知(1).docx",
+      "source_path": "data\\正式文件\\关于启用自助打印终端的通知(1).docx",
+      "file_size_bytes": 4496724,
+      "parsed_units": 1,
+      "chunk_count": 2,
+      "char_count": 426,
+      "title": "关于启用自助打印终端的通知"
+    },
+    {
+      "doc_name": "关于四川轻化工大学2024-2025学年第一学期日常心理咨询服务公告的通知.pdf",
+      "source_path": "data\\正式文件\\关于四川轻化工大学2024-2025学年第一学期日常心理咨询服务公告的通知.pdf",
+      "file_size_bytes": 83840,
+      "parsed_units": 1,
+      "chunk_count": 5,
+      "char_count": 955,
+      "title": "关于四川轻化工大学2024-2025学年第一学期日常心理咨询服务公告的通知"
+    },
+    {
+      "doc_name": "关于四川轻化工大学专属版玻尔AI科研平台首门AI科研素养基础课学习的通知.pdf",
+      "source_path": "data\\正式文件\\关于四川轻化工大学专属版玻尔AI科研平台首门AI科研素养基础课学习的通知.pdf",
+      "file_size_bytes": 281061,
+      "parsed_units": 6,
+      "chunk_count": 25,
+      "char_count": 5089,
+      "title": "关于四川轻化工大学专属版玻尔AI科研平台首门AI科研素养基础课学习的通知"
+    },
+    {
+      "doc_name": "关于宜宾市“畅游两海”大学生年票及宜宾学生公交ic卡线上办理活动的通知.docx",
+      "source_path": "data\\正式文件\\关于宜宾市“畅游两海”大学生年票及宜宾学生公交ic卡线上办理活动的通知.docx",
+      "file_size_bytes": 737491,
+      "parsed_units": 1,
+      "chunk_count": 1,
+      "char_count": 494,
+      "title": "关于宜宾市“畅游两海”大学生年票及宜宾学生公交ic卡线上办理活动的通知"
+    },
+    {
+      "doc_name": "关于开展2025年“乐业宜宾”大学生就业冲刺夏令营暨青年求职能力实训营的通知.pdf",
+      "source_path": "data\\正式文件\\关于开展2025年“乐业宜宾”大学生就业冲刺夏令营暨青年求职能力实训营的通知.pdf",
+      "file_size_bytes": 200824,
+      "parsed_units": 3,
+      "chunk_count": 14,
+      "char_count": 1869,
+      "title": "关于开展2025年“乐业宜宾”大学生就业冲刺夏令营暨青年求职能力实训营的通知"
+    },
+    {
+      "doc_name": "关于开展2025年四川轻化工大学大学生创新创业俱乐部创业补贴申报工作的通知.docx",
+      "source_path": "data\\正式文件\\关于开展2025年四川轻化工大学大学生创新创业俱乐部创业补贴申报工作的通知.docx",
+      "file_size_bytes": 13209,
+      "parsed_units": 1,
+      "chunk_count": 5,
+      "char_count": 792,
+      "title": "关于开展2025年四川轻化工大学大学生创新创业俱乐部创业补贴申报工作的通知"
+    },
+    {
+      "doc_name": "关于开展四川轻化工大学“一站式”学生社区形象标识（LOGO）征集活动的通知.docx",
+      "source_path": "data\\正式文件\\关于开展四川轻化工大学“一站式”学生社区形象标识（LOGO）征集活动的通知.docx",
+      "file_size_bytes": 17676,
+      "parsed_units": 1,
+      "chunk_count": 11,
+      "char_count": 1548,
+      "title": "关于开展四川轻化工大学“一站式”学生社区形象标识（LOGO）征集活动的通知"
+    },
+    {
+      "doc_name": "关于开展学校2026届毕业生就业意向统计的通知(1).docx",
+      "source_path": "data\\正式文件\\关于开展学校2026届毕业生就业意向统计的通知(1).docx",
+      "file_size_bytes": 440834,
+      "parsed_units": 1,
+      "chunk_count": 5,
+      "char_count": 820,
+      "title": "关于开展学校2026届毕业生就业意向统计的通知"
+    },
+    {
+      "doc_name": "关于开展轻风化雨652智慧育人平台系统维护工作的通知.pdf",
+      "source_path": "data\\正式文件\\关于开展轻风化雨652智慧育人平台系统维护工作的通知.pdf",
+      "file_size_bytes": 92512,
+      "parsed_units": 2,
+      "chunk_count": 6,
+      "char_count": 511,
+      "title": "关于开展轻风化雨652智慧育人平台系统维护工作的通知"
+    },
+    {
+      "doc_name": "关于组织学习《地震预警之公共聚集场所》科普视频的温馨提示.docx",
+      "source_path": "data\\正式文件\\关于组织学习《地震预警之公共聚集场所》科普视频的温馨提示.docx",
+      "file_size_bytes": 73433,
+      "parsed_units": 1,
+      "chunk_count": 2,
+      "char_count": 340,
+      "title": "关于组织学习《地震预警之公共聚集场所》科普视频的温馨提示"
+    },
+    {
+      "doc_name": "关于组织学生参加“第十六届国际研究生奖学金信息说明会”的通知.docx",
+      "source_path": "data\\正式文件\\关于组织学生参加“第十六届国际研究生奖学金信息说明会”的通知.docx",
+      "file_size_bytes": 18905,
+      "parsed_units": 1,
+      "chunk_count": 7,
+      "char_count": 1808,
+      "title": "关于组织学生参加“第十六届国际研究生奖学金信息说明会”的通知"
+    },
+    {
+      "doc_name": "关于组织学生参加四川省高校学生第二届心理知识比赛的通知.docx",
+      "source_path": "data\\正式文件\\关于组织学生参加四川省高校学生第二届心理知识比赛的通知.docx",
+      "file_size_bytes": 14379,
+      "parsed_units": 1,
+      "chunk_count": 7,
+      "char_count": 652,
+      "title": "关于组织学生参加四川省高校学生第二届心理知识比赛的通知"
+    },
+    {
+      "doc_name": "关于组织收看“爱我国防”全民国防教育公益大讲堂的通知.pdf",
+      "source_path": "data\\正式文件\\关于组织收看“爱我国防”全民国防教育公益大讲堂的通知.pdf",
+      "file_size_bytes": 219229,
+      "parsed_units": 4,
+      "chunk_count": 9,
+      "char_count": 1443,
+      "title": "关于组织收看“爱我国防”全民国防教育公益大讲堂的通知"
+    },
+    {
+      "doc_name": "关于维护“轻风化雨652”平台学生信息的通知.pdf",
+      "source_path": "data\\正式文件\\关于维护“轻风化雨652”平台学生信息的通知.pdf",
+      "file_size_bytes": 837976,
+      "parsed_units": 6,
+      "chunk_count": 10,
+      "char_count": 1359,
+      "title": "关于维护“轻风化雨652”平台学生信息的通知"
+    },
+    {
+      "doc_name": "关于进一步加强校园交通安全管理的通知.docx",
+      "source_path": "data\\正式文件\\关于进一步加强校园交通安全管理的通知.docx",
+      "file_size_bytes": 22788,
+      "parsed_units": 1,
+      "chunk_count": 7,
+      "char_count": 1471,
+      "title": "关于进一步加强校园交通安全管理的通知"
+    },
+    {
+      "doc_name": "关于防范在QQ群、微信群冒充教师发布有关收费信息实施诈骗的预警提示.docx",
+      "source_path": "data\\正式文件\\关于防范在QQ群、微信群冒充教师发布有关收费信息实施诈骗的预警提示.docx",
+      "file_size_bytes": 15947,
+      "parsed_units": 1,
+      "chunk_count": 1,
+      "char_count": 485,
+      "title": "关于防范在QQ群、微信群冒充教师发布有关收费信息实施诈骗的预警提示"
+    },
+    {
+      "doc_name": "冬季防火安全提示.docx",
+      "source_path": "data\\正式文件\\冬季防火安全提示.docx",
+      "file_size_bytes": 22786,
+      "parsed_units": 1,
+      "chunk_count": 8,
+      "char_count": 2129,
+      "title": "冬季防火安全提示"
+    },
+    {
+      "doc_name": "四川轻化工大学关于做好2024年暑期洪涝受灾家庭经济困难学生资助工作的通知.docx",
+      "source_path": "data\\正式文件\\四川轻化工大学关于做好2024年暑期洪涝受灾家庭经济困难学生资助工作的通知.docx",
+      "file_size_bytes": 14977,
+      "parsed_units": 1,
+      "chunk_count": 3,
+      "char_count": 691,
+      "title": "四川轻化工大学关于做好2024年暑期洪涝受灾家庭经济困难学生资助工作的通知"
+    },
+    {
+      "doc_name": "四川轻化工大学关于开展2024年“一站式”学生社区文明寝室评选活动的通知.docx",
+      "source_path": "data\\正式文件\\四川轻化工大学关于开展2024年“一站式”学生社区文明寝室评选活动的通知.docx",
+      "file_size_bytes": 34834,
+      "parsed_units": 1,
+      "chunk_count": 17,
+      "char_count": 3245,
+      "title": "四川轻化工大学关于开展2024年“一站式”学生社区文明寝室评选活动的通知"
+    },
+    {
+      "doc_name": "四川轻化工大学系统登录+使用手册.pdf",
+      "source_path": "data\\正式文件\\四川轻化工大学系统登录+使用手册.pdf",
+      "file_size_bytes": 2208471,
+      "parsed_units": 14,
+      "chunk_count": 16,
+      "char_count": 1577,
+      "title": "四川轻化工大学系统登录+使用手册"
+    },
+    {
+      "doc_name": "学生使用手册.docx",
+      "source_path": "data\\正式文件\\学生使用手册.docx",
+      "file_size_bytes": 11148050,
+      "parsed_units": 1,
+      "chunk_count": 32,
+      "char_count": 3427,
+      "title": "学生使用手册"
+    },
+    {
+      "doc_name": "学生证（本专科、研究生）期末注意事项.docx",
+      "source_path": "data\\正式文件\\学生证（本专科、研究生）期末注意事项.docx",
+      "file_size_bytes": 13522,
+      "parsed_units": 1,
+      "chunk_count": 4,
+      "char_count": 644,
+      "title": "学生证（本专科、研究生）期末注意事项"
+    },
+    {
+      "doc_name": "寒假归乡，共叙团圆——致川轻化全体同学的倡议书.docx",
+      "source_path": "data\\正式文件\\寒假归乡，共叙团圆——致川轻化全体同学的倡议书.docx",
+      "file_size_bytes": 13153,
+      "parsed_units": 1,
+      "chunk_count": 3,
+      "char_count": 643,
+      "title": "寒假归乡，共叙团圆——致川轻化全体同学的倡议书"
+    },
+    {
+      "doc_name": "应征入伍国家资助解读0305.docx",
+      "source_path": "data\\正式文件\\应征入伍国家资助解读0305.docx",
+      "file_size_bytes": 168010,
+      "parsed_units": 1,
+      "chunk_count": 8,
+      "char_count": 2191,
+      "title": "应征入伍国家资助解读0305"
+    },
+    {
+      "doc_name": "拟于2026届毕业学生线上补采集方法及注意.docx",
+      "source_path": "data\\正式文件\\拟于2026届毕业学生线上补采集方法及注意.docx",
+      "file_size_bytes": 500948,
+      "parsed_units": 1,
+      "chunk_count": 6,
+      "char_count": 893,
+      "title": "拟于2026届毕业学生线上补采集方法及注意"
+    },
+    {
+      "doc_name": "教思政厅函〔2024〕10号附件1.docx",
+      "source_path": "data\\正式文件\\教思政厅函〔2024〕10号附件1.docx",
+      "file_size_bytes": 64378,
+      "parsed_units": 1,
+      "chunk_count": 1,
+      "char_count": 297,
+      "title": "教思政厅函〔2024〕10号附件1"
+    },
+    {
+      "doc_name": "校园安全驾驶、骑行承诺书.docx",
+      "source_path": "data\\正式文件\\校园安全驾驶、骑行承诺书.docx",
+      "file_size_bytes": 17355,
+      "parsed_units": 1,
+      "chunk_count": 2,
+      "char_count": 648,
+      "title": "校园安全驾驶、骑行承诺书"
+    },
+    {
+      "doc_name": "老系统  生源信息填写，核对，就业（三方）协议相关提示.docx",
+      "source_path": "data\\正式文件\\老系统  生源信息填写，核对，就业（三方）协议相关提示.docx",
+      "file_size_bytes": 327030,
+      "parsed_units": 1,
+      "chunk_count": 3,
+      "char_count": 589,
+      "title": "老系统  生源信息填写，核对，就业（三方）协议相关提示"
+    },
+    {
+      "doc_name": "计算机科学与工程学院2024-2025-1学年新生入学温馨提示.pdf",
+      "source_path": "data\\正式文件\\计算机科学与工程学院2024-2025-1学年新生入学温馨提示.pdf",
+      "file_size_bytes": 377191,
+      "parsed_units": 7,
+      "chunk_count": 24,
+      "char_count": 1994,
+      "title": "计算机科学与工程学院2024-2025-1学年新生入学温馨提示"
+    },
+    {
+      "doc_name": "计算机科学与工程学院2025年暑假留校安全告知书.docx",
+      "source_path": "data\\正式文件\\计算机科学与工程学院2025年暑假留校安全告知书.docx",
+      "file_size_bytes": 14479,
+      "parsed_units": 1,
+      "chunk_count": 9,
+      "char_count": 1070,
+      "title": "计算机科学与工程学院2025年暑假留校安全告知书"
+    },
+    {
+      "doc_name": "轻风化雨652离校信息填写步骤(1).docx",
+      "source_path": "data\\正式文件\\轻风化雨652离校信息填写步骤(1).docx",
+      "file_size_bytes": 2517298,
+      "parsed_units": 1,
+      "chunk_count": 1,
+      "char_count": 238,
+      "title": "轻风化雨652离校信息填写步骤"
+    },
+    {
+      "doc_name": "附件：关于不统一购买学生火车优惠卡的通知.docx",
+      "source_path": "data\\正式文件\\附件：关于不统一购买学生火车优惠卡的通知.docx",
+      "file_size_bytes": 13955,
+      "parsed_units": 1,
+      "chunk_count": 6,
+      "char_count": 657,
+      "title": "附件：关于不统一购买学生火车优惠卡的通知"
+    }
+  ],
+  "skipped": [
+    {
+      "doc_name": "关于切实做好2026年下半年义务兵及直招军士征集工作的温馨提示.doc",
+      "reason": "文件类型暂不支持自动入库"
+    },
+    {
+      "doc_name": "关于组织师生参加“四川省大学生安全知识教育暨应急技能大演练竞赛活动”的温馨提示.doc",
+      "reason": "文件类型暂不支持自动入库"
+    },
+    {
+      "doc_name": "关于集中办理非机动车校园通行证的通知.pdf",
+      "reason": "未提取到有效文本"
+    },
+    {
+      "doc_name": "关工委文件.pdf",
+      "reason": "未提取到有效文本"
+    },
+    {
+      "doc_name": "国务院办公厅关于健全基本医疗保险.pdf",
+      "reason": "未提取到有效文本"
+    },
+    {
+      "doc_name": "附件3：学生暑假留校安全责任承诺书.doc",
+      "reason": "文件类型暂不支持自动入库"
+    }
+  ]
+}
