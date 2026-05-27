@@ -72,3 +72,10 @@ export async function moveDeadJobs() {
   );
   return data;
 }
+
+export async function cleanupStaleStartedJobs() {
+  const { data } = await apiClient.post<{ removed: number; request_id?: string | null }>(
+    "/monitor/queues/ingest/cleanup-stale-started"
+  );
+  return data;
+}

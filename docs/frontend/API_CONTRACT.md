@@ -223,6 +223,8 @@
   - 用途：获取队列统计
 - `POST /monitor/queues/ingest/move-dead`
   - 用途：失败任务转死信队列
+- `POST /monitor/queues/ingest/cleanup-stale-started`
+  - 用途：只清理过期 started registry 记录，保留任务本体和其他队列状态
 - `GET /monitor/runtime`
   - 用途：获取数据库 schema、关键服务开关、上传配置、安全风险与 RAG 运行指标
   - 响应必须包含 `request_id`，失败时错误提示继续展示 `request_id`

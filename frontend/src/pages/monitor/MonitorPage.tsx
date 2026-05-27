@@ -1,6 +1,7 @@
 import {
   AlertOutlined,
   DashboardOutlined,
+  DeleteOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   WarningOutlined
@@ -22,6 +23,7 @@ import {
   message
 } from "antd";
 import {
+  cleanupStaleStartedJobs,
   fetchQueueStats,
   fetchRuntimeDiagnostics,
   moveDeadJobs
@@ -84,6 +86,7 @@ function formatPercent(value?: number) {
 
 export function MonitorPage() {
   const [lastMoveRequestId, setLastMoveRequestId] = useState<string | null>(null);
+  const [lastCleanupRequestId, setLastCleanupRequestId] = useState<string | null>(null);
   const [queueSnapshots, setQueueSnapshots] = useState<TrendDatum[]>([]);
   const [riskSnapshots, setRiskSnapshots] = useState<TrendDatum[]>([]);
 
@@ -104,6 +107,19 @@ export function MonitorPage() {
     onSuccess: (data) => {
       setLastMoveRequestId(data.request_id ?? null);
       message.success(`已迁移 ${data.moved} 条失败任务`);
+      void statsQuery.refetch();
+    },
+    onError: (error) => {
+      const normalized = normalizeApiError(error);
+      message.error(formatApiErrorMessage(normalized));
+    }
+  });
+
+  const cleanupStartedMutation = useMutation({
+    mutationFn: cleanupStaleStartedJobs,
+    onSuccess: (data) => {
+      setLastCleanupRequestId(data.request_id ?? null);
+      message.success(`已清理 ${data.removed} 条过期执行记录`);
       void statsQuery.refetch();
     },
     onError: (error) => {
@@ -375,6 +391,25 @@ export function MonitorPage() {
                   />
                 </span>
               </Tooltip>
+              <Tooltip title="清理过期执行记录">
+                <span>
+                  <ConfirmAction
+                    title="确认清理过期执行记录？"
+                    description="该操作只移除 started registry 中已过期的 worker 心跳记录，不删除任务本体。"
+                    okText="确认清理"
+                    cancelText="返回"
+                    onConfirm={() => {
+                      cleanupStartedMutation.mutate();
+                    }}
+                    buttonText=""
+                    size="small"
+                    shape="circle"
+                    icon={<DeleteOutlined />}
+                    loading={cleanupStartedMutation.isPending}
+                    ariaLabel="清理过期执行记录"
+                  />
+                </span>
+              </Tooltip>
             </Space>
           }
         >
@@ -385,7 +420,11 @@ export function MonitorPage() {
                 {resolveHealthTag(riskPercent)}
               </Space>
               <Typography.Text type="secondary">
-                {lastMoveRequestId ? "最近一次死信迁移已完成" : "暂无死信迁移动作"}
+                {lastCleanupRequestId
+                  ? "最近一次过期执行记录清理已完成"
+                  : lastMoveRequestId
+                    ? "最近一次死信迁移已完成"
+                    : "暂无维护动作"}
               </Typography.Text>
             </div>
             <Progress

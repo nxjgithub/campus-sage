@@ -164,6 +164,14 @@
 - `INGEST_QUEUE_DEAD_MAX`：死信队列保留上限，默认 200
 - `INGEST_REQUIRE_HTTP_EMBEDDING`：是否要求入库必须使用 HTTP Embedding 服务，默认 false；Docker Compose 默认 true。启用后若 `EMBEDDING_BACKEND` 不是 `http`，入库任务会失败并提示重试。
 
+说明：
+- Docker Compose 模式下 API/Worker 容器必须使用 `REDIS_URL=redis://redis:6379/0`，宿主机直连 Redis 才使用 `redis://127.0.0.1:6379/0`。
+- 队列监控接口只读取 Redis 队列和 registry 键的数量，不执行 RQ registry cleanup，避免只读看板触发失败回调或改变任务状态。
+- `started` 统计只计算未过期的 worker 心跳记录；已过期的 started registry 成员属于旧 worker 异常退出残留，不应展示为真实执行中任务。
+- 管理端可通过 `POST /api/v1/monitor/queues/ingest/cleanup-stale-started` 清理过期 started registry 成员。该维护动作只移除 registry 成员，不删除任务本体，也不触碰调度、失败或死信队列。
+- 若 `docker compose ps worker` 没有运行中的 worker，入库任务可以入队但不会被消费；监控页仍应可展示积压、失败和死信统计。
+- Docker Compose 默认以 `--with-scheduler` 启动 worker，使 RQ retry 产生的 scheduled 任务到期后能重新回到队列。
+
 ## 8. 开关与调试
 - `DEBUG_MODE`：true/false
 - `ENABLE_SWAGGER`：true/false（prod 可关闭）

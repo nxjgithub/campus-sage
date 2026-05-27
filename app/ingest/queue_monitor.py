@@ -2,12 +2,38 @@
 
 from __future__ import annotations
 
+import time
+
 from rq import Queue
 from redis import Redis
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
 from app.core.settings import Settings
+
+
+def _zset_count(connection: Redis, key: str) -> int:
+    """直接读取有序集合数量，避免 RQ registry 统计时触发清理副作用。"""
+
+    return int(connection.zcard(key) or 0)
+
+
+def _zset_count_after_score(connection: Redis, key: str, min_score: float) -> int:
+    """统计指定分数之后的有序集合成员，用于排除过期 started 记录。"""
+
+    return int(connection.zcount(key, min_score, "+inf") or 0)
+
+
+def _remove_zset_before_score(connection: Redis, key: str, max_score: float) -> int:
+    """移除指定分数之前的有序集合成员。"""
+
+    return int(connection.zremrangebyscore(key, "-inf", max_score) or 0)
+
+
+def _queue_count(connection: Redis, key: str) -> int:
+    """直接读取队列列表数量，保持监控接口只读。"""
+
+    return int(connection.llen(key) or 0)
 
 
 def get_queue_stats(settings: Settings) -> dict[str, int]:
@@ -17,15 +43,39 @@ def get_queue_stats(settings: Settings) -> dict[str, int]:
         connection = Redis.from_url(settings.redis_url)
         queue = Queue(settings.ingest_queue_name, connection=connection)
         dead_queue = Queue(settings.ingest_queue_dead_name, connection=connection)
+        now_ts = time.time()
+        # RQ 的 registry.count/get_job_ids 会先 cleanup，可能在 Web 线程中触发
+        # 失败回调并使用 signal，导致只读监控接口返回 503。这里直接读 Redis
+        # 底层键数量，确保队列看板不改变任务状态。
         return {
-            "queued": queue.count,
-            "started": queue.started_job_registry.count,
-            "deferred": queue.deferred_job_registry.count,
-            "finished": queue.finished_job_registry.count,
-            "failed_registry": queue.failed_job_registry.count,
-            "dead": dead_queue.count,
-            "scheduled": queue.scheduled_job_registry.count,
+            "queued": _queue_count(connection, queue.key),
+            "started": _zset_count_after_score(connection, queue.started_job_registry.key, now_ts),
+            "deferred": _zset_count(connection, queue.deferred_job_registry.key),
+            "finished": _zset_count(connection, queue.finished_job_registry.key),
+            "failed_registry": _zset_count(connection, queue.failed_job_registry.key),
+            "dead": _queue_count(connection, dead_queue.key),
+            "scheduled": _zset_count(connection, queue.scheduled_job_registry.key),
         }
+    except Exception as exc:
+        raise AppError(
+            code=ErrorCode.INGEST_QUEUE_UNAVAILABLE,
+            message="入库队列不可用",
+            detail={"error": str(exc)},
+            status_code=503,
+        ) from exc
+
+
+def cleanup_stale_started(settings: Settings) -> int:
+    """清理过期 started registry 记录，不触碰任务本体。"""
+
+    try:
+        connection = Redis.from_url(settings.redis_url)
+        queue = Queue(settings.ingest_queue_name, connection=connection)
+        return _remove_zset_before_score(
+            connection,
+            queue.started_job_registry.key,
+            time.time(),
+        )
     except Exception as exc:
         raise AppError(
             code=ErrorCode.INGEST_QUEUE_UNAVAILABLE,

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request
 
 from app.api.v1.deps import require_permission
 from app.api.v1.schemas.monitor import (
+    QueueCleanupStartedResponse,
     QueueMoveDeadResponse,
     QueueStats,
     QueueStatsResponse,
@@ -24,6 +25,7 @@ from app.db.migrations import get_current_schema_version
 from app.db.repos import RepositoryProvider
 from app.ingest.queue_monitor import (
     check_queue_alerts,
+    cleanup_stale_started,
     get_queue_stats,
     move_failed_to_dead,
 )
@@ -59,6 +61,18 @@ def move_ingest_dead(
 
     moved = move_failed_to_dead(settings)
     return QueueMoveDeadResponse(moved=moved, request_id=request.state.request_id)
+
+
+@router.post("/queues/ingest/cleanup-stale-started", response_model=QueueCleanupStartedResponse)
+def cleanup_ingest_stale_started(
+    request: Request,
+    current_user: CurrentUser = Depends(require_permission(Permission.MONITOR_READ)),
+    settings: Settings = Depends(get_settings),
+) -> QueueCleanupStartedResponse:
+    """清理过期的执行中记录。"""
+
+    removed = cleanup_stale_started(settings)
+    return QueueCleanupStartedResponse(removed=removed, request_id=request.state.request_id)
 
 
 @router.get("/runtime", response_model=RuntimeDiagnosticsResponse)

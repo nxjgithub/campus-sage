@@ -12,8 +12,39 @@ from app.core.settings import get_settings
 from app.ingest.worker_utils import build_document_service
 
 
-def on_ingest_failure(job: Job, exc_type: type[BaseException], exc_value: BaseException, traceback) -> None:  # type: ignore[override]
+def on_ingest_failure(
+    job: Job,
+    connection: Redis,
+    exc_type: type[BaseException],
+    exc_value: BaseException,
+    traceback,
+) -> None:
     """入库任务失败钩子。"""
+
+    # RQ 1.16 会向失败回调传入 connection 参数。当前钩子仍从配置
+    # 重新构造业务服务，connection 仅用于兼容 RQ 回调签名。
+    _ = connection
+    try:
+        _handle_ingest_failure(job, exc_type, exc_value)
+    except Exception as exc:
+        logger = get_logger()
+        log_event(
+            logger,
+            event="ingest_queue_failure_callback_error",
+            fields={
+                "job_id": getattr(job, "id", None),
+                "queue": getattr(job, "origin", None),
+                "error_message": f"{type(exc).__name__}: {exc}",
+            },
+        )
+
+
+def _handle_ingest_failure(
+    job: Job,
+    exc_type: type[BaseException],
+    exc_value: BaseException,
+) -> None:
+    """处理入库失败，异常由外层钩子吞掉以保护 worker。"""
 
     settings = get_settings()
     service = build_document_service(settings)

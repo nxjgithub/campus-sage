@@ -32,6 +32,12 @@ class QueueMoveDeadResponse(RequestIdMixin):
     moved: int = Field(description="本次迁移任务数")
 
 
+class QueueCleanupStartedResponse(RequestIdMixin):
+    """过期执行记录清理响应。"""
+
+    removed: int = Field(description="本次清理的过期 started 记录数")
+
+
 class RuntimeDatabaseInfo(BaseModel):
     """数据库运行时信息。"""
 

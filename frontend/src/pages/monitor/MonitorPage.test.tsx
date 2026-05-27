@@ -5,6 +5,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  cleanupStaleStartedJobs,
   fetchQueueStats,
   fetchRuntimeDiagnostics,
   moveDeadJobs
@@ -12,6 +13,7 @@ import {
 import { MonitorPage } from "./MonitorPage";
 
 vi.mock("../../shared/api/modules/monitor", () => ({
+  cleanupStaleStartedJobs: vi.fn(),
   fetchQueueStats: vi.fn(),
   fetchRuntimeDiagnostics: vi.fn(),
   moveDeadJobs: vi.fn()
@@ -91,6 +93,10 @@ describe("MonitorPage 二次确认交互", () => {
       moved: 3,
       request_id: "req-move-1"
     });
+    vi.mocked(cleanupStaleStartedJobs).mockResolvedValue({
+      removed: 2,
+      request_id: "req-cleanup-1"
+    });
   });
 
   it("转移失败任务应先确认，确认后再调用接口", async () => {
@@ -107,6 +113,23 @@ describe("MonitorPage 二次确认交互", () => {
     await userEvent.click(screen.getByRole("button", { name: "确认迁移" }));
     await waitFor(() => {
       expect(moveDeadJobs).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("清理过期执行记录应先确认，确认后再调用接口", async () => {
+    renderWithProviders(<MonitorPage />);
+
+    const cleanupButton = await screen.findByRole("button", {
+      name: /清理过期执行记录/
+    });
+    await userEvent.click(cleanupButton);
+
+    expect(await screen.findByRole("button", { name: "确认清理" })).toBeInTheDocument();
+    expect(cleanupStaleStartedJobs).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "确认清理" }));
+    await waitFor(() => {
+      expect(cleanupStaleStartedJobs).toHaveBeenCalledTimes(1);
     });
   });
 });

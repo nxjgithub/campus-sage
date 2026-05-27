@@ -1060,7 +1060,22 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 }
 ```
 
-### 8.3 获取运行时诊断摘要
+### 8.3 清理过期执行记录
+`POST /api/v1/monitor/queues/ingest/cleanup-stale-started`
+
+说明：
+- 仅清理 RQ `started` registry 中已过期的 worker 心跳记录。
+- 不删除 job hash，不迁移失败任务，不触碰排队、调度、失败或死信队列。
+
+响应示例：
+```json
+{
+  "removed": 3,
+  "request_id": "req_xxx"
+}
+```
+
+### 8.4 获取运行时诊断摘要
 `GET /api/v1/monitor/runtime`
 
 说明：

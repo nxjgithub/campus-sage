@@ -71,7 +71,7 @@ services:
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
       NO_PROXY: ${NO_PROXY_INTERNAL:-mysql,qdrant,tei,redis,minio,localhost,127.0.0.1}
       no_proxy: ${NO_PROXY_INTERNAL:-mysql,qdrant,tei,redis,minio,localhost,127.0.0.1}
-    command: [ "python", "-m", "app.ingest.worker_runner", "--queue", "ingest" ]
+    command: [ "python", "-m", "app.ingest.worker_runner", "--queue", "ingest", "--with-scheduler" ]
     volumes:
       - ./data:/app/data
     depends_on:
