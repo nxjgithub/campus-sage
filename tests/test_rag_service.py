@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
+from app.core.error_codes import ErrorCode
+from app.core.errors import AppError
 from app.core.settings import Settings
 from app.core.utils import utc_now_iso
 from app.db.models import ConversationRecord, MessageRecord
@@ -16,13 +20,14 @@ from app.rag.vector_store import VectorHit
 def test_compute_answer_expands_candidate_pool_before_rerank() -> None:
     settings = Settings(
         _env_file=None,
-        vllm_enabled=False,
+        vllm_enabled=True,
         rag_threshold=0.0,
         rag_min_keyword_coverage=0.0,
         rag_rerank_candidate_multiplier=2,
         rag_rerank_candidate_cap=3,
     )
     search_calls: list[int] = []
+    generate_calls: list[tuple[str, str]] = []
 
     class _StubVectorStore:
         def search(
@@ -86,12 +91,18 @@ def test_compute_answer_expands_candidate_pool_before_rerank() -> None:
             ]
             return all_hits[:topk]
 
+    class _StubLlmClient:
+        def generate(self, question: str, context: str) -> str:
+            generate_calls.append((question, context))
+            return "符合学校规定的学生可申请补考。"
+
     service = object.__new__(RagService)
     service._settings = settings
     service._embedder = SimpleEmbedder(vector_dim=8)
     service._vector_store = _StubVectorStore()
     service._context_builder = ContextBuilder(settings.rag_max_context_tokens)
     service._reranker = SimpleReranker()
+    service._llm_client = _StubLlmClient()
 
     result = service._compute_answer(
         kb=SimpleNamespace(
@@ -126,8 +137,111 @@ def test_compute_answer_expands_candidate_pool_before_rerank() -> None:
     )
 
     assert search_calls == [3]
+    assert generate_calls
     assert result.refusal is False
+    assert result.answer == "符合学校规定的学生可申请补考。\n\n参考：[1][2]"
     assert result.citations[0].doc_name == "本科生考试管理规定.md"
+
+
+def test_compute_answer_requires_llm_for_normal_answer() -> None:
+    settings = Settings(
+        _env_file=None,
+        vllm_enabled=False,
+        rag_threshold=0.0,
+        rag_min_keyword_coverage=0.0,
+        rag_min_context_chars=1,
+    )
+
+    class _StubVectorStore:
+        def search(
+            self,
+            kb_id: str,
+            query_vector: list[float],
+            topk: int,
+            filters: dict[str, object] | None = None,
+        ) -> list[VectorHit]:
+            del kb_id, query_vector, topk, filters
+            return [
+                VectorHit(
+                    score=0.99,
+                    payload={
+                        "doc_id": "doc_target",
+                        "doc_name": "本科生考试管理规定.md",
+                        "doc_version": None,
+                        "published_at": "2025-01-01",
+                        "source_uri": None,
+                        "page_start": None,
+                        "page_end": None,
+                        "section_path": None,
+                        "chunk_id": "chunk_target",
+                        "chunk_index": 0,
+                        "text": "补考申请条件一般适用于课程考核未通过且符合学校规定的学生。",
+                    },
+                )
+            ]
+
+    service = object.__new__(RagService)
+    service._settings = settings
+    service._embedder = SimpleEmbedder(vector_dim=8)
+    service._vector_store = _StubVectorStore()
+    service._context_builder = ContextBuilder(settings.rag_max_context_tokens)
+    service._reranker = SimpleReranker()
+
+    with pytest.raises(AppError) as exc_info:
+        service._compute_answer(
+            kb=SimpleNamespace(
+                kb_id="kb_test",
+                config={
+                    "topk": 1,
+                    "threshold": 0.0,
+                    "rerank_enabled": False,
+                    "min_evidence_chunks": 1,
+                    "min_context_chars": 1,
+                    "min_keyword_coverage": 0.0,
+                },
+            ),
+            question="补考申请条件一般适用于哪些学生情形？",
+            topk=None,
+            threshold=None,
+            rerank_enabled=None,
+            filters=None,
+            debug=False,
+            normalized_question="补考申请条件一般适用于哪些学生情形",
+            dialog_state=DialogState(
+                turn_count=0,
+                last_user_question=None,
+                pending_clarification=False,
+                history_text="",
+            ),
+            intent_decision=IntentDecision(
+                intent="qa",
+                normalized_question="补考申请条件一般适用于哪些学生情形",
+                retrieval_query="补考申请条件一般适用于哪些学生情形？",
+            ),
+        )
+
+    assert exc_info.value.code == ErrorCode.RAG_MODEL_FAILED
+    assert exc_info.value.detail == {"vllm_enabled": False}
+
+
+def test_empty_llm_answer_does_not_fallback_to_retrieved_snippet() -> None:
+    settings = Settings(_env_file=None, vllm_enabled=True)
+    service = object.__new__(RagService)
+    service._settings = settings
+
+    with pytest.raises(AppError) as exc_info:
+        service._ensure_citations_in_answer(
+            "",
+            [
+                SimpleNamespace(
+                    citation_id=1,
+                    snippet="检索片段不能直接拼成正常回答。",
+                )
+            ],
+        )
+
+    assert exc_info.value.code == ErrorCode.RAG_MODEL_FAILED
+    assert exc_info.value.detail == {"reason": "empty_answer"}
 
 
 def test_build_citations_returns_attached_assets() -> None:

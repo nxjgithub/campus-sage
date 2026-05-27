@@ -68,8 +68,9 @@
 - `POST /staged-documents/{staged_doc_id}/preview`
   - 用途：生成解析预览
   - 返回：`pages/preview_blocks/assets/chunks/warnings`
-  - `preview_blocks[]`：用于文档式预览，按原文顺序返回标题、段落、表格和图片结构块；该字段只影响前端预览，不替代最终入库分块。后端会兼容部分 DOCX 图片条目 CRC 异常但字节完整的文件，成功恢复的图片仍通过文档级 `assets[]` 返回
-  - `chunks[].assets[]`：文本分块关联的图片资产列表；图片不做 OCR 时，仍可随命中的文本证据返回
+  - `preview_blocks[]`：用于文档式预览，按原文顺序返回标题、段落、表格和图片结构块；该字段只影响前端预览，不替代最终入库分块。后端会先聚合同页或同章节的连续预览文本，再按语义边界生成 `chunks[]`，避免视觉行或短段落直接变成小 chunk。后端会兼容部分 DOCX 图片条目 CRC 异常但字节完整的文件，成功恢复的图片仍通过文档级 `assets[]` 返回；PDF 图片资产也会返回，若原图格式不适合浏览器预览会转为 PNG
+  - `assets[].page_number`：PDF 图片所属页码；DOCX 图片无法稳定换算页码时可为 `null`
+  - `chunks[].assets[]`：文本分块关联的图片资产列表；图片不做 OCR 时，仍可随命中的文本证据返回，但只作为前端复核入口，不代表生成模型已经读取图片内容
 - `PATCH /staged-documents/{staged_doc_id}/chunks/{chunk_id}`
   - 用途：入库前启用/禁用分块，或修正文本文本
   - 请求：`enabled?: boolean`, `text?: string`
@@ -123,6 +124,7 @@
     - 当 `kb.visibility=public` 时允许匿名访问
     - 前端通过知识库列表选择目标知识库，不向用户暴露 `kb_id` 手动输入
   - 失败：参数非法时返回 `400 + VALIDATION_FAILED`
+  - 生成失败：若后端返回 `RAG_MODEL_FAILED`，表示正常回答未能调用生成模型或模型未返回有效内容；前端按接口失败展示，不得当作 `refusal=true` 业务拒答。
 
 前端强约束：
 - `refusal=false`：显示答案正文与引用卡片。
@@ -145,7 +147,7 @@
   - `page_start/page_end` 或 `section_path`
   - `snippet`
   - 若存在 `source_uri`，应提供“官方来源”跳转入口
-  - 若存在 `assets[]`，应在答案引用位置直接渲染图片缩略图，并提供打开原图能力
+  - 若存在 `assets[]`，应在答案正文下方集中渲染去重后的图片缩略图，并提供打开原图能力；缩略图是证据复核材料，不应让用户误解为模型已直接分析原图
   - 若只存在旧字段 `asset_id/asset_url`，应兼容展示图片资产编号和“查看原图”入口，并通过 `asset_url` 拉取图片 blob 后预览
   - 调试模式下 `score` 可能有值，生产态可为 `null`。
 
@@ -204,7 +206,7 @@
 - 助手消息若带 `request_id`，历史会话中也必须支持复制查看。
 - 重新生成产生多个同父级助手消息时，问答主线程只展示最新助手消息，避免同一问题重复回答。
 - 历史会话中的 `check_official_source` 建议应可直接打开；`search_keyword/rewrite_question/add_context` 等文本型建议至少应支持复制。
-- 助手消息点击后打开证据弹窗，弹窗内展示 `timing/citations`。
+- 助手消息正文区域用于阅读和复制，不绑定整条消息点击事件；前端应通过引用编号、图片预览或“查看引用/查看证据详情”按钮打开证据弹窗，弹窗内展示 `timing/citations`。
 - 问答主界面必须支持“加载更早消息”。
 
 ## 8. 反馈接口

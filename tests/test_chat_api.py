@@ -143,7 +143,8 @@ def test_conversation_list_and_message_pagination() -> None:
     assert ids1.isdisjoint(ids2)
 
 
-def test_stream_sse_events_and_request_id_consistency() -> None:
+def test_stream_sse_events_and_request_id_consistency(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_fake_vllm(monkeypatch)
     client = TestClient(app)
     headers = _auth_headers(client)
     kb_id = client.post(
@@ -212,9 +213,9 @@ def test_stream_refusal_event_contains_next_steps() -> None:
 
 
 def test_stream_cancel_and_run_cancel_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _slow_chunks(self, text: str, chunk_size: int = 24):
-        del chunk_size
-        for char in text:
+    def _slow_stream_generate(self, question: str, context: str, cancel_checker=None):
+        del self, question, context, cancel_checker
+        for char in "模型生成内容":
             time.sleep(0.002)
             yield char
 
@@ -225,8 +226,10 @@ def test_stream_cancel_and_run_cancel_endpoint(monkeypatch: pytest.MonkeyPatch) 
         check_state["count"] += 1
         return check_state["count"] >= 3
 
-    monkeypatch.setattr(RagService, "_stream_text_chunks", _slow_chunks)
+    monkeypatch.setenv("VLLM_ENABLED", "true")
+    monkeypatch.setattr(VllmClient, "stream_generate", _slow_stream_generate)
     monkeypatch.setattr(ChatRunService, "is_canceled", _cancel_after_start)
+    reset_settings()
     client = TestClient(app)
     headers = _auth_headers(client)
     kb_id = client.post(
@@ -326,7 +329,8 @@ def test_cancel_endpoint_updates_run_status() -> None:
     assert payload["status"] == "canceled"
 
 
-def test_regenerate_and_edit_resend_and_request_id() -> None:
+def test_regenerate_and_edit_resend_and_request_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_fake_vllm(monkeypatch)
     client = TestClient(app)
     headers = _auth_headers(client)
     kb_id = client.post(
@@ -427,7 +431,8 @@ def test_stream_supports_ping_event(monkeypatch: pytest.MonkeyPatch) -> None:
     assert event_names[-1] == "done"
 
 
-def test_multiturn_clarification_then_answer() -> None:
+def test_multiturn_clarification_then_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_fake_vllm(monkeypatch)
     client = TestClient(app)
     headers = _auth_headers(client)
     kb_id = client.post(
@@ -477,7 +482,8 @@ def test_multiturn_clarification_then_answer() -> None:
     assert memory.slots["topic"] == "补考与重修"
 
 
-def test_latest_question_adds_freshness_warning() -> None:
+def test_latest_question_adds_freshness_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_fake_vllm(monkeypatch)
     client = TestClient(app)
     headers = _auth_headers(client)
     kb_id = client.post(
@@ -514,7 +520,10 @@ def test_latest_question_adds_freshness_warning() -> None:
     assert any(step["action"] == "check_official_source" for step in payload["next_steps"])
 
 
-def test_ambiguous_followup_without_new_constraints_still_clarifies() -> None:
+def test_ambiguous_followup_without_new_constraints_still_clarifies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_fake_vllm(monkeypatch)
     client = TestClient(app)
     headers = _auth_headers(client)
     kb_id = client.post(
@@ -631,6 +640,23 @@ def _collect_sse_events(response) -> list[tuple[str, dict[str, object]]]:
             if current_event == "done":
                 break
     return events
+
+
+def _enable_fake_vllm(monkeypatch: pytest.MonkeyPatch, answer: str = "模型基于证据生成回答。") -> None:
+    """让正常回答测试显式经过模型客户端。"""
+
+    def _fake_generate(self, question: str, context: str) -> str:
+        del self, question, context
+        return answer
+
+    def _fake_stream_generate(self, question: str, context: str, cancel_checker=None):
+        del self, question, context, cancel_checker
+        yield answer
+
+    monkeypatch.setenv("VLLM_ENABLED", "true")
+    monkeypatch.setattr(VllmClient, "generate", _fake_generate)
+    monkeypatch.setattr(VllmClient, "stream_generate", _fake_stream_generate)
+    reset_settings()
 
 
 def _wait_for_job(client: TestClient, job_id: str, headers: dict[str, str]) -> None:

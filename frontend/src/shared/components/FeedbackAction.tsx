@@ -76,7 +76,15 @@ export function FeedbackAction({
   if (submitted) {
     return (
       <Tooltip title="反馈已提交">
-        <Button size="small" icon={<CheckOutlined />} disabled aria-label="反馈已提交" />
+        <Button
+          size="small"
+          icon={<CheckOutlined />}
+          disabled
+          aria-label="反馈已提交"
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+        />
       </Tooltip>
     );
   }
@@ -89,7 +97,8 @@ export function FeedbackAction({
             size="small"
             icon={<LikeOutlined />}
             aria-label="赞同"
-            onClick={() => {
+            onClick={(event) => {
+              event.stopPropagation();
               openModal("up");
             }}
             loading={submitting && rating === "up"}
@@ -100,7 +109,8 @@ export function FeedbackAction({
             size="small"
             icon={<DislikeOutlined />}
             aria-label="反对"
-            onClick={() => {
+            onClick={(event) => {
+              event.stopPropagation();
               openModal("down");
             }}
             loading={submitting && rating === "down"}

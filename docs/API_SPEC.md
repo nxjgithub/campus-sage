@@ -257,7 +257,7 @@ Content-Type：`multipart/form-data`
 
 `POST /api/v1/staged-documents/{staged_doc_id}/preview`
 
-说明：解析暂存文件，返回 `pages/preview_blocks/assets/chunks/warnings`。`preview_blocks` 用于前端按标题、段落、表格、图片顺序还原文档预览；DOCX 内嵌图片会保存为图片资产，并优先绑定到邻近文本分块的 `assets[]`，检索命中文本分块时可同时返回原文图片；对部分 Office 导出文件中仅 CRC 异常但图片字节完整的媒体条目，服务会尝试恢复读取并继续执行图片格式校验；未配置 OCR 时，图片内容不参与语义检索，只作为原图证据复核。
+说明：解析暂存文件，返回 `pages/preview_blocks/assets/chunks/warnings`。`preview_blocks` 用于前端按标题、段落、表格、图片顺序还原文档预览；入库分块会先聚合同页或同章节的连续预览文本，再按 `CHUNK_SIZE/CHUNK_OVERLAP` 和语义边界切分，避免每个段落或视觉行直接变成小 chunk。DOCX 与 PDF 内嵌图片会保存为图片资产，并优先绑定到邻近文本分块的 `assets[]`，检索命中文本分块时可同时返回原文图片；PDF 图片若为 JPEG2000 等浏览器支持不稳定的格式，服务会转为 PNG 资产；对部分 Office 导出文件中仅 CRC 异常但图片字节完整的媒体条目，服务会尝试恢复读取并继续执行图片格式校验；未配置 OCR 时，图片内容不参与语义检索，只作为原图证据复核。`assets[]` 中 PDF 图片会额外返回 `page_number`，DOCX 图片该字段可为 `null`。
 
 `PATCH /api/v1/staged-documents/{staged_doc_id}/chunks/{chunk_id}`
 
@@ -474,6 +474,7 @@ Content-Type：`multipart/form-data`
   - `threshold`（可选）：`0~1`
 - 参数不合法时返回 `400 + VALIDATION_FAILED`。
 - 兼容性：若知识库中存在历史非法配置值（如超范围或错误类型），服务端会自动回退到系统默认值继续执行。
+- 生成约束：所有 `refusal=false` 的正常回答必须调用生成模型；若 `VLLM_ENABLED=false` 或模型未返回有效内容，不允许把检索片段拼接成正常回答，必须返回 `RAG_MODEL_FAILED`（同步）或 SSE `error + done.status=failed`（流式）。
 - 多轮策略：服务端会基于会话历史做基础意图分流与追问补全；若问题信息不足，会返回澄清型拒答（`refusal=true` + `next_steps`）。
 - 连续追问策略：服务端会从历史消息中抽取主题锚点、近期追问和槽位摘要来改写检索 query，但不会修改原始用户消息，也不会把会话摘要当作引用证据。
 - 时效策略：当问题包含“最新/当前/今年”等时效诉求时，服务端会检查 `citations.published_at`，必要时在 `answer` 中追加“请核验最新公告”的提示，并通过 `next_steps` 引导到官方来源。

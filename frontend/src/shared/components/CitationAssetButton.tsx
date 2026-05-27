@@ -43,7 +43,14 @@ export function CitationAssetButton({ assetUrl, label }: CitationAssetButtonProp
 
   return (
     <>
-      <Button size="small" icon={<FileImageOutlined />} onClick={() => void handleOpen()}>
+      <Button
+        size="small"
+        icon={<FileImageOutlined />}
+        onClick={(event) => {
+          event.stopPropagation();
+          void handleOpen();
+        }}
+      >
         查看原图
       </Button>
       <Modal

@@ -53,6 +53,10 @@ _POLICY_INTENT_KEYWORDS = (
     "截止",
     "怎么办",
     "如何",
+    "创建",
+    "制作",
+    "模拟",
+    "面试",
     "申请",
     "办理",
     "规定",
@@ -78,6 +82,10 @@ _POLICY_INTENT_KEYWORDS = (
     "复试",
     "分数线",
     "录取",
+    "简历",
+    "就业",
+    "AI面试",
+    "模拟面试",
 )
 
 _TOPIC_GROUPS: dict[str, tuple[str, ...]] = {
@@ -87,6 +95,7 @@ _TOPIC_GROUPS: dict[str, tuple[str, ...]] = {
     "奖助学金": ("奖学金", "助学金", "助学贷款"),
     "毕业审核": ("毕业", "论文", "答辩", "学位"),
     "招生与报考": ("招生", "报考", "复试", "网报", "报名", "分数线", "录取", "考点"),
+    "就业服务与简历": ("AI简历", "简历", "AI面试", "模拟面试", "面试", "就业", "智慧就业"),
     "假期去向登记": ("假期去向", "去向登记", "离校", "留校", "返校"),
 }
 
@@ -103,6 +112,12 @@ _CAMPUS_SERVICE_TOPIC_KEYWORDS = (
     "报到",
     "认证",
     "缴费",
+    "简历",
+    "就业",
+    "AI面试",
+    "模拟面试",
+    "面试",
+    "智慧就业",
 )
 
 _SPECIFIC_SUBJECT_KEYWORDS = (
@@ -120,6 +135,13 @@ _SPECIFIC_SUBJECT_KEYWORDS = (
     "自助",
     "登记",
     "打印",
+    "AI简历",
+    "简历",
+    "AI面试",
+    "模拟面试",
+    "面试",
+    "就业",
+    "智慧就业",
 )
 
 _ROLE_KEYWORDS: dict[str, tuple[str, ...]] = {
@@ -175,6 +197,12 @@ _LIGHTWEIGHT_MODEL_WEIGHTS: dict[str, dict[str, float]] = {
         "分数线": 1.1,
         "录取": 1.1,
         "考点": 1.0,
+        "创建": 0.8,
+        "制作": 0.8,
+        "简历": 1.0,
+        "就业": 0.8,
+        "模拟": 0.6,
+        "面试": 1.0,
     },
     "clarification": {
         "这个": 1.2,
@@ -306,7 +334,14 @@ def analyze_intent(question: str, state: DialogState) -> IntentDecision:
     intent = _pick_intent(scored)
     if intent == "smalltalk":
         return _smalltalk_decision(normalized_question=normalized, slots=slots)
-    if intent == "clarification" or _need_clarification(normalized, current_slots, slots, state):
+    should_attempt_retrieval = _should_attempt_retrieval(normalized, current_slots, state)
+    if (
+        (intent == "clarification" and not should_attempt_retrieval)
+        or (
+            _need_clarification(normalized, current_slots, slots, state)
+            and not should_attempt_retrieval
+        )
+    ):
         return _clarification_decision(
             normalized_question=normalized,
             slots=slots,
@@ -594,6 +629,55 @@ def _has_followup_detail(text: str, current_slots: dict[str, str]) -> bool:
     if any(key in current_slots for key in ("topic", "role", "time_hint")):
         return True
     return any(keyword in text for keyword in _FOLLOWUP_DETAIL_KEYWORDS)
+
+
+def _should_attempt_retrieval(
+    text: str,
+    current_slots: dict[str, str],
+    state: DialogState,
+) -> bool:
+    """判断低置信意图是否应先进入检索而不是提前澄清。"""
+
+    if "topic" in current_slots or _has_specific_subject(text):
+        return True
+    compact = re.sub(r"\s+", "", text)
+    if len(compact) < 4:
+        return False
+    has_ambiguous_reference = any(keyword in compact for keyword in _AMBIGUOUS_REFERENCES)
+    if has_ambiguous_reference and not state.last_user_question:
+        return False
+    if _is_generic_detail_only_question(compact):
+        return False
+    return bool(re.search(r"[\u4e00-\u9fffA-Za-z0-9]{4,}", compact))
+
+
+def _is_generic_detail_only_question(compact_text: str) -> bool:
+    """识别缺少业务对象的泛化问句，例如“流程是什么”。"""
+
+    candidate = compact_text
+    for keyword in (
+        "是什么",
+        "怎么办",
+        "怎么弄",
+        "如何",
+        "流程",
+        "步骤",
+        "条件",
+        "要求",
+        "材料",
+        "时间",
+        "入口",
+        "对象",
+        "范围",
+        "哪里",
+        "多久",
+        "吗",
+        "呢",
+        "？",
+        "?",
+    ):
+        candidate = candidate.replace(keyword, "")
+    return len(candidate) <= 1
 
 
 def _pick_anchor_question(user_questions: list[str]) -> str | None:

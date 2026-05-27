@@ -61,6 +61,7 @@ export interface StagedAsset {
   url: string;
   order_index: number;
   source: string;
+  page_number?: number | null;
 }
 
 export interface StagedPage {

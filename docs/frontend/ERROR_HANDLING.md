@@ -52,7 +52,7 @@
 - `VECTOR_SEARCH_FAILED` / `VECTOR_UPSERT_FAILED`
   - 提示“向量服务不可用，请稍后重试”
 - `RAG_MODEL_FAILED`
-  - 提示“模型服务不可用”，保留当前问题文本供重试
+  - 提示“模型服务不可用或未启用”，保留当前问题文本供重试；该错误不是 RAG 拒答，不能渲染为 `refusal=true`
 - `UNEXPECTED_ERROR`
   - 提示“服务内部错误”，附 `request_id`
 

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 import pytest
 import time
 
-from app.core.settings import get_settings
+from app.core.settings import get_settings, reset_settings
 from app.core.utils import new_id, utc_now_iso
 from app.db.database import get_database, reset_database
 from app.db.migrations import LATEST_SCHEMA_VERSION
@@ -17,6 +17,7 @@ from app.db.models import ConversationRecord, MessageRecord
 from app.db.repos import RepositoryProvider
 from app.main import app
 from app.auth.service import UserService
+from app.rag.llm_client import VllmClient
 from app.rag.next_steps import NEXT_STEP_ACTIONS
 from tests.conftest import is_qdrant_available, is_qdrant_backend, is_redis_available
 
@@ -430,6 +431,12 @@ def test_staged_document_preview_and_commit_docx_image() -> None:
         chunk["chunk_id"] == image_chunk["chunk_id"] and not chunk["enabled"]
         for chunk in update_response.json()["chunks"]
     )
+    reenable_response = client.patch(
+        f"/api/v1/staged-documents/{staged_id}/chunks/{image_chunk['chunk_id']}",
+        json={"enabled": True},
+        headers=headers,
+    )
+    assert reenable_response.status_code == 200
 
     commit_response = client.post(
         f"/api/v1/staged-documents/{staged_id}/commit", headers=headers
@@ -531,7 +538,8 @@ def test_reindex_missing_file_marks_failed() -> None:
     assert job_payload["error_code"] == "INGEST_PARSE_FAILED"
 
 
-def test_ask_with_evidence() -> None:
+def test_ask_with_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_fake_vllm(monkeypatch)
     client = TestClient(app)
     headers = _auth_headers(client)
     kb_payload = {
@@ -581,7 +589,8 @@ def test_ask_with_evidence() -> None:
         assert any(kb_id in name for name in collections)
 
 
-def test_conversation_and_feedback_flow() -> None:
+def test_conversation_and_feedback_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_fake_vllm(monkeypatch)
     client = TestClient(app)
     headers = _auth_headers(client)
     kb_payload = {
@@ -801,6 +810,18 @@ def _wait_for_job(client: TestClient, job_id: str, headers: dict[str, str]) -> N
         time.sleep(0.05)
     if status in {"queued", "running"}:
         time.sleep(0.1)
+
+
+def _enable_fake_vllm(monkeypatch: pytest.MonkeyPatch, answer: str = "模型基于证据生成回答。") -> None:
+    """让正常回答测试显式经过模型客户端。"""
+
+    def _fake_generate(self, question: str, context: str) -> str:
+        del self, question, context
+        return answer
+
+    monkeypatch.setenv("VLLM_ENABLED", "true")
+    monkeypatch.setattr(VllmClient, "generate", _fake_generate)
+    reset_settings()
 
 
 def _auth_headers(client: TestClient) -> dict[str, str]:

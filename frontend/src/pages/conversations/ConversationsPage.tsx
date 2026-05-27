@@ -90,15 +90,6 @@ function summarizeConversation(item: ConversationListItem) {
   return item.last_message_preview || "暂无摘要，进入详情可查看完整消息。";
 }
 
-function isInteractiveTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-  return Boolean(
-    target.closest("button, a, input, textarea, [role='button'], .ant-card, .ant-btn, .ant-input")
-  );
-}
-
 export function MessageCard(props: {
   item: ConversationMessage;
   submitting: boolean;
@@ -130,12 +121,6 @@ export function MessageCard(props: {
     <List.Item>
       <article
         className={item.role === "assistant" ? "conversation-message conversation-message--assistant" : "conversation-message conversation-message--user"}
-        onClick={(event) => {
-          if (item.role !== "assistant" || isInteractiveTarget(event.target)) {
-            return;
-          }
-          setEvidenceOpen(true);
-        }}
       >
         <header className="conversation-message__head">
           <Space size={8} wrap>
@@ -271,6 +256,17 @@ export function MessageCard(props: {
                   ))}
                 </Space>
               </Card>
+            ) : null}
+            {citations.length > 0 ? (
+              <Button
+                size="small"
+                icon={<SearchOutlined />}
+                onClick={() => {
+                  setEvidenceOpen(true);
+                }}
+              >
+                查看证据详情
+              </Button>
             ) : null}
             <FeedbackAction
               messageId={item.message_id}

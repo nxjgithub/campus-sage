@@ -314,39 +314,14 @@ class RagService:
             computed = prepared
         else:
             generate_start = time.perf_counter()
-            if self._settings.vllm_enabled:
-                streamed_answer = True
-                answer_parts: list[str] = []
-                for delta in self._llm_client.stream_generate(
-                    question=prepared.normalized_question,
-                    context=prepared.context,
-                    cancel_checker=cancel_checker,
-                ):
-                    if cancel_checker():
-                        yield self._canceled_event(run_id, request_id, user_message.message_id)
-                        yield self._done_event(
-                            run_id,
-                            request_id,
-                            status="canceled",
-                            conversation_id=conversation.conversation_id,
-                            user_message_id=user_message.message_id,
-                        )
-                        return
-                    if not delta:
-                        continue
-                    answer_parts.append(delta)
-                    yield {
-                        "event": "token",
-                        "data": {
-                            "run_id": run_id,
-                            "delta": delta,
-                            "request_id": request_id,
-                        },
-                    }
-                answer, citation_delta = self._ensure_citations_for_stream(
-                    "".join(answer_parts),
-                    prepared.citations,
-                )
+            self._ensure_llm_enabled()
+            streamed_answer = True
+            answer_parts: list[str] = []
+            for delta in self._llm_client.stream_generate(
+                question=prepared.normalized_question,
+                context=prepared.context,
+                cancel_checker=cancel_checker,
+            ):
                 if cancel_checker():
                     yield self._canceled_event(run_id, request_id, user_message.message_id)
                     yield self._done_event(
@@ -357,17 +332,40 @@ class RagService:
                         user_message_id=user_message.message_id,
                     )
                     return
-                if citation_delta:
-                    yield {
-                        "event": "token",
-                        "data": {
-                            "run_id": run_id,
-                            "delta": citation_delta,
-                            "request_id": request_id,
-                        },
-                    }
-            else:
-                answer = self._build_answer(prepared.citations)
+                if not delta:
+                    continue
+                answer_parts.append(delta)
+                yield {
+                    "event": "token",
+                    "data": {
+                        "run_id": run_id,
+                        "delta": delta,
+                        "request_id": request_id,
+                    },
+                }
+            answer, citation_delta = self._ensure_citations_for_stream(
+                "".join(answer_parts),
+                prepared.citations,
+            )
+            if cancel_checker():
+                yield self._canceled_event(run_id, request_id, user_message.message_id)
+                yield self._done_event(
+                    run_id,
+                    request_id,
+                    status="canceled",
+                    conversation_id=conversation.conversation_id,
+                    user_message_id=user_message.message_id,
+                )
+                return
+            if citation_delta:
+                yield {
+                    "event": "token",
+                    "data": {
+                        "run_id": run_id,
+                        "delta": citation_delta,
+                        "request_id": request_id,
+                    },
+                }
             generate_ms = int((time.perf_counter() - generate_start) * 1000)
             computed = self._build_generated_result(
                 prepared=prepared,
@@ -535,14 +533,12 @@ class RagService:
             return prepared
 
         generate_start = time.perf_counter()
-        if self._settings.vllm_enabled:
-            answer = self._llm_client.generate(
-                question=prepared.normalized_question,
-                context=prepared.context,
-            )
-            answer = self._ensure_citations_in_answer(answer, prepared.citations)
-        else:
-            answer = self._build_answer(prepared.citations)
+        self._ensure_llm_enabled()
+        answer = self._llm_client.generate(
+            question=prepared.normalized_question,
+            context=prepared.context,
+        )
+        answer = self._ensure_citations_in_answer(answer, prepared.citations)
         generate_ms = int((time.perf_counter() - generate_start) * 1000)
         return self._build_generated_result(
             prepared=prepared,
@@ -1080,13 +1076,17 @@ class RagService:
         cleaned = " ".join(text.strip().split())
         return cleaned[:limit]
 
-    def _build_answer(self, citations: list[CitationDTO]) -> str:
-        """构建答案文本。"""
+    def _ensure_llm_enabled(self) -> None:
+        """确保正常回答必须由生成模型产出。"""
 
-        if not citations:
-            return "未找到可用证据。"
-        head = citations[0].snippet
-        return f"根据检索到的证据，相关内容如下：[1] {head}"
+        if self._settings.vllm_enabled:
+            return
+        raise AppError(
+            code=ErrorCode.RAG_MODEL_FAILED,
+            message="生成模型未启用，无法生成正常回答",
+            detail={"vllm_enabled": False},
+            status_code=502,
+        )
 
     def _ensure_citations_in_answer(
         self, answer: str, citations: list[CitationDTO]
@@ -1097,7 +1097,12 @@ class RagService:
             return answer
         content = answer.strip()
         if not content:
-            return self._build_answer(citations)
+            raise AppError(
+                code=ErrorCode.RAG_MODEL_FAILED,
+                message="生成模型未返回有效内容",
+                detail={"reason": "empty_answer"},
+                status_code=502,
+            )
         if re.search(r"\[\d+\]", content):
             return content
         markers = "".join(f"[{item.citation_id}]" for item in citations)
@@ -1114,8 +1119,12 @@ class RagService:
             return answer.strip(), ""
         content = answer.strip()
         if not content:
-            fallback = self._build_answer(citations)
-            return fallback, fallback
+            raise AppError(
+                code=ErrorCode.RAG_MODEL_FAILED,
+                message="生成模型未返回有效内容",
+                detail={"reason": "empty_answer"},
+                status_code=502,
+            )
         if re.search(r"\[\d+\]", content):
             return content, ""
         markers = "".join(f"[{item.citation_id}]" for item in citations)

@@ -2689,6 +2689,7 @@ body {
 
 .conversation-message--assistant {
   background: linear-gradient(180deg, rgba(248, 251, 255, 0.95), rgba(255, 255, 255, 0.98));
+  cursor: text;
 }
 
 .conversation-message--user {
@@ -8092,6 +8093,7 @@ body,
   border-radius: var(--cs-radius);
   background: var(--cs-panel-bg);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  cursor: text;
 }
 
 .chat-bubble--assistant:hover {
@@ -8588,6 +8590,8 @@ body,
 }
 
 .markdown-message .citation-marker {
+  display: inline-flex;
+  align-items: center;
   height: 24px;
   margin: 0 2px;
   padding: 0 7px !important;
@@ -8608,14 +8612,26 @@ body,
 }
 
 .markdown-message__assets {
-  display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 168px));
-  gap: 10px !important;
-  margin: 10px 0 14px;
+  display: block !important;
+  width: 100%;
+  margin: 14px 0 4px;
+  padding-top: 10px;
+  border-top: 1px dashed #dbe4ef;
 }
 
-.markdown-message__assets .ant-space-item {
-  min-width: 0;
+.markdown-message__assets-title {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--cs-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.markdown-message__asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 168px));
+  gap: 10px;
 }
 
 .markdown-message__asset {
@@ -8625,6 +8641,7 @@ body,
   border: 1px solid var(--cs-border);
   border-radius: var(--cs-radius);
   background: #f8fafc;
+  cursor: zoom-in;
 }
 
 .markdown-message__asset .ant-image,
@@ -8778,6 +8795,10 @@ body,
   }
 
   .markdown-message__assets {
+    padding-top: 8px;
+  }
+
+  .markdown-message__asset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

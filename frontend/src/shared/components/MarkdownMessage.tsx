@@ -1,10 +1,9 @@
-import { Button, Image, Space, Typography } from "antd";
+import { Button, Image, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { apiClient } from "../api/client";
 import { CitationAssetItem, CitationItem } from "../api/modules/ask";
-import { splitCitationMarkers } from "../utils/citation";
 import { citationAssets } from "../utils/citationAssets";
 import { normalizeAssetPath } from "./CitationAssetButton";
 
@@ -14,73 +13,89 @@ interface MarkdownMessageProps {
   onCitationClick?: (citationId: number) => void;
 }
 
+const CITATION_LINK_PREFIX = "csage-citation-";
+const CITATION_MARKER_PATTERN = /\[(\d+)\]/g;
+
 export function MarkdownMessage({ content, citations = [], onCitationClick }: MarkdownMessageProps) {
-  const tokens = splitCitationMarkers(content);
-  const citationMap = useMemo(() => {
-    return new Map(citations.map((citation) => [citation.citation_id, citation]));
-  }, [citations]);
-  const hasInlineAssets = tokens.some((token) => {
-    if (token.type !== "marker") return false;
-    const citation = citationMap.get(token.citationId);
-    return citation ? citationAssets(citation).length > 0 : false;
-  });
-  const fallbackAssets = hasInlineAssets
-    ? []
-    : citations.flatMap((citation) => citationAssets(citation));
+  const markdownContent = useMemo(() => withCitationLinks(content), [content]);
+  const assets = useMemo(() => uniqueCitationAssets(citations), [citations]);
 
   return (
     <div className="markdown-message">
-      {tokens.map((token, index) => {
-        if (token.type === "marker") {
-          const citation = citationMap.get(token.citationId);
-          const assets = citation ? citationAssets(citation) : [];
-          return (
-            <span className="markdown-message__citation" key={`${token.marker}_${index}`}>
-              <Button
-                size="small"
-                type="link"
-                className="citation-marker"
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ href, children }) => {
+            const citationId = parseCitationHref(href);
+            if (citationId !== null) {
+              return (
+                <Button
+                  size="small"
+                  type="link"
+                  className="citation-marker"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onCitationClick?.(citationId);
+                  }}
+                >
+                  {children}
+                </Button>
+              );
+            }
+            return (
+              <Typography.Link
+                href={href}
+                target="_blank"
+                rel="noreferrer"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onCitationClick?.(token.citationId);
                 }}
               >
-                {token.marker}
-              </Button>
-              <InlineAssets assets={assets} />
-            </span>
-          );
-        }
-        return <MarkdownText key={`text_${index}`} value={token.value} />;
-      })}
-      <InlineAssets assets={fallbackAssets} />
+                {children}
+              </Typography.Link>
+            );
+          },
+          table: ({ children }) => (
+            <div className="markdown-message__table-wrap">
+              <table>{children}</table>
+            </div>
+          )
+        }}
+      >
+        {markdownContent}
+      </ReactMarkdown>
+      <InlineAssets assets={assets} />
     </div>
   );
 }
 
-function MarkdownText({ value }: { value: string }) {
-  if (!value) {
+function withCitationLinks(content: string) {
+  return content.replace(
+    CITATION_MARKER_PATTERN,
+    (_marker, citationId: string) => `[\\[${citationId}\\]](#${CITATION_LINK_PREFIX}${citationId})`
+  );
+}
+
+function parseCitationHref(href?: string) {
+  const prefix = `#${CITATION_LINK_PREFIX}`;
+  if (!href?.startsWith(prefix)) {
     return null;
   }
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        a: ({ href, children }) => (
-          <Typography.Link href={href} target="_blank" rel="noreferrer">
-            {children}
-          </Typography.Link>
-        ),
-        table: ({ children }) => (
-          <div className="markdown-message__table-wrap">
-            <table>{children}</table>
-          </div>
-        )
-      }}
-    >
-      {value}
-    </ReactMarkdown>
-  );
+  const citationId = Number(href.slice(prefix.length));
+  return Number.isInteger(citationId) && citationId > 0 ? citationId : null;
+}
+
+function uniqueCitationAssets(citations: CitationItem[]) {
+  const assets = new Map<string, CitationAssetItem>();
+  for (const citation of citations) {
+    for (const asset of citationAssets(citation)) {
+      if (!assets.has(asset.asset_id)) {
+        assets.set(asset.asset_id, asset);
+      }
+    }
+  }
+  return [...assets.values()];
 }
 
 function InlineAssets({ assets }: { assets: CitationAssetItem[] }) {
@@ -88,11 +103,22 @@ function InlineAssets({ assets }: { assets: CitationAssetItem[] }) {
     return null;
   }
   return (
-    <Space className="markdown-message__assets" size={10} wrap>
-      {assets.map((asset) => (
-        <InlineAssetImage asset={asset} key={asset.asset_id} />
-      ))}
-    </Space>
+    <section
+      className="markdown-message__assets"
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+      onMouseDown={(event) => {
+        event.stopPropagation();
+      }}
+    >
+      <Typography.Text className="markdown-message__assets-title">图片证据</Typography.Text>
+      <div className="markdown-message__asset-grid">
+        {assets.map((asset) => (
+          <InlineAssetImage asset={asset} key={asset.asset_id} />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -124,8 +150,16 @@ function InlineAssetImage({ asset }: { asset: CitationAssetItem }) {
     return null;
   }
   return (
-    <figure className="markdown-message__asset">
-      <Image src={url} alt={asset.asset_label || "图片证据"} />
+    <figure
+      className="markdown-message__asset"
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+      onMouseDown={(event) => {
+        event.stopPropagation();
+      }}
+    >
+      <Image src={url} alt={asset.asset_label || "图片证据"} preview={{ mask: "预览" }} />
       <figcaption>{asset.asset_label || asset.file_name || "图片证据"}</figcaption>
     </figure>
   );

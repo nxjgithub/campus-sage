@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DeleteOutlined, EditOutlined, HistoryOutlined, LoginOutlined, LogoutOutlined, MessageOutlined, PlusOutlined, SearchOutlined, SendOutlined, StopOutlined } from "@ant-design/icons";
 import {
   Alert,
@@ -115,6 +115,9 @@ const QUALITY_PROMISES = [
   { label: "拒答边界", value: "证据不足时给出下一步建议" },
   { label: "过程回放", value: "会话、引用、反馈可追踪" }
 ];
+
+const DEFAULT_COMPOSER_BOTTOM_INSET = 196;
+const COMPOSER_SCROLL_GAP = 24;
 
 function toThreadMessage(item: ConversationMessage): ThreadMessage {
   return {
@@ -348,7 +351,9 @@ export function AskPage() {
   const [editQuestion, setEditQuestion] = useState("");
   const [editTargetMessageId, setEditTargetMessageId] = useState<string | null>(null);
   const [actioningMessageId, setActioningMessageId] = useState<string | null>(null);
+  const [composerBottomInset, setComposerBottomInset] = useState(DEFAULT_COMPOSER_BOTTOM_INSET);
   const threadViewportRef = useRef<HTMLDivElement | null>(null);
+  const composerShellRef = useRef<HTMLDivElement | null>(null);
   const citationRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const currentUserLocalIdRef = useRef<string | null>(null);
   const currentAssistantLocalIdRef = useRef<string | null>(null);
@@ -493,6 +498,14 @@ export function AskPage() {
   }, [activeAssistantKey, assistantMessages]);
 
   const latestAssistantContent = assistantMessages[assistantMessages.length - 1]?.content ?? "";
+  const latestAssistantRefusalLayoutKey = latestAssistant
+    ? [
+        latestAssistant.refusal ? "refusal" : "answer",
+        latestAssistant.refusal_reason ?? "",
+        latestAssistant.next_steps.map((step) => `${step.action}:${step.value ?? ""}`).join("|"),
+        latestAssistant.suggestions.join("|")
+      ].join("::")
+    : "";
 
   const threadSummary = useMemo(
     () =>
@@ -514,12 +527,55 @@ export function AskPage() {
   );
 
   useEffect(() => {
+    const shell = composerShellRef.current;
+    if (!shell) {
+      return;
+    }
+    const updateInset = () => {
+      const nextInset = Math.ceil(shell.getBoundingClientRect().height) + COMPOSER_SCROLL_GAP;
+      setComposerBottomInset((current) => (current === nextInset ? current : nextInset));
+    };
+    updateInset();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateInset);
+      return () => {
+        window.removeEventListener("resize", updateInset);
+      };
+    }
+    const observer = new ResizeObserver(updateInset);
+    observer.observe(shell);
+    window.addEventListener("resize", updateInset);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateInset);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
     const container = threadViewportRef.current;
     if (!container) {
       return;
     }
-    container.scrollTop = container.scrollHeight;
-  }, [threadMessages.length, latestAssistantContent, composerStatus]);
+    let timeoutId: number | null = null;
+    const frameId = window.requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+      timeoutId = window.setTimeout(() => {
+        container.scrollTop = container.scrollHeight;
+      }, 80);
+    });
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [
+    threadMessages.length,
+    latestAssistantContent,
+    latestAssistantRefusalLayoutKey,
+    composerStatus,
+    composerBottomInset
+  ]);
 
   useEffect(() => {
     if (!evidenceOpen || !selectedAssistant || activeCitationId === null) {
@@ -1378,7 +1434,7 @@ export function AskPage() {
               <Typography.Text strong>
                 {isAuthenticated ? user?.email ?? "当前用户" : "游客模式"}
               </Typography.Text>
-              <Typography.Text type="secondary">点击回答查看引用。</Typography.Text>
+              <Typography.Text type="secondary">通过引用编号或查看引用按钮复核证据。</Typography.Text>
             </div>
             {isAuthenticated ? (
               <div className="chat-sidebar-user__actions">
@@ -1495,7 +1551,14 @@ export function AskPage() {
         {threadError ? <RequestErrorAlert error={threadError} /> : null}
         {messagesError ? <RequestErrorAlert error={messagesError} /> : null}
 
-        <div ref={threadViewportRef} className="chat-thread-viewport">
+        <div
+          ref={threadViewportRef}
+          className="chat-thread-viewport"
+          style={{
+            paddingBottom: composerBottomInset,
+            scrollPaddingBottom: composerBottomInset
+          }}
+        >
           {messagesHasMore && threadStatus === "success" ? (
             <div className="chat-thread-loadmore">
               <Button
@@ -1572,15 +1635,6 @@ export function AskPage() {
                         ? "chat-bubble chat-bubble--user"
                         : "chat-bubble chat-bubble--assistant"
                     }
-                    onClick={(event) => {
-                      if (item.role === "assistant") {
-                        const target = event.target as HTMLElement;
-                        if (target.closest(".chat-bubble-actions")) {
-                          return;
-                        }
-                        openEvidenceModal(item);
-                      }
-                    }}
                   >
                     <header className="chat-bubble__header">
                       <Space size={8}>
@@ -1624,6 +1678,20 @@ export function AskPage() {
                             onSubmit={handleFeedbackSubmit}
                           />
                         ) : null}
+                        {item.citations.length ? (
+                          <Tooltip title="查看引用证据">
+                            <Button
+                              size="small"
+                              icon={<SearchOutlined />}
+                              aria-label="查看引用"
+                              onClick={() => {
+                                openEvidenceModal(item);
+                              }}
+                            >
+                              查看引用
+                            </Button>
+                          </Tooltip>
+                        ) : null}
                         {item.message_id ? (
                           <Tooltip title="重试">
                             <Button
@@ -1660,7 +1728,7 @@ export function AskPage() {
             : null}
         </div>
 
-        <div className="chat-composer-shell">
+        <div ref={composerShellRef} className="chat-composer-shell">
           <div className="chat-composer">
             {composerNextSteps.length ? (
               <div className="chat-composer-guidance">

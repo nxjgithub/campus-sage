@@ -55,6 +55,7 @@ class StagedAssetResponse(BaseModel):
     url: str = Field(description="图片访问地址")
     order_index: int = Field(description="图片在文档中的顺序")
     source: str = Field(description="资产来源")
+    page_number: int | None = Field(default=None, description="PDF 图片所属页码")
 
 
 class StagedAssetRefResponse(BaseModel):

@@ -136,6 +136,22 @@ def test_analyze_intent_uses_generic_campus_service_topic() -> None:
     assert decision.slots["topic"] == "校园事务"
 
 
+def test_analyze_intent_prefers_policy_query_for_ai_resume_question() -> None:
+    state = build_dialog_state([])
+    decision = analyze_intent("AI简历如何制作？", state)
+    assert decision.intent == "policy_query"
+    assert decision.early_refusal is False
+    assert decision.slots["topic"] == "就业服务与简历"
+
+
+def test_analyze_intent_prefers_retrieval_for_ai_interview_question() -> None:
+    state = build_dialog_state([])
+    decision = analyze_intent("AI模拟面试", state)
+    assert decision.intent == "policy_query"
+    assert decision.early_refusal is False
+    assert decision.slots["topic"] == "就业服务与简历"
+
+
 def test_analyze_intent_prefers_retrieval_for_specific_activity_guide() -> None:
     state = build_dialog_state([])
     decision = analyze_intent("2025年国家安全知识暨保密知识竞赛的参与操作步骤是什么？", state)

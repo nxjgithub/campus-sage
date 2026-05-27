@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import binascii
 from dataclasses import asdict, dataclass
+import hashlib
+import io
 import json
 from pathlib import Path
 import shutil
@@ -41,6 +43,7 @@ class StagedAsset:
     url: str
     order_index: int
     source: str
+    page_number: int | None = None
 
 
 @dataclass(slots=True)
@@ -407,71 +410,117 @@ class StagedDocumentService:
         asset_by_id = {asset.asset_id: asset for asset in assets}
         chunks: list[StagedChunk] = []
         pending_assets: list[dict[str, str]] = []
-        current_heading: str | None = None
+        buffer_lines: list[str] = []
+        buffer_page_number: int | None = None
+        buffer_section_path: str | None = None
+
+        def flush_buffer() -> None:
+            """按累计文本统一切分，避免每个预览段落都变成独立小块。"""
+
+            nonlocal pending_assets, buffer_page_number, buffer_section_path
+            if not buffer_lines:
+                return
+            text = "\n".join(line for line in buffer_lines if line.strip()).strip()
+            buffer_lines.clear()
+            if not text:
+                buffer_page_number = None
+                buffer_section_path = None
+                return
+            parsed_chunks = self._chunker.build(
+                [
+                    ParsedPage(
+                        page_number=buffer_page_number,
+                        text=text,
+                        section_path=buffer_section_path,
+                    )
+                ]
+            )
+            for offset, chunk in enumerate(parsed_chunks):
+                attached_assets = pending_assets if offset == 0 and pending_assets else None
+                chunks.append(
+                    self._chunk_to_staged_chunk(
+                        chunk=chunk,
+                        chunk_index=len(chunks),
+                        attached_assets=attached_assets,
+                    )
+                )
+            if parsed_chunks:
+                pending_assets = []
+            buffer_page_number = None
+            buffer_section_path = None
 
         for block in preview_blocks:
-            if block.block_type == "heading" and block.text:
-                current_heading = block.text.strip() or current_heading
             if block.block_type in {"heading", "paragraph", "table"}:
+                if self._should_flush_preview_buffer(
+                    buffer_lines=buffer_lines,
+                    current_page_number=buffer_page_number,
+                    current_section_path=buffer_section_path,
+                    next_block=block,
+                ):
+                    flush_buffer()
                 text = self._preview_block_text(block)
                 if text:
-                    block_chunks = self._split_preview_block_text(
-                        text=text,
-                        section_path=block.section_path or current_heading,
-                        pending_assets=pending_assets,
-                        start_index=len(chunks),
-                    )
-                    chunks.extend(block_chunks)
-                    pending_assets = []
+                    if not buffer_lines:
+                        buffer_page_number = block.page_number
+                        buffer_section_path = block.section_path
+                    buffer_lines.append(text)
                 continue
             if block.block_type == "image" and block.asset_id:
                 asset = asset_by_id.get(block.asset_id)
                 if asset is None:
                     continue
+                flush_buffer()
                 asset_ref = asdict(self._asset_ref(asset))
                 if chunks:
                     self._append_asset_to_chunk(chunks[-1], asset_ref)
                 else:
                     pending_assets.append(asset_ref)
 
+        flush_buffer()
         if pending_assets:
             chunks.extend(self._image_asset_chunks(pending_assets, len(chunks)))
         return chunks
 
-    def _split_preview_block_text(
+    def _should_flush_preview_buffer(
         self,
-        text: str,
-        section_path: str | None,
-        pending_assets: list[dict[str, str]],
-        start_index: int,
-    ) -> list[StagedChunk]:
-        """切分单个预览文本块，并把前置图片绑定到首个文本分块。"""
+        buffer_lines: list[str],
+        current_page_number: int | None,
+        current_section_path: str | None,
+        next_block: StagedPreviewBlock,
+    ) -> bool:
+        """判断预览文本累计缓冲是否应在页或章节边界冲刷。"""
 
-        parsed_chunks = self._chunker.build(
-            [ParsedPage(page_number=None, text=text, section_path=section_path)]
+        if not buffer_lines:
+            return False
+        if next_block.page_number is not None and next_block.page_number != current_page_number:
+            return True
+        return (
+            next_block.section_path is not None
+            and next_block.section_path != current_section_path
         )
-        result: list[StagedChunk] = []
-        for offset, chunk in enumerate(parsed_chunks):
-            attached_assets = pending_assets if offset == 0 and pending_assets else None
-            result.append(
-                StagedChunk(
-                    chunk_id=new_id("pchunk"),
-                    chunk_index=start_index + offset,
-                    text=chunk.text,
-                    page_start=chunk.page_start,
-                    page_end=chunk.page_end,
-                    section_path=chunk.section_path,
-                    enabled=True,
-                    source_kind="text",
-                    assets=attached_assets,
-                    asset_id=attached_assets[0]["asset_id"] if attached_assets else None,
-                    asset_label=(
-                        attached_assets[0]["asset_label"] if attached_assets else None
-                    ),
-                    asset_url=attached_assets[0]["asset_url"] if attached_assets else None,
-                )
-            )
-        return result
+
+    def _chunk_to_staged_chunk(
+        self,
+        chunk: Chunk,
+        chunk_index: int,
+        attached_assets: list[dict[str, str]] | None = None,
+    ) -> StagedChunk:
+        """把正式分块转换为预览分块，并保留邻近图片资产引用。"""
+
+        return StagedChunk(
+            chunk_id=new_id("pchunk"),
+            chunk_index=chunk_index,
+            text=chunk.text,
+            page_start=chunk.page_start,
+            page_end=chunk.page_end,
+            section_path=chunk.section_path,
+            enabled=True,
+            source_kind="text",
+            assets=attached_assets,
+            asset_id=attached_assets[0]["asset_id"] if attached_assets else None,
+            asset_label=(attached_assets[0]["asset_label"] if attached_assets else None),
+            asset_url=attached_assets[0]["asset_url"] if attached_assets else None,
+        )
 
     def _image_asset_chunks(
         self, asset_refs: list[dict[str, str]], start_index: int
@@ -569,7 +618,56 @@ class StagedDocumentService:
             blocks = self._build_docx_preview_blocks(file_path, assets)
             if blocks:
                 return blocks
+        if file_path.suffix.lower() == ".pdf":
+            return self._build_pdf_preview_blocks(pages, assets)
         return self._build_text_preview_blocks(pages)
+
+    def _build_pdf_preview_blocks(
+        self, pages: list[ParsedPage], assets: list[StagedAsset]
+    ) -> list[StagedPreviewBlock]:
+        """生成 PDF 预览块；图片缺少坐标时保守追加到所属页文本之后。"""
+
+        text_blocks = self._build_text_preview_blocks(pages)
+        if not assets:
+            return text_blocks
+
+        assets_by_page: dict[int | None, list[StagedAsset]] = {}
+        for asset in assets:
+            assets_by_page.setdefault(asset.page_number, []).append(asset)
+
+        blocks: list[StagedPreviewBlock] = []
+        emitted_pages: set[int | None] = set()
+        current_page: int | None = None
+
+        def append_page_assets(page_number: int | None) -> None:
+            if page_number in emitted_pages:
+                return
+            emitted_pages.add(page_number)
+            for asset in assets_by_page.get(page_number, []):
+                blocks.append(
+                    StagedPreviewBlock(
+                        block_type="image",
+                        order_index=len(blocks),
+                        text=asset.file_name,
+                        page_number=asset.page_number,
+                        section_path="图片资产",
+                        asset_id=asset.asset_id,
+                        asset_label=asset.label,
+                        asset_url=asset.url,
+                    )
+                )
+
+        for block in text_blocks:
+            if current_page is not None and block.page_number != current_page:
+                append_page_assets(current_page)
+            current_page = block.page_number
+            block.order_index = len(blocks)
+            blocks.append(block)
+        append_page_assets(current_page)
+
+        for page_number in assets_by_page:
+            append_page_assets(page_number)
+        return blocks
 
     def _build_docx_preview_blocks(
         self, file_path: Path, assets: list[StagedAsset]
@@ -680,10 +778,18 @@ class StagedDocumentService:
         return blocks
 
     def _extract_assets(self, staged_doc_id: str, file_path: Path) -> list[StagedAsset]:
+        """按文件类型抽取内嵌图片资产。"""
+
+        suffix = file_path.suffix.lower()
+        if suffix == ".docx":
+            return self._extract_docx_assets(staged_doc_id, file_path)
+        if suffix == ".pdf":
+            return self._extract_pdf_assets(staged_doc_id, file_path)
+        return []
+
+    def _extract_docx_assets(self, staged_doc_id: str, file_path: Path) -> list[StagedAsset]:
         """抽取 DOCX 内嵌图片资产。"""
 
-        if file_path.suffix.lower() != ".docx":
-            return []
         try:
             with ZipFile(file_path) as archive:
                 rels = self._read_docx_relationships(archive)
@@ -735,6 +841,126 @@ class StagedDocumentService:
                 return assets
         except (BadZipFile, KeyError, ET.ParseError):
             return []
+
+    def _extract_pdf_assets(self, staged_doc_id: str, file_path: Path) -> list[StagedAsset]:
+        """抽取 PDF 页面图片；无法确定坐标时仅保留页码级定位。"""
+
+        try:
+            reader = self._load_pdf_reader(file_path)
+        except AppError:
+            return []
+
+        assets: list[StagedAsset] = []
+        seen_hashes: set[str] = set()
+        asset_dir = self._staged_root(staged_doc_id) / "assets"
+        asset_dir.mkdir(parents=True, exist_ok=True)
+
+        for page_number, page in enumerate(reader.pages, start=1):
+            try:
+                images = list(page.images)
+            except Exception:
+                continue
+            for image_index, image in enumerate(images, start=1):
+                normalized = self._normalize_pdf_image(
+                    image_name=str(getattr(image, "name", "") or f"image{image_index}"),
+                    data=getattr(image, "data", None),
+                    pdf_image=image,
+                )
+                if normalized is None:
+                    continue
+                data, suffix, media_type, source_name = normalized
+                digest = hashlib.sha256(data).hexdigest()
+                if digest in seen_hashes:
+                    continue
+                seen_hashes.add(digest)
+
+                asset_id = new_id("asset")
+                stored_file_name = f"{asset_id}{suffix}"
+                relative_path = f"assets/{stored_file_name}"
+                (asset_dir / stored_file_name).write_bytes(data)
+                self._asset_store.put_asset(
+                    asset_id=asset_id,
+                    file_name=stored_file_name,
+                    media_type=media_type,
+                    content=data,
+                )
+                assets.append(
+                    StagedAsset(
+                        asset_id=asset_id,
+                        label=f"图 {len(assets) + 1}",
+                        file_name=f"page{page_number}_{source_name}",
+                        media_type=media_type,
+                        relative_path=relative_path,
+                        url=f"/api/v1/assets/{asset_id}",
+                        order_index=len(assets) + 1,
+                        source="pdf",
+                        page_number=page_number,
+                    )
+                )
+        return assets
+
+    def _load_pdf_reader(self, file_path: Path) -> Any:
+        """加载 PDF 读取器，独立封装便于测试替换。"""
+
+        try:
+            from pypdf import PdfReader  # type: ignore
+
+            return PdfReader(file_path)
+        except Exception as exc:
+            raise AppError(
+                code=ErrorCode.INGEST_PARSE_FAILED,
+                message="缺少 PDF 解析依赖，无法解析 PDF 图片",
+                detail={"path": str(file_path), "error": str(exc)},
+                status_code=400,
+            ) from exc
+
+    def _normalize_pdf_image(
+        self,
+        image_name: str,
+        data: object,
+        pdf_image: object,
+    ) -> tuple[bytes, str, str, str] | None:
+        """归一化 PDF 图片字节，必要时将 JPEG2000 等格式转为 PNG。"""
+
+        source_name = Path(image_name).name or "image"
+        suffix = self._normalize_image_suffix(Path(source_name).suffix)
+        if isinstance(data, bytes):
+            media_type = self._guess_media_type(suffix)
+            if self._is_valid_image_bytes(data, media_type):
+                return data, suffix, media_type, source_name
+
+        converted = self._convert_pdf_image_to_png(getattr(pdf_image, "image", None))
+        if converted is None:
+            return None
+        stem = Path(source_name).stem or "image"
+        return converted, ".png", "image/png", f"{stem}.png"
+
+    def _convert_pdf_image_to_png(self, image_object: object) -> bytes | None:
+        """将浏览器不稳定支持的 PDF 图片格式转换为 PNG。"""
+
+        if image_object is None:
+            return None
+        try:
+            image = image_object
+            mode = str(getattr(image, "mode", ""))
+            if mode and mode not in {"1", "L", "LA", "P", "RGB", "RGBA"}:
+                image = image.convert("RGB")
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            data = buffer.getvalue()
+        except Exception:
+            return None
+        return data if self._is_valid_png(data) else None
+
+    def _normalize_image_suffix(self, suffix: str) -> str:
+        """归一化图片扩展名，保证存储后缀与媒体类型一致。"""
+
+        normalized = suffix.lower().strip()
+        if normalized == ".jpeg":
+            return ".jpg"
+        if normalized in {".jpg", ".png", ".gif"}:
+            return normalized
+        return normalized or ".bin"
 
     def _read_docx_relationships(self, archive: ZipFile) -> dict[str, str]:
         """读取 DOCX relationship，建立 rId 到媒体文件的映射。"""
