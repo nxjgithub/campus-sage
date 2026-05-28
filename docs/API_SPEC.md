@@ -10,7 +10,9 @@
 
 认证约定：
 - 除 `/auth/*` 接口外，默认需要 `Authorization: Bearer <access_token>`  
-- 若知识库 `visibility=public`，问答接口可匿名访问
+- 若知识库 `visibility=public`，问答接口与知识库列表可匿名访问；匿名列表只返回 public 知识库
+- 角色与知识库可见性矩阵：游客只能读/问 `public`；`user` 可读/问 `public/internal`；`manager` 可读/问/维护 `public/internal`，但不能访问 `admin` 知识库；`admin` 可访问和维护全部知识库
+- `kb_access` 只作为 public/internal 知识库的细粒度授权补充，不允许让非 admin 角色绕过 `visibility=admin`
 
 
 ## 0. 统一响应与错误格式
@@ -172,6 +174,8 @@
 
 ### 2.2 获取知识库列表
 `GET /api/v1/kb`
+
+说明：该接口允许匿名访问。匿名用户只返回 `public`；登录 `user/manager` 返回 `public/internal` 与显式授权的 public/internal 知识库；`admin` 返回全部。
 
 响应示例：
 ```json
@@ -927,6 +931,7 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 {
   "items": [
     {"name": "admin", "permissions": ["*"]},
+    {"name": "manager", "permissions": ["kb.read", "kb.write", "doc.read", "doc.write", "ingest.read", "ingest.write", "rag.ask", "conversation.read", "conversation.write", "message.write", "feedback.write", "monitor.read"]},
     {"name": "user", "permissions": ["kb.read", "rag.ask", "conversation.read", "conversation.write", "message.write", "feedback.write"]}
   ],
   "request_id": "req_xxx"

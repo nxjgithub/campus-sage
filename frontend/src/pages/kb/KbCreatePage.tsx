@@ -16,6 +16,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { createKb, fetchKbList } from "../../shared/api/modules/kb";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
+import { useAuth } from "../../shared/auth/auth";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import { buildKbConfig, DEFAULT_KB_FORM_VALUES, KbFormValues } from "./kbShared";
 
@@ -28,7 +29,13 @@ const VISIBILITY_LABEL: Record<KbFormValues["visibility"], string> = {
 export function KbCreatePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { role } = useAuth();
   const [form] = Form.useForm<KbFormValues>();
+  const visibilityOptions = [
+    { value: "public", label: "公开" },
+    { value: "internal", label: "内部" },
+    ...(role === "admin" ? [{ value: "admin", label: "管理员" }] : [])
+  ];
 
   const kbQuery = useQuery({
     queryKey: ["kb", "list"],
@@ -176,13 +183,7 @@ export function KbCreatePage() {
                   </div>
                   <div className="kb-config-grid">
                     <Form.Item name="visibility" label="可见性" rules={[{ required: true }]}>
-                      <Select
-                        options={[
-                          { value: "public", label: "公开" },
-                          { value: "internal", label: "内部" },
-                          { value: "admin", label: "管理员" }
-                        ]}
-                      />
+                      <Select options={visibilityOptions} />
                     </Form.Item>
                     <Form.Item name="topk" label="TopK">
                       <InputNumber min={1} style={{ width: "100%" }} />

@@ -51,6 +51,7 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 多轮追问改写已增强：服务端会维护主题锚点、近期追问和槽位摘要，连续追问时优先绑定原始业务问题；摘要仅用于检索，不作为回答证据。
 - 会话轻量记忆已落库到 `conversation_memory`，服务重启后仍可用于多轮 query rewrite。
 - 用户端会话始终按当前登录用户隔离；管理员账号进入问答视角时也只看到自己的会话，跨用户审计不得复用用户端会话接口。
+- 知识库权限矩阵已收口：游客只读/问 public，user 读/问 public/internal，manager 可维护 public/internal 但不能访问 admin 知识库，admin 拥有全部权限；`kb_access` 不再允许非 admin 绕过 `visibility=admin`。
 - 对“最新/当前/今年”等时效型问题，服务层会基于 `published_at` 追加核验提示并引导官方来源。
 - 已支持流式问答 SSE：`start/token/citation/refusal/done/error` 事件并携带 request_id。
 - 拒答响应已补充结构化 `next_steps`，便于前端渲染“下一步建议”而不只展示纯文本。

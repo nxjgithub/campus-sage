@@ -13,6 +13,12 @@ vi.mock("../../shared/api/modules/kb", () => ({
   createKb: vi.fn()
 }));
 
+vi.mock("../../shared/auth/auth", () => ({
+  useAuth: () => ({
+    role: "admin"
+  })
+}));
+
 function renderWithProviders(node: ReactNode) {
   const queryClient = new QueryClient({
     defaultOptions: {

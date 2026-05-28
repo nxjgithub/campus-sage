@@ -6,7 +6,7 @@
 - 响应格式：JSON
 - 建议读取响应头：`X-Request-ID`
 - 认证方式：`Authorization: Bearer <access_token>`
-- 除 `/auth/*` 与 public 知识库匿名问答外，其余接口默认需要登录
+- 除 `/auth/*`、public 知识库匿名问答与匿名知识库列表外，其余接口默认需要登录
 
 ## 2. 统一错误结构
 ```json
@@ -46,6 +46,10 @@
   - 成功：返回 `KnowledgeBaseResponse`
 - `GET /kb`
   - 用途：获取知识库列表
+  - 匿名：只返回 `public`
+  - `user`：返回 `public/internal`
+  - `manager`：返回 `public/internal`，治理端可维护这两类知识库
+  - `admin`：返回全部，包括 `admin`
   - 成功：`items[]`
   - 列表项必须包含 `description/config/visibility/updated_at`；治理端列表直接用 `config.topk/config.threshold/config.rerank_enabled/config.max_context_tokens` 展示检索策略，不得在缺少 `config` 时把重排推断为 `off`
 - `GET /kb/{kb_id}`
@@ -270,7 +274,8 @@
 前端行为约束：
 - 401 时触发一次 refresh 后重试原请求；refresh 失败则清理本地 token 并跳转登录页。
 - 流式问答使用 `fetch` 读取 SSE，也必须遵循同一条 401 refresh 规则；重试成功后继续按 SSE 事件更新消息。
-- `roles` 包含 `admin` 才允许访问 `/admin/*`。
+- `roles` 包含 `admin` 或 `manager` 才允许访问 `/admin/*`；`manager` 管理端不展示用户管理入口，且直接访问 `/admin/users*` 应重定向。
+- `roles` 包含 `manager` 时前端默认工作台为 `/admin/kb`，但知识库可见性选项不得提供 `admin`。
 - `/app/conversations` 需登录，`/app/ask` 可匿名。
 
 ## 11. 评测接口（管理员）

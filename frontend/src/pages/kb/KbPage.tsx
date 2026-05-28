@@ -30,6 +30,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { deleteKb, fetchKbDetail, fetchKbList, updateKb } from "../../shared/api/modules/kb";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
+import { useAuth } from "../../shared/auth/auth";
 import { ConfirmAction } from "../../shared/components/ConfirmAction";
 import { OpsPane } from "../../shared/components/OpsWorkbench";
 import { PageState } from "../../shared/components/PageState";
@@ -45,12 +46,24 @@ import {
 export function KbPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { role } = useAuth();
   const [editForm] = Form.useForm<KbEditValues>();
   const [editingKbId, setEditingKbId] = useState<string | null>(null);
   const [keyword, setKeyword] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>("all");
   const [tableDensity, setTableDensity] = useState<TableDensity>("small");
   const [onlyRerankEnabled, setOnlyRerankEnabled] = useState(false);
+  const visibilityFilterOptions = [
+    { label: "全部", value: "all" as const },
+    { label: "Public", value: "public" as const },
+    { label: "Internal", value: "internal" as const },
+    ...(role === "admin" ? [{ label: "Admin", value: "admin" as const }] : [])
+  ];
+  const visibilityEditOptions = [
+    { value: "public", label: "public" },
+    { value: "internal", label: "internal" },
+    ...(role === "admin" ? [{ value: "admin", label: "admin" }] : [])
+  ];
 
   const kbQuery = useQuery({
     queryKey: ["kb", "list"],
@@ -255,12 +268,7 @@ export function KbPage() {
               <div className="density-toolbar__group">
                 <Segmented<VisibilityFilter>
                   value={visibilityFilter}
-                  options={[
-                    { label: "全部", value: "all" },
-                    { label: "Public", value: "public" },
-                    { label: "Internal", value: "internal" },
-                    { label: "Admin", value: "admin" }
-                  ]}
+                  options={visibilityFilterOptions}
                   onChange={(value) => {
                     setVisibilityFilter(value);
                   }}
@@ -467,13 +475,7 @@ export function KbPage() {
             </div>
             <div className="kb-modal-grid">
               <Form.Item name="visibility" label="可见性" rules={[{ required: true }]}>
-                <Select
-                  options={[
-                    { value: "public", label: "public" },
-                    { value: "internal", label: "internal" },
-                    { value: "admin", label: "admin" }
-                  ]}
-                />
+                <Select options={visibilityEditOptions} />
               </Form.Item>
               <Form.Item name="topk" label="TopK">
                 <InputNumber min={1} style={{ width: "100%" }} />

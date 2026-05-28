@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 
-from app.api.v1.deps import get_authorization_service, get_kb_service, require_permission
+from app.api.v1.deps import (
+    get_authorization_service,
+    get_kb_service,
+    get_optional_user,
+    require_permission,
+)
 from app.api.v1.mappers import kb_to_list_item, kb_to_response
 from app.api.v1.schemas.kb import (
     KnowledgeBaseCreateRequest,
@@ -13,6 +18,7 @@ from app.api.v1.schemas.kb import (
 from app.auth.dto import CurrentUser
 from app.auth.permissions import Permission
 from app.auth.service import AuthorizationService
+from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
 from app.ingest.service import KnowledgeBaseService
 
@@ -28,6 +34,7 @@ def create_kb(
 ) -> KnowledgeBaseResponse:
     """创建知识库。"""
 
+    _ensure_can_assign_visibility(current_user, payload.visibility)
     config = (
         payload.config.model_dump(exclude_none=True)
         if payload.config
@@ -45,7 +52,7 @@ def create_kb(
 @router.get("/kb", response_model=KnowledgeBaseListResponse)
 def list_kb(
     request: Request,
-    current_user: CurrentUser = Depends(require_permission(Permission.KB_READ)),
+    current_user: CurrentUser | None = Depends(get_optional_user),
     authz: AuthorizationService = Depends(get_authorization_service),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KnowledgeBaseListResponse:
@@ -107,6 +114,8 @@ def update_kb(
         required_level="write",
         allow_public=False,
     )
+    if payload.visibility is not None:
+        _ensure_can_assign_visibility(current_user, payload.visibility)
     config = payload.config.model_dump(exclude_none=True) if payload.config else None
     record = service.update(
         kb_id=kb_id,
@@ -137,3 +146,18 @@ def delete_kb(
     )
     service.delete(kb_id)
     return {"status": "deleted", "request_id": request.state.request_id}
+
+
+def _ensure_can_assign_visibility(current_user: CurrentUser, visibility: str) -> None:
+    """限制非管理员创建或改为管理员专用知识库。"""
+
+    if visibility != "admin":
+        return
+    if "admin" in current_user.roles or "*" in current_user.permissions:
+        return
+    raise AppError(
+        code=ErrorCode.AUTH_FORBIDDEN,
+        message="仅管理员可创建或设置管理员专用知识库",
+        detail={"visibility": visibility},
+        status_code=403,
+    )

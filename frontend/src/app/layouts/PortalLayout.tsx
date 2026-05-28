@@ -71,7 +71,13 @@ function resolvePortalTone(role: AppRole) {
 }
 
 function resolveRoleText(role: AppRole) {
-  return role === "admin" ? "管理员" : "用户";
+  if (role === "admin") {
+    return "管理员";
+  }
+  if (role === "manager") {
+    return "内容管理员";
+  }
+  return "用户";
 }
 
 function useIsDesktopLayout() {
@@ -115,7 +121,7 @@ export function PortalLayout({
   const layoutPreference = resolveLayoutPreference(matches);
   const hideGlobalSider = Boolean(layoutPreference.hideGlobalSider);
   const isAdminRoute = location.pathname.startsWith("/admin");
-  const canSwitchPortal = isAuthenticated && role === "admin";
+  const canSwitchPortal = isAuthenticated && (role === "admin" || role === "manager");
   const nextPath = encodeURIComponent(`${location.pathname}${location.search}`);
   const contentClassName = hideGlobalSider ? "app-content app-content--ask" : "app-content";
   const activeRoute = resolveNavEntry(location.pathname, navItems);

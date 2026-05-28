@@ -3,7 +3,7 @@ import { useAuth } from "../../shared/auth/auth";
 import { AppRole, getRoleHomePath } from "../../shared/auth/role";
 
 interface RequireRoleProps {
-  allow: AppRole;
+  allow: AppRole | AppRole[];
   children: JSX.Element;
 }
 
@@ -24,7 +24,8 @@ export function RequireRole({ allow, children }: RequireRoleProps) {
     const redirect = encodeURIComponent(`${location.pathname}${location.search}`);
     return <Navigate to={`/login?next=${redirect}`} replace />;
   }
-  if (role !== allow) {
+  const allowedRoles = Array.isArray(allow) ? allow : [allow];
+  if (!allowedRoles.includes(role)) {
     return <Navigate to={getRoleHomePath(role)} replace />;
   }
   return children;

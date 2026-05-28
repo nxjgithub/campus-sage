@@ -110,6 +110,7 @@
 - 提交失败时允许重试。
 
 ## 8. 用户管理页面
+- 用户管理仅 `admin` 可见；`manager` 虽可进入管理端，但不得看到用户管理导航，也不得直接访问 `/admin/users` 与 `/admin/users/create`。
 - 管理端用户能力拆分为两个页面：
   - `/admin/users`：用户列表、状态编辑、角色配置、知识库授权
   - `/admin/users/create`：独立创建用户

@@ -1191,7 +1191,7 @@ export function AskPage() {
       }
     }
     if (step.action === "check_official_source" || step.action === "verify_kb_scope") {
-      if (role === "admin") {
+      if (role === "admin" || role === "manager") {
         navigate(kbId ? `/admin/documents?kb=${encodeURIComponent(kbId)}` : "/admin/documents");
         return;
       }
@@ -1458,7 +1458,7 @@ export function AskPage() {
             </div>
             {isAuthenticated ? (
               <div className="chat-sidebar-user__actions">
-                {role === "admin" ? (
+                {role === "admin" || role === "manager" ? (
                   <PortalSwitch
                     activeRole="user"
                     onChange={(targetRole) => {

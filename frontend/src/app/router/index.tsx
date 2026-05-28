@@ -93,7 +93,7 @@ const router = createBrowserRouter(
     {
       path: "/admin",
       element: (
-        <RequireRole allow="admin">
+        <RequireRole allow={["admin", "manager"]}>
           {withSuspense(<AdminLayout />)}
         </RequireRole>
       ),
@@ -101,8 +101,22 @@ const router = createBrowserRouter(
         { index: true, element: <Navigate to="/admin/kb" replace /> },
         { path: "kb", element: withSuspense(<KbPage />) },
         { path: "kb/create", element: withSuspense(<KbCreatePage />) },
-        { path: "users", element: withSuspense(<UsersPage />) },
-        { path: "users/create", element: withSuspense(<UsersCreatePage />) },
+        {
+          path: "users",
+          element: (
+            <RequireRole allow="admin">
+              {withSuspense(<UsersPage />)}
+            </RequireRole>
+          )
+        },
+        {
+          path: "users/create",
+          element: (
+            <RequireRole allow="admin">
+              {withSuspense(<UsersCreatePage />)}
+            </RequireRole>
+          )
+        },
         { path: "documents", element: withSuspense(<DocumentsPage />) },
         { path: "documents/upload", element: withSuspense(<DocumentsUploadPage />) },
         { path: "eval", element: withSuspense(<EvalPage />) },

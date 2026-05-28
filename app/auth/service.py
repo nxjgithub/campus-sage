@@ -365,12 +365,21 @@ class AuthorizationService:
                 detail=None,
                 status_code=401,
             )
-        if "*" in current_user.permissions:
+        if _is_admin_user(current_user):
             return
+        if visibility == "admin":
+            raise AppError(
+                code=ErrorCode.KB_ACCESS_DENIED,
+                message="无权访问该知识库",
+                detail={"kb_id": kb_id},
+                status_code=403,
+            )
         access = self._kb_access_repo.get(current_user.user.user_id, kb_id)
         if access and _has_level(access.access_level, required_level):
             return
-        if visibility == "internal" and required_level == "read":
+        if visibility in {"public", "internal"} and required_level == "read":
+            return
+        if visibility in {"public", "internal"} and required_level == "write" and _is_manager_user(current_user):
             return
         raise AppError(
             code=ErrorCode.KB_ACCESS_DENIED,
@@ -409,6 +418,18 @@ def _has_level(actual: str, required: str) -> bool:
 
     order = {"read": 1, "write": 2, "admin": 3}
     return order.get(actual, 0) >= order.get(required, 0)
+
+
+def _is_admin_user(current_user: CurrentUser) -> bool:
+    """判断当前用户是否为系统管理员。"""
+
+    return "admin" in current_user.roles or "*" in current_user.permissions
+
+
+def _is_manager_user(current_user: CurrentUser) -> bool:
+    """判断当前用户是否为内容管理员。"""
+
+    return "manager" in current_user.roles
 
 
 def _dump_permissions(permissions: list[str]) -> str:

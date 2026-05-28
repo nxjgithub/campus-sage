@@ -12,8 +12,13 @@ describe("role helper", () => {
     expect(resolveRoleFromRoles(undefined)).toBe("user");
   });
 
+  it("应在包含 manager 角色时返回内容管理员", () => {
+    expect(resolveRoleFromRoles(["user", "manager"])).toBe("manager");
+  });
+
   it("应返回正确首页路由", () => {
     expect(getRoleHomePath("admin")).toBe("/admin/kb");
+    expect(getRoleHomePath("manager")).toBe("/admin/kb");
     expect(getRoleHomePath("user")).toBe("/app/ask");
   });
 });
