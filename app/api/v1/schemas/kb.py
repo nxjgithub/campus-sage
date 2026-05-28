@@ -108,7 +108,9 @@ class KnowledgeBaseListItem(BaseModel):
 
     kb_id: str = Field(description="知识库ID")
     name: str = Field(description="知识库名称")
+    description: str | None = Field(default=None, description="知识库说明")
     visibility: Literal["public", "internal", "admin"] = Field(description="可见性")
+    config: KnowledgeBaseConfig = Field(description="RAG 参数配置")
     updated_at: str = Field(description="更新时间")
 
 

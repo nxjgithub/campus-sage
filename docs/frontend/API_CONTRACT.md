@@ -47,6 +47,7 @@
 - `GET /kb`
   - 用途：获取知识库列表
   - 成功：`items[]`
+  - 列表项必须包含 `description/config/visibility/updated_at`；治理端列表直接用 `config.topk/config.threshold/config.rerank_enabled/config.max_context_tokens` 展示检索策略，不得在缺少 `config` 时把重排推断为 `off`
 - `GET /kb/{kb_id}`
   - 用途：获取知识库详情
 - `PATCH /kb/{kb_id}`
@@ -61,6 +62,7 @@
 - `POST /kb/{kb_id}/documents`
   - 类型：`multipart/form-data`
   - 字段：`file`(必填), `doc_name`, `doc_version`, `published_at`, `source_uri`
+  - `source_uri` 只允许填写可公开访问的 http/https 官方原文地址；演示页、本地路径和占位地址不得作为“官方来源”展示
   - 成功：返回 `doc + job`
 - `POST /kb/{kb_id}/documents/staged`
   - 用途：上传到暂存区，不立即入库
@@ -146,7 +148,7 @@
   - `doc_name`
   - `page_start/page_end` 或 `section_path`
   - `snippet`
-  - 若存在 `source_uri`，应提供“官方来源”跳转入口
+  - 若存在可信 `source_uri`，应提供“官方来源”跳转入口；`/demo/campus-sage` 等占位来源不得展示为官方来源
   - 若存在 `assets[]`，应在答案正文下方集中渲染去重后的图片缩略图，并提供打开原图能力；缩略图是证据复核材料，不应让用户误解为模型已直接分析原图
   - 若只存在旧字段 `asset_id/asset_url`，应兼容展示图片资产编号和“查看原图”入口，并通过 `asset_url` 拉取图片 blob 后预览
   - 调试模式下 `score` 可能有值，生产态可为 `null`。
@@ -187,6 +189,7 @@
 - `GET /conversations?kb_id=&keyword=&cursor=&limit=&offset=`
   - 用途：会话列表（侧栏）
   - 返回增强：`total/next_cursor/last_message_preview/last_message_at`
+  - 隐私约束：只返回当前登录用户自己的会话；管理员在问答视角也不得看到其他用户会话
 - `GET /conversations/{conversation_id}`
   - 用途：会话详情（含消息、助手引用、消息级 `request_id`、拒答后的 `suggestions/next_steps`）
 - `PATCH /conversations/{conversation_id}`
@@ -199,6 +202,7 @@
   - 消息项补充：消息项返回 `parent_message_id/edited_from_message_id`，助手消息可返回消息级 `request_id`，用于历史回放排障展示
 
 前端展示约束：
+- 会话详情、消息分页、继续追问、反馈、重新生成和编辑后重发遇到 `AUTH_FORBIDDEN + 无权访问该会话` 时，按失效会话处理：刷新会话列表、清空当前会话上下文，并保留用户刚输入的问题。
 - 用户消息与助手消息视觉区分。
 - 助手消息若 `refusal=true` 且存在 `next_steps`，历史会话中也必须渲染同一套下一步建议卡片。
 - 助手消息若同时带 `suggestions[]`，历史会话中也必须作为兼容性补充说明一起展示。
@@ -206,7 +210,7 @@
 - 助手消息若带 `request_id`，历史会话中也必须支持复制查看。
 - 重新生成产生多个同父级助手消息时，问答主线程只展示最新助手消息，避免同一问题重复回答。
 - 历史会话中的 `check_official_source` 建议应可直接打开；`search_keyword/rewrite_question/add_context` 等文本型建议至少应支持复制。
-- 助手消息正文区域用于阅读和复制，不绑定整条消息点击事件；前端应通过引用编号、图片预览或“查看引用/查看证据详情”按钮打开证据弹窗，弹窗内展示 `timing/citations`。
+- 助手消息正文区域用于阅读和复制，不绑定整条消息点击事件；前端应通过引用编号、图片预览或“查看引用/查看证据详情”图标按钮打开证据弹窗，弹窗内展示 `timing/citations`。
 - 问答主界面必须支持“加载更早消息”。
 
 ## 8. 反馈接口

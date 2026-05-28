@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CitationItem, NextStepItem } from "../api/modules/ask";
-import { resolveOfficialSourceUrl, resolveReviewNextStep } from "./nextStep";
+import { isOfficialSourceUrl, resolveOfficialSourceUrl, resolveReviewNextStep } from "./nextStep";
 
 describe("nextStep 工具", () => {
   it("应优先使用 next_step 自带的官方来源链接", () => {
@@ -33,6 +33,23 @@ describe("nextStep 工具", () => {
     ];
 
     expect(resolveOfficialSourceUrl(step, citations)).toBe("https://example.edu/notice");
+  });
+
+  it("应拒绝 demo 占位来源链接", () => {
+    const demoUrl = "https://www.suse.edu.cn/demo/campus-sage/main.psp";
+    const step: NextStepItem = {
+      action: "check_official_source",
+      label: "查看官方来源",
+      detail: "查看官网",
+      value: demoUrl
+    };
+
+    expect(isOfficialSourceUrl(demoUrl)).toBe(false);
+    expect(resolveOfficialSourceUrl(step, [])).toBeNull();
+    expect(resolveReviewNextStep(step, [])).toEqual({
+      kind: "info",
+      payload: "当前消息未提供可直接打开的官方来源，请结合引用片段继续核对。"
+    });
   });
 
   it("历史会话中的文本型建议应解析为复制动作", () => {

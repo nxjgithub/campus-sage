@@ -29,6 +29,7 @@ from app.rag.embedding import Embedder, get_embedder
 from app.rag.llm_client import VllmClient
 from app.rag.retrieval_policy import resolve_search_topk
 from app.rag.reranker import get_reranker
+from app.rag.source_uri import is_official_source_uri
 from app.rag.vector_store import VectorHit, VectorStore, get_vector_store
 
 _NO_EVIDENCE_ANSWER_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -1209,7 +1210,7 @@ class RagService:
 
         for hit in hits:
             candidate = hit.payload.get("source_uri")
-            if isinstance(candidate, str) and candidate.strip():
+            if isinstance(candidate, str) and is_official_source_uri(candidate):
                 return candidate.strip()
         return None
 

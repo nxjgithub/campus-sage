@@ -30,17 +30,37 @@ def reset_store() -> None:
 def test_create_and_list_kb() -> None:
     client = TestClient(app)
     headers = _auth_headers(client)
-    response = client.post("/api/v1/kb", json={"name": "教务知识库"}, headers=headers)
+    response = client.post(
+        "/api/v1/kb",
+        json={
+            "name": "教务知识库",
+            "description": "选课与考试制度",
+            "config": {
+                "topk": 7,
+                "threshold": 0.2,
+                "rerank_enabled": True,
+                "max_context_tokens": 4096,
+                "min_evidence_chunks": 1,
+                "min_context_chars": 20,
+                "min_keyword_coverage": 0.3,
+            },
+        },
+        headers=headers,
+    )
     assert response.status_code == 200
     payload = response.json()
     kb_id = payload["kb_id"]
     assert payload["request_id"]
-    assert payload["config"]["topk"] == 5
+    assert payload["config"]["topk"] == 7
 
     list_response = client.get("/api/v1/kb", headers=headers)
     assert list_response.status_code == 200
     items = list_response.json()["items"]
-    assert any(item["kb_id"] == kb_id for item in items)
+    listed_item = next(item for item in items if item["kb_id"] == kb_id)
+    assert listed_item["description"] == "选课与考试制度"
+    assert listed_item["config"]["topk"] == 7
+    assert listed_item["config"]["threshold"] == 0.2
+    assert listed_item["config"]["rerank_enabled"] is True
 
     duplicate = client.post("/api/v1/kb", json={"name": "教务知识库"}, headers=headers)
     assert duplicate.status_code == 409

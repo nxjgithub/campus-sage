@@ -37,7 +37,7 @@ def create_feedback(
 
     message = conversation_service.get_message(message_id)
     conversation = conversation_service.get_conversation(message.conversation_id)
-    if "*" not in current_user.permissions and conversation.user_id != current_user.user.user_id:
+    if conversation.user_id != current_user.user.user_id:
         raise AppError(
             code=ErrorCode.AUTH_FORBIDDEN,
             message="无权访问该会话",

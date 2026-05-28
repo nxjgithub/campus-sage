@@ -77,6 +77,26 @@ def test_conversation_crud_permissions() -> None:
     )
     assert rename_forbidden.status_code == 403
 
+    admin_list = client.get(f"/api/v1/conversations?kb_id={kb_id}", headers=admin_headers)
+    assert admin_list.status_code == 200
+    assert all(
+        item["conversation_id"] != conversation_id for item in admin_list.json()["items"]
+    )
+
+    admin_messages_forbidden = client.get(
+        f"/api/v1/conversations/{conversation_id}/messages",
+        headers=admin_headers,
+    )
+    assert admin_messages_forbidden.status_code == 403
+
+    admin_stream_forbidden = client.post(
+        f"/api/v1/kb/{kb_id}/ask/stream",
+        json={"question": "继续追问", "conversation_id": conversation_id},
+        headers=admin_headers,
+    )
+    assert admin_stream_forbidden.status_code == 403
+    assert admin_stream_forbidden.json()["error"]["message"] == "无权访问该会话"
+
     renamed = client.patch(
         f"/api/v1/conversations/{conversation_id}",
         json={"title": "u1 renamed"},

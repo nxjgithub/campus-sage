@@ -1,12 +1,19 @@
 import { CitationItem, NextStepItem } from "../api/modules/ask";
 
-export function isOfficialSourceUrl(value?: string | null) {
+const PLACEHOLDER_SOURCE_PATH_MARKERS = ["/demo/campus-sage"];
+
+export function isOfficialSourceUrl(value?: string | null): value is string {
   if (!value) {
     return false;
   }
   try {
     const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return false;
+    }
+    return !PLACEHOLDER_SOURCE_PATH_MARKERS.some((marker) =>
+      url.pathname.toLowerCase().includes(marker)
+    );
   } catch {
     return false;
   }

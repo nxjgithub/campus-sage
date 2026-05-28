@@ -177,11 +177,20 @@
 ```json
 {
   "items": [
-    {"kb_id": "kb_123", "name": "教务知识库", "visibility": "internal", "updated_at": "2026-02-07T10:00:00Z"}
+    {
+      "kb_id": "kb_123",
+      "name": "教务知识库",
+      "description": "选课、考试、补考等制度",
+      "visibility": "internal",
+      "config": {"topk": 5, "threshold": 0.25, "rerank_enabled": false, "max_context_tokens": 3000, "min_evidence_chunks": 1, "min_context_chars": 20, "min_keyword_coverage": 0.3},
+      "updated_at": "2026-02-07T10:00:00Z"
+    }
   ],
   "request_id": "req_xxx"
 }
 ```
+
+列表项必须返回当前 `description` 与完整 `config`，后台知识库列表直接使用该配置展示 TopK、阈值、重排开关和上下文预算，避免因字段缺失把真实配置误显示为关闭或空值。
 
 ### 2.3 获取知识库详情
 `GET /api/v1/kb/{kb_id}`
@@ -227,7 +236,7 @@ Content-Type：`multipart/form-data`
 `doc_name`：可选，不传则使用文件名  
 `doc_version`：可选  
 `published_at`：可选，格式 `YYYY-MM-DD`
-`source_uri`：可选，要求为 `http/https` 官方来源链接
+`source_uri`：可选，要求为 `http/https` 官方来源链接；不得填写演示页、占位页、本地路径或不可公开访问地址
 
 响应示例：
 ```json
@@ -620,6 +629,9 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 ### 5.2 获取会话列表（侧栏场景）
 `GET /api/v1/conversations`
 
+说明：
+- 会话是个人问答上下文，列表仅返回当前登录用户自己的未删除会话；管理员账号在用户端也不跨用户列出会话。
+
 可选查询参数：
 - `kb_id: str`
 - `keyword: str`（按标题与消息内容模糊匹配）
@@ -648,6 +660,8 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 
 ### 5.3 获取会话详情（全量消息）
 `GET /api/v1/conversations/{conversation_id}`
+
+说明：会话详情、消息分页、重命名、删除、反馈、重新生成和编辑后重发均要求会话归属当前用户；管理员若需要审计能力，应通过独立管理接口设计，不复用用户端会话接口。
 
 响应示例：
 ```json

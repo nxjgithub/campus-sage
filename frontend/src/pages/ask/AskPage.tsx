@@ -56,7 +56,7 @@ import { MarkdownMessage } from "../../shared/components/MarkdownMessage";
 import { PortalSwitch } from "../../shared/components/PortalSwitch";
 import { RefusalNextStepsCard } from "../../shared/components/RefusalNextStepsCard";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
-import { resolveOfficialSourceUrl } from "../../shared/utils/nextStep";
+import { isOfficialSourceUrl, resolveOfficialSourceUrl } from "../../shared/utils/nextStep";
 import { citationAssets } from "../../shared/utils/citationAssets";
 import { formatRefusalReason } from "../../shared/utils/refusal";
 
@@ -216,6 +216,13 @@ function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
+function isConversationAccessError(error: ApiErrorShape) {
+  return (
+    error.code === "CONVERSATION_NOT_FOUND" ||
+    (error.code === "AUTH_FORBIDDEN" && error.message.includes("会话"))
+  );
+}
+
 function summarizeConversation(item: ConversationListItem) {
   return item.last_message_preview || "暂无消息";
 }
@@ -357,6 +364,16 @@ export function AskPage() {
   const citationRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const currentUserLocalIdRef = useRef<string | null>(null);
   const currentAssistantLocalIdRef = useRef<string | null>(null);
+  const activeConversationIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
+
+  const updateActiveConversation = (conversationId: string | null) => {
+    activeConversationIdRef.current = conversationId;
+    setActiveConversationId(conversationId);
+  };
 
   const kbQuery = useQuery({
     queryKey: ["kb", "list"],
@@ -393,7 +410,7 @@ export function AskPage() {
     }
     setKbId(nextKbId);
     setKeyword("");
-    setActiveConversationId(null);
+    updateActiveConversation(null);
     setHistoryMessages([]);
     setLocalMessages([]);
     setMessagesHasMore(false);
@@ -433,7 +450,7 @@ export function AskPage() {
     if (nextConversationId === activeConversationId) {
       return;
     }
-    setActiveConversationId(nextConversationId);
+    updateActiveConversation(nextConversationId);
     if (nextConversationId) {
       return;
     }
@@ -647,7 +664,7 @@ export function AskPage() {
 
   const resetThreadState = (options?: { clearConversationId?: boolean }) => {
     if (options?.clearConversationId ?? true) {
-      setActiveConversationId(null);
+      updateActiveConversation(null);
       setSelectionLockConversationId(null);
     }
     setHistoryMessages([]);
@@ -667,6 +684,9 @@ export function AskPage() {
         before: appendOlder ? messagesBefore ?? undefined : undefined,
         limit: MESSAGE_PAGE_SIZE
       });
+      if (activeConversationIdRef.current !== conversationId) {
+        return;
+      }
       const mapped = response.items.map(toThreadMessage);
       setHistoryMessages((previous) => (appendOlder ? [...mapped, ...previous] : mapped));
       setMessagesHasMore(response.has_more);
@@ -675,7 +695,7 @@ export function AskPage() {
     } catch (error) {
       const normalized = normalizeApiError(error);
       setMessagesError(normalized);
-      if (normalized.code === "CONVERSATION_NOT_FOUND") {
+      if (isConversationAccessError(normalized)) {
         resetThreadState();
         await refreshConversationList();
       }
@@ -740,7 +760,7 @@ export function AskPage() {
       const run = await getChatRun(runId);
       if (run.conversation_id) {
         setSelectionLockConversationId(run.conversation_id);
-        setActiveConversationId(run.conversation_id);
+        updateActiveConversation(run.conversation_id);
         if (hasAccessToken) {
           await loadMessages(run.conversation_id, false);
           setLocalMessages([]);
@@ -910,7 +930,7 @@ export function AskPage() {
     const setConversation = (id: string) => {
       localConversationId = id;
       setSelectionLockConversationId(id);
-      setActiveConversationId(id);
+      updateActiveConversation(id);
     };
     try {
       await askStreamByKb(
@@ -951,7 +971,7 @@ export function AskPage() {
           resetThreadState();
           await kbQuery.refetch();
           await refreshConversationList();
-        } else if (normalized.code === "CONVERSATION_NOT_FOUND") {
+        } else if (isConversationAccessError(normalized)) {
           setComposerText(question);
           resetThreadState();
           await refreshConversationList();
@@ -1010,7 +1030,7 @@ export function AskPage() {
     setLocalMessages([]);
     if (!hasAccessToken) {
       setSelectionLockConversationId(null);
-      setActiveConversationId(null);
+      updateActiveConversation(null);
       setHistoryMessages([]);
       return;
     }
@@ -1026,7 +1046,7 @@ export function AskPage() {
       });
       setKeyword("");
       setSelectionLockConversationId(created.conversation_id);
-      setActiveConversationId(created.conversation_id);
+      updateActiveConversation(created.conversation_id);
       setHistoryMessages([]);
       setMessagesHasMore(false);
       setMessagesBefore(null);
@@ -1080,7 +1100,7 @@ export function AskPage() {
       onOk: async () => {
         try {
           await deleteConversationMutation.mutateAsync(activeConversationId);
-          setActiveConversationId(null);
+          updateActiveConversation(null);
           setSelectionLockConversationId(null);
           setHistoryMessages([]);
           setLocalMessages([]);
@@ -1120,7 +1140,7 @@ export function AskPage() {
       const result = await regenerateMutation.mutateAsync(messageId);
       if (result.conversation_id) {
         setSelectionLockConversationId(result.conversation_id);
-        setActiveConversationId(result.conversation_id);
+        updateActiveConversation(result.conversation_id);
         await loadMessages(result.conversation_id, false);
       }
       await refreshConversationList();
@@ -1199,7 +1219,7 @@ export function AskPage() {
       });
       if (result.conversation_id) {
         setSelectionLockConversationId(result.conversation_id);
-        setActiveConversationId(result.conversation_id);
+        updateActiveConversation(result.conversation_id);
         await loadMessages(result.conversation_id, false);
       }
       setEditOpen(false);
@@ -1412,7 +1432,7 @@ export function AskPage() {
                         return;
                       }
                       setSelectionLockConversationId(null);
-                      setActiveConversationId(item.conversation_id);
+                      updateActiveConversation(item.conversation_id);
                       setLocalMessages([]);
                       setActiveAssistantKey(null);
                       setActiveCitationId(null);
@@ -1682,14 +1702,13 @@ export function AskPage() {
                           <Tooltip title="查看引用证据">
                             <Button
                               size="small"
+                              shape="circle"
                               icon={<SearchOutlined />}
                               aria-label="查看引用"
                               onClick={() => {
                                 openEvidenceModal(item);
                               }}
-                            >
-                              查看引用
-                            </Button>
+                            />
                           </Tooltip>
                         ) : null}
                         {item.message_id ? (
@@ -1901,7 +1920,7 @@ export function AskPage() {
                                 ) : null}
                               </Space>
                             ) : null}
-                            {citation.source_uri ? (
+                            {isOfficialSourceUrl(citation.source_uri) ? (
                               <Typography.Link href={citation.source_uri} target="_blank" rel="noreferrer">
                                 官方来源
                               </Typography.Link>

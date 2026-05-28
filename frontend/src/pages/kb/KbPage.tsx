@@ -345,7 +345,7 @@ export function KbPage() {
                           TopK {record.config?.topk ?? "-"} · 阈值 {record.config?.threshold ?? "-"}
                         </Typography.Text>
                         <Typography.Text type="secondary" className="kb-strategy-cell__secondary">
-                          重排 {record.config?.rerank_enabled ? "on" : "off"} · 上下文{" "}
+                          重排 {record.config ? (record.config.rerank_enabled ? "on" : "off") : "-"} · 上下文{" "}
                           {record.config?.max_context_tokens ?? "-"}
                         </Typography.Text>
                       </div>

@@ -40,7 +40,7 @@ import { CitationAssetButton } from "../../shared/components/CitationAssetButton
 import { MarkdownMessage } from "../../shared/components/MarkdownMessage";
 import { RefusalNextStepsCard } from "../../shared/components/RefusalNextStepsCard";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
-import { resolveReviewNextStep } from "../../shared/utils/nextStep";
+import { isOfficialSourceUrl, resolveReviewNextStep } from "../../shared/utils/nextStep";
 import { citationAssets } from "../../shared/utils/citationAssets";
 import { formatRefusalReason } from "../../shared/utils/refusal";
 
@@ -132,7 +132,14 @@ export function MessageCard(props: {
           </Space>
         </header>
 
-        <div className="conversation-message__content">
+        <div
+          className="conversation-message__content"
+          onClick={() => {
+            if (item.role === "assistant" && citations.length > 0) {
+              setEvidenceOpen(true);
+            }
+          }}
+        >
           {item.role === "assistant" ? (
             <MarkdownMessage
               content={item.content}
@@ -246,7 +253,7 @@ export function MessageCard(props: {
                             ) : null}
                           </Space>
                         ) : null}
-                        {citation.source_uri ? (
+                        {isOfficialSourceUrl(citation.source_uri) ? (
                           <Typography.Link href={citation.source_uri} target="_blank" rel="noreferrer">
                             官方来源
                           </Typography.Link>
@@ -353,7 +360,7 @@ export function MessageCard(props: {
                             ) : null}
                           </Space>
                         ) : null}
-                        {citation.source_uri ? (
+                        {isOfficialSourceUrl(citation.source_uri) ? (
                           <Typography.Link href={citation.source_uri} target="_blank" rel="noreferrer">
                             官方来源
                           </Typography.Link>

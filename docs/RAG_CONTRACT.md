@@ -54,7 +54,7 @@
 ### 2.2 推荐字段（Recommended）
 - `source_type: str`
     - "pdf" | "docx" | "html" | "text"
-- `source_uri: str | null`
+- `source_uri: str | null`：可公开访问的 http/https 官方原文地址；不得使用演示页、占位页或本地路径
     - 文档来源链接（若有）
 - `hash: str | null`
     - chunk 文本 hash（用于去重/增量更新）
@@ -95,7 +95,7 @@
 - `doc_name: str`
 - `doc_version: str | null`
 - `published_at: str | null`
-- `source_uri: str | null`
+- `source_uri: str | null`：可公开访问的 http/https 官方原文地址；不得使用演示页、占位页或本地路径
 - `page_start: int | null`
 - `page_end: int | null`
 - `section_path: str | null`

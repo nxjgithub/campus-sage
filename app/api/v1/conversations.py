@@ -79,7 +79,8 @@ def list_conversations(
     """获取会话列表。"""
 
     items = []
-    user_filter = None if "*" in current_user.permissions else current_user.user.user_id
+    # 会话属于个人问答上下文，即使管理员进入用户端也不能列出他人的会话。
+    user_filter = current_user.user.user_id
     result = service.list_conversations(
         kb_id=kb_id,
         user_id=user_filter,
@@ -246,8 +247,6 @@ def _ensure_conversation_owner(
 ) -> None:
     """校验会话归属。"""
 
-    if "*" in current_user.permissions:
-        return
     if conversation_user_id != current_user.user.user_id:
         raise AppError(
             code=ErrorCode.AUTH_FORBIDDEN,

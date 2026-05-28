@@ -38,7 +38,9 @@ def kb_to_list_item(record: KnowledgeBaseRecord) -> KnowledgeBaseListItem:
     return KnowledgeBaseListItem(
         kb_id=record.kb_id,
         name=record.name,
+        description=record.description,
         visibility=record.visibility,
+        config=record.config,
         updated_at=record.updated_at,
     )
 

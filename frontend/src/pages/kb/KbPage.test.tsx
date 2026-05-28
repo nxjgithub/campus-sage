@@ -50,7 +50,16 @@ describe("KbPage 二次确认交互", () => {
         {
           kb_id: "kb-1",
           name: "教务知识库",
+          description: "选课与考试制度",
           visibility: "internal",
+          config: {
+            topk: 7,
+            threshold: 0.2,
+            rerank_enabled: true,
+            max_context_tokens: 4096,
+            min_context_chars: 20,
+            min_keyword_coverage: 0.3
+          },
           updated_at: "2026-02-12T12:00:00Z"
         }
       ]
@@ -110,6 +119,9 @@ describe("KbPage 二次确认交互", () => {
     renderWithProviders(<KbPage />);
 
     const rowCell = await screen.findByText("教务知识库");
+    expect(screen.getByText("选课与考试制度")).toBeInTheDocument();
+    expect(screen.getByText("TopK 7 · 阈值 0.2")).toBeInTheDocument();
+    expect(screen.getByText(/重排 on/)).toBeInTheDocument();
     const row = rowCell.closest("tr");
     if (!(row instanceof HTMLElement)) {
       throw new Error("未找到知识库行");

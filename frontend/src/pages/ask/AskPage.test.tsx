@@ -505,6 +505,80 @@ describe("AskPage 聊天交互", () => {
     expect(screen.queryByText("这是旧会话回答")).not.toBeInTheDocument();
   });
 
+  it("继续追问失效或无权会话时应清理上下文并保留问题", async () => {
+    mockAccessToken = "token_ask";
+    mockAuthState = {
+      status: "authenticated",
+      user: { user_id: "user_1", email: "admin@example.com", roles: ["admin"], status: "active" },
+      role: "admin",
+      isAuthenticated: true
+    };
+    let conversationListPayload = {
+      items: [
+        {
+          conversation_id: "conv_foreign",
+          kb_id: "kb_1",
+          title: "他人会话",
+          last_message_preview: "他人会话内容",
+          last_message_at: "2026-02-21T10:00:00Z",
+          updated_at: "2026-02-21T10:00:00Z"
+        }
+      ],
+      total: 1,
+      next_cursor: null
+    };
+    vi.mocked(fetchConversationList).mockImplementation(async () => conversationListPayload);
+    vi.mocked(fetchConversationMessagesPage).mockResolvedValue({
+      items: [
+        {
+          message_id: "msg_foreign_assistant",
+          role: "assistant",
+          content: "不应继续保留的历史回答",
+          citations: [],
+          refusal: false,
+          refusal_reason: null,
+          suggestions: [],
+          next_steps: [],
+          timing: null,
+          created_at: "2026-02-21T10:00:00Z",
+          request_id: "req_old"
+        }
+      ],
+      has_more: false,
+      next_before: null
+    });
+    vi.mocked(askStreamByKb).mockRejectedValue({
+      code: "AUTH_FORBIDDEN",
+      message: "无权访问该会话",
+      request_id: "req_b2377009597b4b79a4f1a486804b9571"
+    });
+
+    renderWithProviders(<AskPage />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /他人会话/ }));
+    expect(await screen.findByText("不应继续保留的历史回答")).toBeInTheDocument();
+
+    conversationListPayload = {
+      items: [],
+      total: 0,
+      next_cursor: null
+    };
+    await fillQuestionInput("继续追问");
+    await userEvent.click(screen.getByRole("button", { name: /发送/ }));
+
+    await waitFor(() => {
+      expect(askStreamByKb).toHaveBeenCalledWith(
+        "kb_1",
+        { question: "继续追问", conversation_id: "conv_foreign" },
+        expect.any(Object)
+      );
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("不应继续保留的历史回答")).not.toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText(/请输入你的问题|请输入问题/)).toHaveValue("继续追问");
+  });
+
   it("重新生成后同一用户问题只展示最新助手回答", async () => {
     mockAccessToken = "token_ask";
     mockAuthState = {

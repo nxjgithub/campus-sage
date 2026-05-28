@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from app.db.models import ConversationMemoryRecord, MessageRecord
 from app.rag.dto import CitationDTO, NextStepDTO
+from app.rag.source_uri import is_official_source_uri
 
 _SMALLTALK_KEYWORDS = (
     "你好",
@@ -873,6 +874,6 @@ def _pick_source_uri(citations: list[CitationDTO]) -> str | None:
     """提取可用来源链接。"""
 
     for item in citations:
-        if item.source_uri is not None and item.source_uri.strip():
+        if is_official_source_uri(item.source_uri):
             return item.source_uri.strip()
     return None

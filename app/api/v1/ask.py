@@ -87,6 +87,7 @@ async def ask_question_stream(
     current_user: CurrentUser | None = Depends(get_optional_user),
     authz: AuthorizationService = Depends(get_authorization_service),
     kb_service: KnowledgeBaseService = Depends(get_kb_service),
+    conversation_service: ConversationService = Depends(get_conversation_service),
     service: RagService = Depends(get_rag_service),
     run_service: ChatRunService = Depends(get_chat_run_service),
 ) -> StreamingResponse:
@@ -101,6 +102,12 @@ async def ask_question_stream(
         visibility=kb_record.visibility,
         required_level="read",
         allow_public=True,
+    )
+    _ensure_stream_conversation_access(
+        kb_id=kb_id,
+        conversation_id=payload.conversation_id,
+        user_id=user_id,
+        conversation_service=conversation_service,
     )
     run = run_service.create_run(
         request_id=request.state.request_id,
@@ -430,9 +437,34 @@ def _ensure_conversation_owner(
 ) -> None:
     """校验会话归属。"""
 
-    if "*" in current_user.permissions:
-        return
     if conversation_user_id != current_user.user.user_id:
+        raise AppError(
+            code=ErrorCode.AUTH_FORBIDDEN,
+            message="无权访问该会话",
+            detail={"conversation_id": conversation_id},
+            status_code=403,
+        )
+
+
+def _ensure_stream_conversation_access(
+    kb_id: str,
+    conversation_id: str | None,
+    user_id: str | None,
+    conversation_service: ConversationService,
+) -> None:
+    """在建立 SSE 前校验会话归属，避免流内 403 导致前端状态滞留。"""
+
+    if conversation_id is None:
+        return
+    conversation = conversation_service.get_conversation(conversation_id)
+    if conversation.kb_id != kb_id:
+        raise AppError(
+            code=ErrorCode.VALIDATION_FAILED,
+            message="会话不属于当前知识库",
+            detail={"conversation_id": conversation_id, "kb_id": kb_id},
+            status_code=400,
+        )
+    if conversation.user_id != user_id:
         raise AppError(
             code=ErrorCode.AUTH_FORBIDDEN,
             message="无权访问该会话",
