@@ -16,6 +16,7 @@ import {
   Image,
   Input,
   Modal,
+  Segmented,
   Select,
   Space,
   Steps,
@@ -47,6 +48,9 @@ import {
 import { fetchKbList } from "../../shared/api/modules/kb";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import { pushJobHistoryId, UPLOAD_ACCEPT, UPLOAD_FORMAT_HINT, UploadFormValues } from "./documentsShared";
+import type { UploadInputMode } from "./documentsShared";
+
+const DEFAULT_TEXT_DOC_NAME = "粘贴文本";
 
 export function DocumentsUploadPage() {
   const navigate = useNavigate();
@@ -58,6 +62,7 @@ export function DocumentsUploadPage() {
   const [activeStep, setActiveStep] = useState(0);
   const [editingChunk, setEditingChunk] = useState<StagedChunk | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [inputMode, setInputMode] = useState<UploadInputMode>("file");
 
   const initialKbId = searchParams.get("kb") ?? undefined;
 
@@ -73,14 +78,14 @@ export function DocumentsUploadPage() {
 
   const uploadPreviewMutation = useMutation({
     mutationFn: async (values: UploadFormValues) => {
-      const targetFile = fileList[0];
-      if (!targetFile?.originFileObj) {
-        throw new Error("请先选择文件");
-      }
+      const targetFile = resolveUploadFile(inputMode, values, fileList[0]?.originFileObj);
+      const docName =
+        values.doc_name?.trim() ||
+        (inputMode === "text" ? DEFAULT_TEXT_DOC_NAME : undefined);
       const staged = await uploadStagedDocument({
         kbId: values.kb_id,
-        file: targetFile.originFileObj,
-        docName: values.doc_name?.trim() || undefined,
+        file: targetFile,
+        docName,
         docVersion: values.doc_version?.trim() || undefined,
         publishedAt: values.published_at?.trim() || undefined,
         sourceUri: values.source_uri?.trim() || undefined
@@ -146,8 +151,15 @@ export function DocumentsUploadPage() {
   ]);
 
   const watchedKbId = Form.useWatch("kb_id", form) ?? initialKbId ?? "";
+  const rawText = Form.useWatch("raw_text", form) ?? "";
   const selectedKbName = kbNameMap.get(watchedKbId) ?? "未选择";
   const selectedFileName = fileList[0]?.name ?? "未选择";
+  const selectedSourceName =
+    inputMode === "text"
+      ? rawText.trim()
+        ? `粘贴文本（${rawText.trim().length} 字）`
+        : "未输入"
+      : selectedFileName;
   const enabledChunkCount = preview?.chunks.filter((item) => item.enabled).length ?? 0;
   const disabledChunkCount = (preview?.chunks.length ?? 0) - enabledChunkCount;
   const imageChunkCount = preview?.chunks.filter((item) => item.source_kind === "image_asset").length ?? 0;
@@ -229,8 +241,8 @@ export function DocumentsUploadPage() {
               <span className="split-overview-stat__value">{selectedKbName}</span>
             </div>
             <div className="split-overview-stat">
-              <span className="split-overview-stat__label">文件</span>
-              <span className="split-overview-stat__value">{selectedFileName}</span>
+              <span className="split-overview-stat__label">来源</span>
+              <span className="split-overview-stat__value">{selectedSourceName}</span>
             </div>
             <div className="split-overview-stat">
               <span className="split-overview-stat__label">图片资产</span>
@@ -281,7 +293,7 @@ export function DocumentsUploadPage() {
             <Form<UploadFormValues>
               form={form}
               layout="vertical"
-              initialValues={{ published_at: undefined, kb_id: initialKbId }}
+              initialValues={{ published_at: undefined, kb_id: initialKbId, input_mode: "file" }}
               onFinish={(values) => {
                 uploadPreviewMutation.mutate(values);
               }}
@@ -297,27 +309,73 @@ export function DocumentsUploadPage() {
                   disabled={Boolean(preview)}
                 />
               </Form.Item>
-              <Form.Item label="文档文件" required>
-                <Upload
-                  maxCount={1}
-                  beforeUpload={() => false}
-                  fileList={fileList}
+              <Form.Item label="入库方式">
+                <Segmented
+                  value={inputMode}
                   disabled={Boolean(preview)}
-                  onChange={({ fileList: nextList }) => {
-                    setFileList(nextList);
+                  options={[
+                    { label: "上传文件", value: "file" },
+                    { label: "粘贴文本", value: "text" }
+                  ]}
+                  onChange={(value) => {
+                    const nextMode = value as UploadInputMode;
+                    setInputMode(nextMode);
+                    form.setFieldValue("input_mode", nextMode);
+                    if (nextMode === "text") {
+                      setFileList([]);
+                    }
                   }}
-                  accept={UPLOAD_ACCEPT}
-                >
-                  <Tooltip title="选择文件">
-                    <Button shape="circle" icon={<InboxOutlined />} aria-label="选择文件" />
-                  </Tooltip>
-                </Upload>
-                <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-                  {UPLOAD_FORMAT_HINT}
-                </Typography.Paragraph>
+                />
               </Form.Item>
+              {inputMode === "text" ? (
+                <Form.Item
+                  name="raw_text"
+                  label="文本内容"
+                  required
+                  rules={[
+                    {
+                      validator: (_, value) => {
+                        if (typeof value === "string" && value.trim()) {
+                          return Promise.resolve();
+                        }
+                        return Promise.reject(new Error("请粘贴要入库的文本内容"));
+                      }
+                    }
+                  ]}
+                >
+                  <Input.TextArea
+                    disabled={Boolean(preview)}
+                    rows={10}
+                    showCount
+                    placeholder="粘贴一段公告、制度、问答材料或网页正文，系统会按 TXT 文档生成预览和分块。"
+                  />
+                </Form.Item>
+              ) : (
+                <Form.Item label="文档文件" required>
+                  <Upload
+                    maxCount={1}
+                    beforeUpload={() => false}
+                    fileList={fileList}
+                    disabled={Boolean(preview)}
+                    onChange={({ fileList: nextList }) => {
+                      setFileList(nextList);
+                    }}
+                    accept={UPLOAD_ACCEPT}
+                  >
+                    <Tooltip title="选择文件">
+                      <Button shape="circle" icon={<InboxOutlined />} aria-label="选择文件" />
+                    </Tooltip>
+                  </Upload>
+                  <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+                    {UPLOAD_FORMAT_HINT}
+                  </Typography.Paragraph>
+                </Form.Item>
+              )}
               <Form.Item name="doc_name" label="文档名称（可选）">
-                <Input disabled={Boolean(preview)} placeholder="默认使用文件名" />
+                <Input
+                  disabled={Boolean(preview)}
+                  placeholder={inputMode === "text" ? "默认使用“粘贴文本”" : "默认使用文件名"}
+                />
               </Form.Item>
               <Form.Item name="doc_version" label="文档版本（可选）">
                 <Input disabled={Boolean(preview)} placeholder="例如：2026 春季版" />
@@ -335,6 +393,7 @@ export function DocumentsUploadPage() {
                     setPreview(null);
                     setActiveStep(0);
                     setFileList([]);
+                    setInputMode("file");
                     form.resetFields();
                   }}
                 >
@@ -479,6 +538,32 @@ export function DocumentsUploadPage() {
       </Modal>
     </div>
   );
+}
+
+function resolveUploadFile(
+  inputMode: UploadInputMode,
+  values: UploadFormValues,
+  selectedFile?: File
+) {
+  if (inputMode === "text") {
+    const text = values.raw_text?.trim() ?? "";
+    if (!text) {
+      throw new Error("请先粘贴文本内容");
+    }
+    return new File([text], buildTextFileName(values.doc_name), {
+      type: "text/plain;charset=utf-8"
+    });
+  }
+  if (!selectedFile) {
+    throw new Error("请先选择文件");
+  }
+  return selectedFile;
+}
+
+function buildTextFileName(docName?: string) {
+  const rawName = docName?.trim() || DEFAULT_TEXT_DOC_NAME;
+  const safeName = rawName.replace(/[\\/:*?"<>|]/g, "_").trim() || DEFAULT_TEXT_DOC_NAME;
+  return safeName.toLowerCase().endsWith(".txt") ? safeName : `${safeName}.txt`;
 }
 
 function DocumentPreview({ preview }: { preview: StagedDocument }) {

@@ -873,10 +873,11 @@ class RagService:
     ) -> _ComputationResult:
         """应用生成后策略并组装最终问答结果。"""
 
+        citations = self._filter_citations_by_answer(answer, prepared.citations)
         answer, suggestions, next_steps = self._apply_freshness_policy(
             question=prepared.normalized_question,
             answer=answer,
-            citations=prepared.citations,
+            citations=citations,
         )
         semantic_refusal_reason = self._get_semantic_refusal_reason(
             question=prepared.normalized_question,
@@ -919,7 +920,7 @@ class RagService:
             refusal_reason=None,
             suggestions=suggestions,
             next_steps=next_steps,
-            citations=prepared.citations,
+            citations=citations,
             timing={
                 "retrieve_ms": prepared.retrieve_ms,
                 "rerank_ms": prepared.rerank_ms,
@@ -934,6 +935,22 @@ class RagService:
             intent=prepared.intent,
             slots=prepared.slots,
         )
+
+    def _filter_citations_by_answer(
+        self,
+        answer: str,
+        citations: list[CitationDTO],
+    ) -> list[CitationDTO]:
+        """仅返回答案正文实际标注过的引用，避免展示未直接使用的候选证据。"""
+
+        if not citations:
+            return citations
+        cited_ids = [int(item) for item in re.findall(r"\[(\d+)\]", answer)]
+        if not cited_ids:
+            return citations
+        wanted = set(cited_ids)
+        filtered = [item for item in citations if item.citation_id in wanted]
+        return filtered or citations
 
     def _resolve_qa_config(
         self,

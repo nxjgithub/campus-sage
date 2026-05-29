@@ -267,6 +267,7 @@ Content-Type：`multipart/form-data`
 Content-Type：`multipart/form-data`
 
 说明：文件只保存到暂存区，不写入向量库。成功后返回 `staged_doc_id`，前端应继续调用预览接口。
+前端若提供粘贴文本入口，应将文本按 UTF-8 封装为 `.txt` 文件并继续提交本接口，后端仍按普通 TXT 文档执行解析、预览、分块与确认入库。
 
 `POST /api/v1/staged-documents/{staged_doc_id}/preview`
 
@@ -492,6 +493,7 @@ Content-Type：`multipart/form-data`
 - 连续追问策略：服务端会从历史消息中抽取主题锚点、近期追问和槽位摘要来改写检索 query，但不会修改原始用户消息，也不会把会话摘要当作引用证据。
 - 身份认知：对“你是谁/你能做什么/你的职责是什么”等系统身份问题，服务端可在检索前返回固定身份说明；该响应不是知识库事实回答，允许 `refusal=false`、`citations=[]` 且 `timing.retrieve_ms=0`。
 - 提问推荐：对“我可以问哪些问题/当前知识库能问什么”等请求，服务端会基于当前知识库分块样本调用生成模型生成若干可直接提问的问题；响应允许 `refusal=false`、`citations=[]`，并在 `answer/suggestions` 中返回推荐问题。拒答响应也可在 `suggestions` 和 `next_steps` 中追加这类推荐问题。
+- 引用收敛：若答案正文只标注了部分引用编号，响应 `citations[]` 只返回这些编号对应的证据，避免前端证据面板展示未被答案实际使用的候选 chunk。
 - 时效策略：当问题包含“最新/当前/今年”等时效诉求时，服务端会检查 `citations.published_at`，必要时在 `answer` 中追加“请核验最新公告”的提示，并通过 `next_steps` 引导到官方来源。
 
 ### 4.2 发起问答（流式 SSE）

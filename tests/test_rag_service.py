@@ -10,6 +10,7 @@ from app.core.settings import Settings
 from app.core.utils import utc_now_iso
 from app.db.models import ConversationRecord, MessageRecord
 from app.rag.context_builder import ContextBuilder
+from app.rag.dto import CitationDTO
 from app.rag.dialog_policy import DialogState, IntentDecision
 from app.rag.embedding import SimpleEmbedder
 from app.rag.reranker import SimpleReranker
@@ -502,6 +503,42 @@ def test_build_citations_returns_attached_assets() -> None:
     assert citations[0].assets[0].asset_url == "/api/v1/assets/asset_1"
 
 
+def test_generated_result_only_returns_answer_cited_evidence() -> None:
+    settings = Settings(_env_file=None)
+    service = object.__new__(RagService)
+    service._settings = settings
+
+    prepared = SimpleNamespace(
+        kb_id="kb_test",
+        kb_name="测试知识库",
+        normalized_question="如何获得证书？",
+        citations=[
+            _citation_dto(1, "doc_1", "证据一"),
+            _citation_dto(2, "doc_2", "证据二"),
+            _citation_dto(3, "doc_3", "证据三"),
+        ],
+        retrieve_ms=1,
+        rerank_ms=2,
+        context_ms=3,
+        total_start=0.0,
+        topk=3,
+        threshold=0.25,
+        rerank_enabled=True,
+        hits_for_log=[],
+        intent="qa",
+        slots={},
+    )
+
+    result = service._build_generated_result(
+        prepared=prepared,
+        answer="根据证据1，完成学习和答题即可获得证书。[1]",
+        generate_ms=4,
+    )
+
+    assert result.refusal is False
+    assert [item.citation_id for item in result.citations] == [1]
+
+
 def test_ask_stream_uses_vllm_delta_stream_before_saving_message() -> None:
     settings = Settings(
         _env_file=None,
@@ -661,3 +698,20 @@ def test_ask_stream_uses_vllm_delta_stream_before_saving_message() -> None:
     assert token_deltas == ["第一段", "第二段", "\n\n参考：[1]"]
     assert assistant_messages[0].content == "第一段第二段\n\n参考：[1]"
     assert events[-1]["event"] == "done"
+
+
+def _citation_dto(citation_id: int, doc_id: str, snippet: str) -> CitationDTO:
+    return CitationDTO(
+        citation_id=citation_id,
+        doc_id=doc_id,
+        doc_name=f"{doc_id}.md",
+        doc_version=None,
+        published_at=None,
+        source_uri=None,
+        page_start=None,
+        page_end=None,
+        section_path="测试章节",
+        chunk_id=f"chunk_{citation_id}",
+        snippet=snippet,
+        score=None,
+    )

@@ -2,12 +2,15 @@ import { DocumentItem, IngestJob } from "../../shared/api/modules/documents";
 
 export interface UploadFormValues {
   kb_id: string;
+  input_mode?: UploadInputMode;
+  raw_text?: string;
   doc_name?: string;
   doc_version?: string;
   published_at?: string;
   source_uri?: string;
 }
 
+export type UploadInputMode = "file" | "text";
 export type TableDensity = "middle" | "small";
 export type DocumentStatusFilter = "all" | DocumentItem["status"];
 
