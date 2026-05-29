@@ -154,10 +154,12 @@ export function PortalLayout({
       <Tooltip
         placement="rightTop"
         title={
-          <Space direction="vertical" size={4}>
-            <Typography.Text strong>{panelLabel}</Typography.Text>
-            <Typography.Text>{panelDescription}</Typography.Text>
-          </Space>
+          panelRole === "admin" ? null : (
+            <Space direction="vertical" size={4}>
+              <Typography.Text strong>{panelLabel}</Typography.Text>
+              <Typography.Text>{panelDescription}</Typography.Text>
+            </Space>
+          )
         }
       >
         <div className="brand-block">

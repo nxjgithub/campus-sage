@@ -48,6 +48,8 @@ class VectorStore(Protocol):
         filters: dict[str, Any] | None = None,
     ) -> list[VectorHit]: ...
 
+    def sample_payloads(self, kb_id: str, limit: int = 12) -> list[dict[str, Any]]: ...
+
 
 class InMemoryVectorStore:
     """内存向量库（MVP 兜底实现）。"""
@@ -108,6 +110,24 @@ class InMemoryVectorStore:
             hits.append(VectorHit(score=score, payload=entry.payload))
         hits.sort(key=lambda item: item.score, reverse=True)
         return hits[: max(0, topk)]
+
+    def sample_payloads(self, kb_id: str, limit: int = 12) -> list[dict[str, Any]]:
+        """抽取知识库分块 payload 样本，用于生成可提问问题。"""
+
+        with self._lock:
+            items = list(self._items.get(kb_id, []))
+        payloads: list[dict[str, Any]] = []
+        seen_docs: set[str] = set()
+        for entry in items:
+            doc_id = str(entry.payload.get("doc_id") or "")
+            if doc_id in seen_docs and len(payloads) >= max(1, limit // 2):
+                continue
+            if doc_id:
+                seen_docs.add(doc_id)
+            payloads.append(entry.payload)
+            if len(payloads) >= max(0, limit):
+                break
+        return payloads
 
     def _match_filters(self, payload: dict[str, Any], filters: dict[str, Any] | None) -> bool:
         if not filters:
@@ -283,6 +303,18 @@ class QdrantVectorStore:
         )
         return self._apply_post_filters(merged, filters)[: max(0, topk)]
 
+    def sample_payloads(self, kb_id: str, limit: int = 12) -> list[dict[str, Any]]:
+        """从 Qdrant 抽取 payload 样本，用于拒答和提问推荐。"""
+
+        try:
+            if not self._run_with_retry(lambda: self._collection_exists(kb_id)):
+                return []
+            return self._run_with_retry(
+                lambda: self._sample_payloads_impl(kb_id=kb_id, limit=limit)
+            )
+        except Exception:
+            return []
+
     def _collection_name(self, kb_id: str) -> str:
         return f"{self._collection_prefix}{kb_id}"
 
@@ -371,6 +403,25 @@ class QdrantVectorStore:
         if not self._collection_exists(kb_id):
             return
         self._client.delete_collection(collection_name=self._collection_name(kb_id))
+
+    def _sample_payloads_impl(self, kb_id: str, limit: int) -> list[dict[str, Any]]:
+        """兼容 qdrant-client scroll 接口抽样读取 payload。"""
+
+        scroll = getattr(self._client, "scroll", None)
+        if not callable(scroll):
+            return self._sample_payloads_rest_compat(self._collection_name(kb_id), limit)
+        points, _ = scroll(
+            collection_name=self._collection_name(kb_id),
+            limit=max(0, limit),
+            with_payload=True,
+            with_vectors=False,
+        )
+        payloads: list[dict[str, Any]] = []
+        for point in points:
+            payload = getattr(point, "payload", None)
+            if isinstance(payload, dict):
+                payloads.append(payload)
+        return payloads
 
     def _ensure_collection(self, kb_id: str) -> None:
         name = self._collection_name(kb_id)
@@ -568,6 +619,32 @@ class QdrantVectorStore:
             )
             for item in results
         ]
+
+    def _sample_payloads_rest_compat(
+        self, collection_name: str, limit: int
+    ) -> list[dict[str, Any]]:
+        """使用 REST scroll 接口读取 payload 样本。"""
+
+        headers: dict[str, str] = {}
+        if self._qdrant_api_key:
+            headers["api-key"] = self._qdrant_api_key
+        response = httpx.post(
+            f"{self._qdrant_url.rstrip('/')}/collections/{collection_name}/points/scroll",
+            json={"limit": max(0, limit), "with_payload": True, "with_vector": False},
+            headers=headers,
+            timeout=self._qdrant_timeout_s,
+            trust_env=False,
+        )
+        if response.status_code != 200:
+            return []
+        data = response.json()
+        points = ((data.get("result") or {}).get("points") or [])
+        payloads: list[dict[str, Any]] = []
+        for point in points:
+            payload = point.get("payload") if isinstance(point, dict) else None
+            if isinstance(payload, dict):
+                payloads.append(payload)
+        return payloads
 
     @staticmethod
     def _dump_rest_model(value: Any) -> Any:

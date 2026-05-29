@@ -7420,6 +7420,7 @@ body {
 
 .app-shell--admin .admin-table-cell--primary {
   min-width: 260px;
+  overflow: hidden;
 }
 
 .app-shell--admin .admin-table-cell--primary .ant-typography,
@@ -7433,6 +7434,18 @@ body {
   display: grid;
   width: 100%;
   min-width: 0;
+  overflow: hidden;
+}
+
+.app-shell--admin .admin-table-primary-stack .ant-space-item,
+.app-shell--admin .admin-table-primary-stack .ant-typography,
+.app-shell--admin .admin-table-primary-stack .ant-typography strong,
+.app-shell--admin .admin-table-primary-stack .ant-typography a {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-shell--admin .admin-table-cell--status,
@@ -7927,6 +7940,7 @@ body,
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   gap: 12px;
   padding: 16px 12px;
   overflow: hidden;
@@ -7971,16 +7985,51 @@ body,
   display: grid;
   gap: 10px;
   padding: 10px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .chat-sidebar-toolbar {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  max-width: 100%;
 }
 
 .chat-sidebar-toolbar .ant-btn,
 .chat-composer-actions .ant-btn {
   min-width: 0;
   border-radius: var(--cs-radius);
+}
+
+/* 侧栏控件必须在 272px 桌面栏和窄屏顶部栏内自适应，避免长知识库名撑破边界。 */
+.chat-sidebar-controls .ant-select,
+.chat-sidebar-controls .ant-input-affix-wrapper,
+.chat-sidebar-toolbar .ant-btn {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.chat-sidebar-controls .ant-select-selector,
+.chat-sidebar-controls .ant-select-selection-search,
+.chat-sidebar-controls .ant-select-selection-item,
+.chat-sidebar-controls .ant-select-selection-placeholder,
+.chat-sidebar-controls .ant-input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-sidebar-controls .ant-select-selection-item,
+.chat-sidebar-controls .ant-select-selection-placeholder,
+.chat-sidebar-toolbar .ant-btn > span:not(.anticon) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-sidebar-toolbar .ant-btn {
+  padding-inline: 8px;
 }
 
 .chat-sidebar-section-head {

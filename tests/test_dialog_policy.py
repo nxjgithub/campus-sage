@@ -45,6 +45,23 @@ def test_analyze_intent_smalltalk_returns_early_refusal() -> None:
     assert decision.next_steps
 
 
+def test_analyze_intent_identity_returns_direct_answer() -> None:
+    state = build_dialog_state([])
+    decision = analyze_intent("你是谁？", state)
+    assert decision.intent == "identity"
+    assert decision.early_refusal is False
+    assert decision.direct_answer is not None
+    assert "CampusSage" in decision.direct_answer
+
+
+def test_analyze_intent_question_recommendation_request() -> None:
+    state = build_dialog_state([])
+    decision = analyze_intent("我可以问哪些问题？", state)
+    assert decision.intent == "question_recommendation"
+    assert decision.recommend_questions is True
+    assert decision.early_refusal is False
+
+
 def test_analyze_intent_asks_for_clarification_on_ambiguous_question() -> None:
     state = build_dialog_state([])
     decision = analyze_intent("这个怎么办", state)

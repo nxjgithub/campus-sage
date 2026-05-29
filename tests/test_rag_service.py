@@ -224,6 +224,223 @@ def test_compute_answer_requires_llm_for_normal_answer() -> None:
     assert exc_info.value.detail == {"vllm_enabled": False}
 
 
+def test_compute_answer_returns_identity_without_retrieval_or_llm() -> None:
+    settings = Settings(_env_file=None, vllm_enabled=False)
+
+    class _FailingVectorStore:
+        def search(self, *args, **kwargs) -> list[VectorHit]:
+            del args, kwargs
+            raise AssertionError("身份认知回答不应触发向量检索")
+
+    class _FailingLlmClient:
+        def generate(self, question: str, context: str) -> str:
+            del question, context
+            raise AssertionError("身份认知回答不应触发生成模型")
+
+    service = object.__new__(RagService)
+    service._settings = settings
+    service._embedder = SimpleEmbedder(vector_dim=8)
+    service._vector_store = _FailingVectorStore()
+    service._context_builder = ContextBuilder(settings.rag_max_context_tokens)
+    service._reranker = SimpleReranker()
+    service._llm_client = _FailingLlmClient()
+
+    result = service._compute_answer(
+        kb=SimpleNamespace(
+            kb_id="kb_test",
+            config={
+                "topk": 5,
+                "threshold": 0.25,
+                "rerank_enabled": True,
+            },
+        ),
+        question="你是谁？",
+        topk=None,
+        threshold=None,
+        rerank_enabled=None,
+        filters=None,
+        debug=False,
+        normalized_question="你是谁",
+        dialog_state=DialogState(
+            turn_count=0,
+            last_user_question=None,
+            pending_clarification=False,
+            history_text="",
+        ),
+        intent_decision=IntentDecision(
+            intent="identity",
+            normalized_question="你是谁",
+            retrieval_query="你是谁？",
+            direct_answer="我是 CampusSage。",
+        ),
+    )
+
+    assert result.refusal is False
+    assert result.answer == "我是 CampusSage。"
+    assert result.citations == []
+    assert result.timing["retrieve_ms"] == 0
+    assert result.timing["generate_ms"] == 0
+
+
+def test_compute_answer_recommends_questions_without_vector_search() -> None:
+    settings = Settings(_env_file=None, vllm_enabled=True)
+
+    class _StubVectorStore:
+        def search(self, *args, **kwargs) -> list[VectorHit]:
+            del args, kwargs
+            raise AssertionError("推荐问题不应触发向量相似度检索")
+
+        def sample_payloads(self, kb_id: str, limit: int = 12) -> list[dict[str, object]]:
+            del kb_id, limit
+            return [
+                {
+                    "doc_id": "doc_notice",
+                    "doc_name": "补考通知.md",
+                    "section_path": "考试管理/补考",
+                    "text": "补考申请条件、确认时间和考试安排以教务系统通知为准。",
+                }
+            ]
+
+    class _StubLlmClient:
+        def generate_question_suggestions(
+            self,
+            kb_name: str,
+            source_context: str,
+            user_question: str | None = None,
+            count: int = 4,
+        ) -> list[str]:
+            del kb_name, source_context, user_question, count
+            return ["补考申请条件是什么？", "补考确认时间在哪里查看？"]
+
+    service = object.__new__(RagService)
+    service._settings = settings
+    service._embedder = SimpleEmbedder(vector_dim=8)
+    service._vector_store = _StubVectorStore()
+    service._context_builder = ContextBuilder(settings.rag_max_context_tokens)
+    service._reranker = SimpleReranker()
+    service._llm_client = _StubLlmClient()
+
+    result = service._compute_answer(
+        kb=SimpleNamespace(
+            kb_id="kb_test",
+            name="测试知识库",
+            config={"topk": 5, "threshold": 0.25, "rerank_enabled": True},
+        ),
+        question="我可以问哪些问题？",
+        topk=None,
+        threshold=None,
+        rerank_enabled=None,
+        filters=None,
+        debug=False,
+        normalized_question="我可以问哪些问题",
+        dialog_state=DialogState(
+            turn_count=0,
+            last_user_question=None,
+            pending_clarification=False,
+            history_text="",
+        ),
+        intent_decision=IntentDecision(
+            intent="question_recommendation",
+            normalized_question="我可以问哪些问题",
+            retrieval_query="我可以问哪些问题？",
+            recommend_questions=True,
+        ),
+    )
+
+    assert result.refusal is False
+    assert result.citations == []
+    assert "补考申请条件是什么？" in result.answer
+    assert result.suggestions == ["补考申请条件是什么？", "补考确认时间在哪里查看？"]
+    assert result.timing["retrieve_ms"] == 0
+
+
+def test_refusal_guidance_adds_llm_question_suggestions() -> None:
+    settings = Settings(
+        _env_file=None,
+        vllm_enabled=True,
+        rag_threshold=0.5,
+        rag_min_keyword_coverage=0.0,
+    )
+
+    class _StubVectorStore:
+        def search(
+            self,
+            kb_id: str,
+            query_vector: list[float],
+            topk: int,
+            filters: dict[str, object] | None = None,
+        ) -> list[VectorHit]:
+            del kb_id, query_vector, topk, filters
+            return []
+
+        def sample_payloads(self, kb_id: str, limit: int = 12) -> list[dict[str, object]]:
+            del kb_id, limit
+            return [
+                {
+                    "doc_id": "doc_scholarship",
+                    "doc_name": "奖学金评定办法.md",
+                    "section_path": "学生资助/奖学金",
+                    "text": "奖学金评定通常关注申请条件、评定流程、公示和异议处理。",
+                }
+            ]
+
+    class _StubLlmClient:
+        def generate_question_suggestions(
+            self,
+            kb_name: str,
+            source_context: str,
+            user_question: str | None = None,
+            count: int = 4,
+        ) -> list[str]:
+            del kb_name, source_context, user_question, count
+            return ["奖学金评定条件有哪些？"]
+
+    service = object.__new__(RagService)
+    service._settings = settings
+    service._embedder = SimpleEmbedder(vector_dim=8)
+    service._vector_store = _StubVectorStore()
+    service._context_builder = ContextBuilder(settings.rag_max_context_tokens)
+    service._reranker = SimpleReranker()
+    service._llm_client = _StubLlmClient()
+
+    result = service._compute_answer(
+        kb=SimpleNamespace(
+            kb_id="kb_test",
+            name="学生事务知识库",
+            config={
+                "topk": 3,
+                "threshold": 0.5,
+                "rerank_enabled": False,
+                "min_evidence_chunks": 1,
+                "min_context_chars": 20,
+                "min_keyword_coverage": 0.0,
+            },
+        ),
+        question="完全无关的问题",
+        topk=None,
+        threshold=None,
+        rerank_enabled=None,
+        filters=None,
+        debug=False,
+        normalized_question="完全无关的问题",
+        dialog_state=DialogState(
+            turn_count=0,
+            last_user_question=None,
+            pending_clarification=False,
+            history_text="",
+        ),
+        intent_decision=IntentDecision(
+            intent="qa",
+            normalized_question="完全无关的问题",
+            retrieval_query="完全无关的问题",
+        ),
+    )
+
+    assert result.refusal is True
+    assert "可尝试提问：奖学金评定条件有哪些？" in result.suggestions
+    assert any(step.value == "奖学金评定条件有哪些？" for step in result.next_steps)
+
+
 def test_empty_llm_answer_does_not_fallback_to_retrieved_snippet() -> None:
     settings = Settings(_env_file=None, vllm_enabled=True)
     service = object.__new__(RagService)

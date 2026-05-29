@@ -65,6 +65,8 @@ class _ComputationResult:
 class _GenerationInputs:
     """生成前已完成的检索与上下文结果。"""
 
+    kb_id: str
+    kb_name: str
     normalized_question: str
     context: str
     citations: list[CitationDTO]
@@ -547,6 +549,115 @@ class RagService:
             generate_ms=generate_ms,
         )
 
+    def _build_direct_answer_result(
+        self,
+        answer: str,
+        total_start: float,
+        topk: int,
+        threshold: float,
+        rerank_enabled: bool,
+        intent_decision: IntentDecision,
+    ) -> _ComputationResult:
+        """构造不依赖知识库检索的系统身份类回答。"""
+
+        total_ms = int((time.perf_counter() - total_start) * 1000)
+        return _ComputationResult(
+            answer=answer,
+            refusal=False,
+            refusal_reason=None,
+            suggestions=[],
+            next_steps=[],
+            citations=[],
+            timing={
+                "retrieve_ms": 0,
+                "rerank_ms": 0,
+                "context_ms": 0,
+                "generate_ms": 0,
+                "total_ms": total_ms,
+            },
+            topk=topk,
+            threshold=threshold,
+            rerank_enabled=rerank_enabled,
+            hits_for_log=[],
+            intent=intent_decision.intent,
+            slots=intent_decision.slots,
+        )
+
+    def _build_question_recommendation_result(
+        self,
+        kb,
+        question: str,
+        total_start: float,
+        topk: int,
+        threshold: float,
+        rerank_enabled: bool,
+        intent_decision: IntentDecision,
+    ) -> _ComputationResult:
+        """构造“当前知识库可以问什么”的问题推荐回答。"""
+
+        kb_id = str(kb.kb_id)
+        kb_name = str(getattr(kb, "name", kb_id))
+        payloads = self._collect_question_suggestion_payloads(
+            kb_id=kb_id,
+            hits=[],
+        )
+        questions = self._generate_recommended_questions(
+            kb_name=kb_name,
+            user_question=question,
+            payloads=payloads,
+        )
+        total_ms = int((time.perf_counter() - total_start) * 1000)
+        if not questions:
+            return _ComputationResult(
+                answer="当前知识库中缺少可用于推荐问题的样本内容，请先确认文档是否已完成入库。",
+                refusal=True,
+                refusal_reason="LOW_EVIDENCE",
+                suggestions=["建议先确认当前知识库是否已有已索引文档"],
+                next_steps=[
+                    NextStepDTO(
+                        action="verify_kb_scope",
+                        label="确认知识库范围",
+                        detail="进入文档入库列表，确认文档状态为已索引后再询问可提问范围。",
+                        value=None,
+                    )
+                ],
+                citations=[],
+                timing={
+                    "retrieve_ms": 0,
+                    "rerank_ms": 0,
+                    "context_ms": 0,
+                    "generate_ms": 0,
+                    "total_ms": total_ms,
+                },
+                topk=topk,
+                threshold=threshold,
+                rerank_enabled=rerank_enabled,
+                hits_for_log=[],
+                intent=intent_decision.intent,
+                slots=intent_decision.slots,
+            )
+        return _ComputationResult(
+            answer=self._format_recommended_question_answer(questions),
+            refusal=False,
+            refusal_reason=None,
+            suggestions=questions,
+            next_steps=[],
+            citations=[],
+            timing={
+                "retrieve_ms": 0,
+                "rerank_ms": 0,
+                "context_ms": 0,
+                "generate_ms": 0,
+                "total_ms": total_ms,
+            },
+            topk=topk,
+            threshold=threshold,
+            rerank_enabled=rerank_enabled,
+            hits_for_log=[],
+            intent=intent_decision.intent,
+            slots=intent_decision.slots,
+        )
+
     def _prepare_generation_inputs(
         self,
         kb,
@@ -588,14 +699,41 @@ class RagService:
         )
 
         total_start = time.perf_counter()
+        if intent_decision.direct_answer is not None:
+            return self._build_direct_answer_result(
+                answer=intent_decision.direct_answer,
+                total_start=total_start,
+                topk=resolved_topk,
+                threshold=resolved_threshold,
+                rerank_enabled=resolved_rerank_enabled,
+                intent_decision=intent_decision,
+            )
+        if intent_decision.recommend_questions:
+            return self._build_question_recommendation_result(
+                kb=kb,
+                question=normalized_question,
+                total_start=total_start,
+                topk=resolved_topk,
+                threshold=resolved_threshold,
+                rerank_enabled=resolved_rerank_enabled,
+                intent_decision=intent_decision,
+            )
         if intent_decision.early_refusal:
             total_ms = int((time.perf_counter() - total_start) * 1000)
+            suggestions, next_steps = self._enhance_guidance_with_question_suggestions(
+                kb_id=str(kb.kb_id),
+                kb_name=str(getattr(kb, "name", kb.kb_id)),
+                user_question=normalized_question,
+                hits=[],
+                suggestions=list(intent_decision.suggestions),
+                next_steps=list(intent_decision.next_steps),
+            )
             return _ComputationResult(
                 answer=self._build_refusal_answer(intent_decision.refusal_reason or "LOW_COVERAGE"),
                 refusal=True,
                 refusal_reason=intent_decision.refusal_reason,
-                suggestions=intent_decision.suggestions,
-                next_steps=intent_decision.next_steps,
+                suggestions=suggestions,
+                next_steps=next_steps,
                 citations=[],
                 timing={
                     "retrieve_ms": 0,
@@ -643,6 +781,8 @@ class RagService:
         )
         if refusal_reason is not None:
             suggestions, next_steps = self._build_refusal_guidance(
+                kb_id=str(kb.kb_id),
+                kb_name=str(getattr(kb, "name", kb.kb_id)),
                 question=normalized_question,
                 refusal_reason=refusal_reason,
                 hits=hits,
@@ -675,6 +815,8 @@ class RagService:
         context_ms = int((time.perf_counter() - context_start) * 1000)
         if not context_result.hits or len(context_result.context.strip()) < min_context_chars:
             suggestions, next_steps = self._build_refusal_guidance(
+                kb_id=str(kb.kb_id),
+                kb_name=str(getattr(kb, "name", kb.kb_id)),
                 question=normalized_question,
                 refusal_reason="LOW_EVIDENCE",
                 hits=context_result.hits,
@@ -706,6 +848,8 @@ class RagService:
         slots = dict(intent_decision.slots)
         slots.setdefault("dialog_turn", str(dialog_state.turn_count))
         return _GenerationInputs(
+            kb_id=str(kb.kb_id),
+            kb_name=str(getattr(kb, "name", kb.kb_id)),
             normalized_question=normalized_question,
             context=context_result.context,
             citations=citations,
@@ -740,6 +884,8 @@ class RagService:
         )
         if semantic_refusal_reason is not None:
             suggestions, next_steps = self._build_refusal_guidance(
+                kb_id=prepared.kb_id,
+                kb_name=prepared.kb_name,
                 question=prepared.normalized_question,
                 refusal_reason=semantic_refusal_reason,
                 hits=prepared.hits_for_log,
@@ -1145,7 +1291,12 @@ class RagService:
         return base
 
     def _build_refusal_guidance(
-        self, question: str, refusal_reason: str, hits: list[VectorHit]
+        self,
+        kb_id: str,
+        kb_name: str,
+        question: str,
+        refusal_reason: str,
+        hits: list[VectorHit],
     ) -> tuple[list[str], list[NextStepDTO]]:
         """构造拒答后的建议与结构化下一步。"""
 
@@ -1203,7 +1354,182 @@ class RagService:
                     value=None,
                 ),
             )
-        return suggestions, next_steps
+        return self._enhance_guidance_with_question_suggestions(
+            kb_id=kb_id,
+            kb_name=kb_name,
+            user_question=question,
+            hits=hits,
+            suggestions=suggestions,
+            next_steps=next_steps,
+        )
+
+    def _enhance_guidance_with_question_suggestions(
+        self,
+        kb_id: str,
+        kb_name: str,
+        user_question: str,
+        hits: list[VectorHit],
+        suggestions: list[str],
+        next_steps: list[NextStepDTO],
+    ) -> tuple[list[str], list[NextStepDTO]]:
+        """用当前知识库内容增强拒答建议，补充可直接询问的问题。"""
+
+        payloads = self._collect_question_suggestion_payloads(kb_id=kb_id, hits=hits)
+        questions = self._generate_recommended_questions(
+            kb_name=kb_name,
+            user_question=user_question,
+            payloads=payloads,
+        )
+        if not questions:
+            return suggestions, next_steps
+        enhanced = list(suggestions)
+        for question in questions[:3]:
+            enhanced.append(f"可尝试提问：{question}")
+        enhanced_steps = list(next_steps)
+        if questions:
+            enhanced_steps.append(
+                NextStepDTO(
+                    action="rewrite_question",
+                    label="尝试推荐问题",
+                    detail="这个问题来自当前知识库样本，可直接复制后提问。",
+                    value=questions[0],
+                )
+            )
+        return enhanced, enhanced_steps
+
+    def _collect_question_suggestion_payloads(
+        self,
+        kb_id: str,
+        hits: list[VectorHit],
+        limit: int = 12,
+    ) -> list[dict[str, object]]:
+        """收集用于生成推荐问题的 payload 样本。"""
+
+        payloads = [hit.payload for hit in hits if hit.payload]
+        sample_payloads = getattr(self._vector_store, "sample_payloads", None)
+        if callable(sample_payloads) and len(payloads) < limit:
+            try:
+                payloads.extend(sample_payloads(kb_id, limit=limit))
+            except Exception:
+                pass
+        return self._dedupe_payloads(payloads)[:limit]
+
+    def _generate_recommended_questions(
+        self,
+        kb_name: str,
+        user_question: str,
+        payloads: list[dict[str, object]],
+        count: int = 4,
+    ) -> list[str]:
+        """调用模型生成推荐问题，模型不可用时做保守兜底。"""
+
+        source_context = self._build_question_suggestion_context(payloads)
+        if not source_context:
+            return []
+        generator = getattr(self._llm_client, "generate_question_suggestions", None)
+        if self._settings.vllm_enabled and callable(generator):
+            try:
+                questions = generator(
+                    kb_name=kb_name,
+                    source_context=source_context,
+                    user_question=user_question,
+                    count=count,
+                )
+                normalized = self._normalize_recommended_questions(questions)
+                if normalized:
+                    return normalized[:count]
+            except Exception:
+                pass
+        return self._fallback_recommended_questions(payloads)[:count]
+
+    def _build_question_suggestion_context(
+        self,
+        payloads: list[dict[str, object]],
+    ) -> str:
+        """将 payload 样本压缩成模型可读的知识库摘要。"""
+
+        lines: list[str] = []
+        for payload in payloads[:12]:
+            doc_name = str(payload.get("doc_name") or "未命名文档")
+            section_path = str(payload.get("section_path") or "未识别章节")
+            text = " ".join(str(payload.get("text") or "").split())
+            if not text:
+                continue
+            lines.append(
+                f"- 文档：{doc_name}；章节：{section_path}；片段：{text[:180]}"
+            )
+        return "\n".join(lines)
+
+    def _dedupe_payloads(
+        self,
+        payloads: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        """按文档、章节和文本片段去重，减少推荐问题提示词噪声。"""
+
+        deduped: list[dict[str, object]] = []
+        seen: set[str] = set()
+        for payload in payloads:
+            text = " ".join(str(payload.get("text") or "").split())
+            key = "|".join(
+                [
+                    str(payload.get("doc_id") or ""),
+                    str(payload.get("section_path") or ""),
+                    text[:80],
+                ]
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(payload)
+        return deduped
+
+    def _fallback_recommended_questions(
+        self,
+        payloads: list[dict[str, object]],
+    ) -> list[str]:
+        """模型不可用时根据样本文档生成保守问题，避免拒答建议为空。"""
+
+        candidates: list[str] = []
+        for payload in payloads:
+            doc_name = str(payload.get("doc_name") or "").strip()
+            section_path = str(payload.get("section_path") or "").strip()
+            if section_path:
+                topic = section_path.split("/")[-1].split("、")[-1].strip()
+                if topic:
+                    candidates.append(f"{topic}有哪些办理要求？")
+            if doc_name:
+                title = doc_name.rsplit(".", 1)[0].strip()
+                if title:
+                    candidates.append(f"{title}主要说明了哪些内容？")
+        return self._normalize_recommended_questions(candidates)
+
+    def _normalize_recommended_questions(self, questions: list[str]) -> list[str]:
+        """规范化推荐问题列表，去重并限制长度。"""
+
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in questions:
+            question = " ".join(str(item).strip().split()).strip("\"'“”[]")
+            if not question or len(question) < 4:
+                continue
+            if not question.endswith(("?", "？")):
+                question = f"{question}？"
+            if len(question) > 48:
+                question = f"{question[:47]}？"
+            if question in seen:
+                continue
+            seen.add(question)
+            normalized.append(question)
+            if len(normalized) >= 6:
+                break
+        return normalized
+
+    def _format_recommended_question_answer(self, questions: list[str]) -> str:
+        """格式化主动推荐问题回答。"""
+
+        lines = ["你可以从当前知识库里尝试这些问题："]
+        lines.extend(f"{index}. {question}" for index, question in enumerate(questions, 1))
+        return "\n".join(lines)
 
     def _pick_official_source_uri(self, hits: list[VectorHit]) -> str | None:
         """从候选证据中选择首个可跳转的官方来源链接。"""

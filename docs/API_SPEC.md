@@ -490,6 +490,8 @@ Content-Type：`multipart/form-data`
 - 生成约束：所有 `refusal=false` 的正常回答必须调用生成模型；若 `VLLM_ENABLED=false` 或模型未返回有效内容，不允许把检索片段拼接成正常回答，必须返回 `RAG_MODEL_FAILED`（同步）或 SSE `error + done.status=failed`（流式）。
 - 多轮策略：服务端会基于会话历史做基础意图分流与追问补全；若问题信息不足，会返回澄清型拒答（`refusal=true` + `next_steps`）。
 - 连续追问策略：服务端会从历史消息中抽取主题锚点、近期追问和槽位摘要来改写检索 query，但不会修改原始用户消息，也不会把会话摘要当作引用证据。
+- 身份认知：对“你是谁/你能做什么/你的职责是什么”等系统身份问题，服务端可在检索前返回固定身份说明；该响应不是知识库事实回答，允许 `refusal=false`、`citations=[]` 且 `timing.retrieve_ms=0`。
+- 提问推荐：对“我可以问哪些问题/当前知识库能问什么”等请求，服务端会基于当前知识库分块样本调用生成模型生成若干可直接提问的问题；响应允许 `refusal=false`、`citations=[]`，并在 `answer/suggestions` 中返回推荐问题。拒答响应也可在 `suggestions` 和 `next_steps` 中追加这类推荐问题。
 - 时效策略：当问题包含“最新/当前/今年”等时效诉求时，服务端会检查 `citations.published_at`，必要时在 `answer` 中追加“请核验最新公告”的提示，并通过 `next_steps` 引导到官方来源。
 
 ### 4.2 发起问答（流式 SSE）

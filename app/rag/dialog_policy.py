@@ -23,6 +23,25 @@ _SMALLTALK_KEYWORDS = (
     "bye",
 )
 
+_IDENTITY_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^(你|您|campussage|csage).{0,8}(是谁|是什么|叫什么|能做什么|可以做什么|有什么用)"),
+    re.compile(r"(介绍|说明).{0,6}(你自己|一下你|campussage|csage)"),
+    re.compile(r"(你的|你).{0,4}(身份|定位|职责|能力|功能)"),
+)
+
+_IDENTITY_ANSWER = (
+    "我是 CampusSage（CSage），一个面向校园制度与文档知识库的证据型问答助手。"
+    "我会基于当前选择的知识库进行检索、重排和证据引用，回答时尽量给出可复核的来源；"
+    "如果知识库证据不足，我会拒答并提示你补充问题或核验官方来源。"
+)
+
+_QUESTION_RECOMMENDATION_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(我|用户|大家)?可以(问|咨询|提问)(哪些|什么|啥)(问题|内容|事项)?"),
+    re.compile(r"(哪些|什么|啥)(问题|内容|事项).{0,8}(可以|能)(问|咨询|提问)"),
+    re.compile(r"(推荐|给我|列出).{0,8}(几个|一些|可问|可以问).{0,8}(问题|提问)"),
+    re.compile(r"(当前|这个)?知识库.{0,8}(能问|可以问|覆盖|包含)"),
+)
+
 _AMBIGUOUS_REFERENCES = ("这个", "那个", "它", "这项", "该项", "上述", "上面")
 
 _FOLLOWUP_DETAIL_KEYWORDS = (
@@ -249,6 +268,8 @@ class IntentDecision:
     refusal_reason: str | None = None
     suggestions: list[str] = field(default_factory=list)
     next_steps: list[NextStepDTO] = field(default_factory=list)
+    direct_answer: str | None = None
+    recommend_questions: bool = False
 
 
 @dataclass(slots=True)
@@ -321,6 +342,10 @@ def analyze_intent(question: str, state: DialogState) -> IntentDecision:
             slots=slots,
             detail_value="事项/对象/条件/时间/材料",
         )
+    if _is_identity_question(normalized):
+        return _identity_decision(normalized_question=normalized, slots=slots)
+    if _is_question_recommendation_request(normalized):
+        return _question_recommendation_decision(normalized_question=normalized, slots=slots)
     if _is_smalltalk(normalized):
         return _smalltalk_decision(normalized_question=normalized, slots=slots)
 
@@ -431,6 +456,32 @@ def _smalltalk_decision(normalized_question: str, slots: dict[str, str]) -> Inte
                 value=None,
             ),
         ],
+    )
+
+
+def _identity_decision(normalized_question: str, slots: dict[str, str]) -> IntentDecision:
+    """构造身份认知场景的直接回答决策。"""
+
+    return IntentDecision(
+        intent="identity",
+        normalized_question=normalized_question,
+        retrieval_query=normalized_question,
+        slots=slots,
+        direct_answer=_IDENTITY_ANSWER,
+    )
+
+
+def _question_recommendation_decision(
+    normalized_question: str, slots: dict[str, str]
+) -> IntentDecision:
+    """构造可提问问题推荐决策。"""
+
+    return IntentDecision(
+        intent="question_recommendation",
+        normalized_question=normalized_question,
+        retrieval_query=normalized_question,
+        slots=slots,
+        recommend_questions=True,
     )
 
 
@@ -550,6 +601,20 @@ def _is_smalltalk(text: str) -> bool:
     if len(lowered) <= 6 and any(keyword in lowered for keyword in _SMALLTALK_KEYWORDS):
         return True
     return False
+
+
+def _is_identity_question(text: str) -> bool:
+    """判断是否为询问系统身份、定位或能力的问题。"""
+
+    lowered = text.lower()
+    return any(pattern.search(lowered) for pattern in _IDENTITY_PATTERNS)
+
+
+def _is_question_recommendation_request(text: str) -> bool:
+    """判断是否为请求系统推荐可提问问题。"""
+
+    lowered = text.lower()
+    return any(pattern.search(lowered) for pattern in _QUESTION_RECOMMENDATION_PATTERNS)
 
 
 def _need_clarification(

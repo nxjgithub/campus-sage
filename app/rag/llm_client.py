@@ -78,6 +78,55 @@ class VllmClient:
         content = message.get("content") or ""
         return content.strip()
 
+    def generate_question_suggestions(
+        self,
+        kb_name: str,
+        source_context: str,
+        user_question: str | None = None,
+        count: int = 4,
+    ) -> list[str]:
+        """基于知识库样本文本调用模型生成可提问问题。"""
+
+        payload = self._build_question_suggestion_payload(
+            kb_name=kb_name,
+            source_context=source_context,
+            user_question=user_question,
+            count=count,
+        )
+        try:
+            response = httpx.post(
+                f"{self._base_url}/chat/completions",
+                json=payload,
+                headers=self._build_headers(),
+                timeout=self._timeout,
+                trust_env=False,
+            )
+        except Exception as exc:
+            raise AppError(
+                code=ErrorCode.RAG_MODEL_FAILED,
+                message="模型服务不可用",
+                detail={"error": str(exc)},
+                status_code=502,
+            ) from exc
+
+        if response.status_code != 200:
+            raise AppError(
+                code=ErrorCode.RAG_MODEL_FAILED,
+                message="模型服务返回异常状态",
+                detail={
+                    "status_code": response.status_code,
+                    "body": _extract_response_body(response),
+                },
+                status_code=502,
+            )
+        data = response.json()
+        choices = data.get("choices") or []
+        if not choices:
+            return []
+        message = choices[0].get("message") or {}
+        content = message.get("content") or ""
+        return _parse_question_suggestions(content)
+
     def stream_generate(
         self,
         question: str,
@@ -231,6 +280,44 @@ class VllmClient:
             ],
         }
 
+    def _build_question_suggestion_payload(
+        self,
+        kb_name: str,
+        source_context: str,
+        user_question: str | None,
+        count: int,
+    ) -> dict[str, object]:
+        """构造推荐问题生成请求体。"""
+
+        trimmed_context = source_context[:4000]
+        request_text = user_question or "用户想了解当前知识库可以提问哪些问题。"
+        return {
+            "model": self._model,
+            "temperature": 0.35,
+            "stream": False,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "你是校园知识库问答助手的提问推荐器。"
+                        "只能根据给定知识库样本文本生成用户可直接询问的问题。"
+                        "不要编造样本文本之外的业务范围，不要输出解释。"
+                        "输出 JSON 数组，数组元素必须是中文问句字符串。"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"知识库名称：{kb_name}\n"
+                        f"用户原问题：{request_text}\n"
+                        f"请生成 {max(1, min(count, 6))} 个可直接提问的问题。\n"
+                        "问题应覆盖不同文档或不同办理事项，避免重复，长度控制在 30 字以内。\n\n"
+                        f"知识库样本文本：\n{trimmed_context}"
+                    ),
+                },
+            ],
+        }
+
     def _build_headers(self) -> dict[str, str]:
         """构造模型服务请求头。"""
 
@@ -238,6 +325,51 @@ class VllmClient:
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
         return headers
+
+
+def _parse_question_suggestions(content: str) -> list[str]:
+    """解析模型返回的推荐问题列表，兼容 JSON 和逐行文本。"""
+
+    raw = content.strip()
+    if not raw:
+        return []
+    candidates: list[str] = []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            candidates = [str(item) for item in parsed]
+    except Exception:
+        candidates = []
+    if not candidates:
+        candidates = [
+            line.strip(" -0123456789.、\t")
+            for line in raw.splitlines()
+            if line.strip()
+        ]
+    return _normalize_question_suggestions(candidates)
+
+
+def _normalize_question_suggestions(candidates: list[str]) -> list[str]:
+    """规范化推荐问题，去重并保证问句形式。"""
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in candidates:
+        question = " ".join(str(item).strip().split())
+        if not question:
+            continue
+        question = question.strip("\"'“”[]")
+        if len(question) < 4:
+            continue
+        if not question.endswith(("?", "？")):
+            question = f"{question}？"
+        if question in seen:
+            continue
+        seen.add(question)
+        normalized.append(question)
+        if len(normalized) >= 6:
+            break
+    return normalized
 
 
 def _extract_response_body(response: httpx.Response) -> object:
