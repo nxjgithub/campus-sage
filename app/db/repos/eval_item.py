@@ -19,15 +19,16 @@ class EvalItemRepository:
             self._db.execute(
                 """
                 INSERT INTO eval_item (
-                    eval_item_id, eval_set_id, question, gold_doc_id,
+                    eval_item_id, eval_set_id, question, gold_doc_id, gold_doc_name,
                     gold_page_start, gold_page_end, tags_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
                     record.eval_item_id,
                     record.eval_set_id,
                     record.question,
                     record.gold_doc_id,
+                    record.gold_doc_name,
                     record.gold_page_start,
                     record.gold_page_end,
                     record.tags_json,
@@ -40,7 +41,7 @@ class EvalItemRepository:
 
         rows = self._db.fetch_all(
             """
-            SELECT eval_item_id, eval_set_id, question, gold_doc_id,
+            SELECT eval_item_id, eval_set_id, question, gold_doc_id, gold_doc_name,
                    gold_page_start, gold_page_end, tags_json, created_at
             FROM eval_item
             WHERE eval_set_id = ?
@@ -54,6 +55,7 @@ class EvalItemRepository:
                 eval_set_id=row["eval_set_id"],
                 question=row["question"],
                 gold_doc_id=row["gold_doc_id"],
+                gold_doc_name=row["gold_doc_name"],
                 gold_page_start=row["gold_page_start"],
                 gold_page_end=row["gold_page_end"],
                 tags_json=row["tags_json"],

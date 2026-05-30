@@ -64,7 +64,11 @@ describe("KbPage 二次确认交互", () => {
             rerank_enabled: true,
             max_context_tokens: 4096,
             min_context_chars: 20,
-            min_keyword_coverage: 0.3
+            min_keyword_coverage: 0.3,
+            web_enabled: false,
+            allowed_web_prefixes: [],
+            web_seed_urls: [],
+            web_search_topk: 3
           },
           updated_at: "2026-02-12T12:00:00Z"
         }
@@ -81,7 +85,11 @@ describe("KbPage 二次确认交互", () => {
         rerank_enabled: false,
         max_context_tokens: 3000,
         min_context_chars: 20,
-        min_keyword_coverage: 0.3
+        min_keyword_coverage: 0.3,
+        web_enabled: true,
+        allowed_web_prefixes: ["https://jwc.suse.edu.cn/", "https://xsc.suse.edu.cn/"],
+        web_seed_urls: ["https://jwc.suse.edu.cn/jwgg/list.htm"],
+        web_search_topk: 4
       },
       created_at: "2026-02-12T12:00:00Z",
       updated_at: "2026-02-12T12:00:00Z"
@@ -97,7 +105,11 @@ describe("KbPage 二次确认交互", () => {
         rerank_enabled: false,
         max_context_tokens: 3000,
         min_context_chars: 20,
-        min_keyword_coverage: 0.3
+        min_keyword_coverage: 0.3,
+        web_enabled: false,
+        allowed_web_prefixes: [],
+        web_seed_urls: [],
+        web_search_topk: 3
       },
       created_at: "2026-02-12T12:00:00Z",
       updated_at: "2026-02-12T12:00:00Z"
@@ -113,7 +125,11 @@ describe("KbPage 二次确认交互", () => {
         rerank_enabled: false,
         max_context_tokens: 3000,
         min_context_chars: 20,
-        min_keyword_coverage: 0.3
+        min_keyword_coverage: 0.3,
+        web_enabled: true,
+        allowed_web_prefixes: ["https://jwc.suse.edu.cn/", "https://xsc.suse.edu.cn/"],
+        web_seed_urls: ["https://jwc.suse.edu.cn/jwgg/list.htm"],
+        web_search_topk: 4
       },
       created_at: "2026-02-12T12:00:00Z",
       updated_at: "2026-02-12T12:00:00Z"
@@ -141,6 +157,43 @@ describe("KbPage 二次确认交互", () => {
     await userEvent.click(screen.getByRole("button", { name: /确\s*认\s*删\s*除/ }));
     await waitFor(() => {
       expect(deleteKb).toHaveBeenCalledWith("kb-1");
+    });
+  });
+
+  it("编辑知识库应保留并提交受控联网配置", async () => {
+    renderWithProviders(<KbPage />);
+
+    const rowCell = await screen.findByText("教务知识库");
+    const row = rowCell.closest("tr");
+    if (!(row instanceof HTMLElement)) {
+      throw new Error("未找到知识库行");
+    }
+
+    await userEvent.click(within(row).getByRole("button", { name: "编辑知识库" }));
+    expect(await screen.findByText("受控联网检索")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchKbDetail).toHaveBeenCalledWith("kb-1");
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "保存变更" }));
+
+    await waitFor(() => {
+      expect(updateKb).toHaveBeenCalledWith("kb-1", {
+        description: null,
+        visibility: "internal",
+        config: {
+          topk: 5,
+          threshold: 0.25,
+          rerank_enabled: false,
+          max_context_tokens: 3000,
+          min_context_chars: 20,
+          min_keyword_coverage: 0.3,
+          web_enabled: true,
+          allowed_web_prefixes: ["https://jwc.suse.edu.cn/", "https://xsc.suse.edu.cn/"],
+          web_seed_urls: ["https://jwc.suse.edu.cn/jwgg/list.htm"],
+          web_search_topk: 4
+        }
+      });
     });
   });
 });

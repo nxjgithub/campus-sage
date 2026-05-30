@@ -77,6 +77,7 @@ def test_run_mysql_migrations_bootstraps_latest_schema() -> None:
     assert database.current_version == LATEST_SCHEMA_VERSION
     assert any("CREATE TABLE IF NOT EXISTS knowledge_base" in item for item in database.executed)
     assert any("CREATE TABLE IF NOT EXISTS chat_run" in item for item in database.executed)
+    assert any("gold_doc_name VARCHAR(255) NULL" in item for item in database.executed)
     assert any("ALTER TABLE `knowledge_base` COMMENT" in item for item in database.executed)
     assert any(
         "MODIFY COLUMN `kb_id` VARCHAR(128) NOT NULL COMMENT" in item
@@ -97,6 +98,17 @@ def test_run_mysql_migrations_upgrades_v4_comments() -> None:
         "MODIFY COLUMN `doc_name` VARCHAR(255) NOT NULL COMMENT" in item
         for item in database.executed
     )
+
+
+def test_run_mysql_migrations_upgrades_v6_eval_gold_doc_name() -> None:
+    """已初始化到 v6 的 MySQL 库应补齐评测标准文档名称。"""
+
+    database = FakeMigrationDatabase(current_version=6)
+
+    run_mysql_migrations(database)
+
+    assert database.current_version == LATEST_SCHEMA_VERSION
+    assert any("ALTER TABLE eval_item ADD COLUMN gold_doc_name VARCHAR(255) NULL" in item for item in database.executed)
 
 
 def test_run_mysql_migrations_rejects_partial_legacy_version() -> None:

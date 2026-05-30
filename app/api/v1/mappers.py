@@ -142,6 +142,7 @@ def _citation_from_dto(dto: CitationDTO) -> Citation:
         citation_id=dto.citation_id,
         doc_id=dto.doc_id,
         doc_name=dto.doc_name,
+        source_type=dto.source_type,
         doc_version=dto.doc_version,
         published_at=dto.published_at,
         source_uri=dto.source_uri,

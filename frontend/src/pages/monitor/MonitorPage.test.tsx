@@ -132,4 +132,26 @@ describe("MonitorPage 二次确认交互", () => {
       expect(cleanupStaleStartedJobs).toHaveBeenCalledTimes(1);
     });
   });
+
+  it("队列统计全为零时仍应展示健康看板", async () => {
+    vi.mocked(fetchQueueStats).mockResolvedValue({
+      stats: {
+        queued: 0,
+        started: 0,
+        deferred: 0,
+        finished: 0,
+        failed_registry: 0,
+        dead: 0,
+        scheduled: 0
+      },
+      alerts: [],
+      request_id: "req-monitor-empty"
+    });
+
+    renderWithProviders(<MonitorPage />);
+
+    expect(await screen.findByText("队列监控中心")).toBeInTheDocument();
+    expect(screen.getByText("暂无告警")).toBeInTheDocument();
+    expect(screen.queryByText("当前条件下暂无内容")).not.toBeInTheDocument();
+  });
 });

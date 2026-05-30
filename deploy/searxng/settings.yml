@@ -1,0 +1,52 @@
+# CampusSage 本地 SearxNG 配置。
+# 只用于受控联网检索候选 URL 搜索，最终抓取仍由后端按知识库授权前缀校验。
+use_default_settings:
+  engines:
+    keep_only:
+      - duckduckgo
+      - wikipedia
+
+server:
+  bind_address: "0.0.0.0"
+  port: 8080
+  secret_key: "campus-sage-local-searxng-production-key-change-me"
+  # 本地演示环境未配置 Valkey，开启 limiter 会在启动时产生配置错误。
+  limiter: false
+
+search:
+  # 后端使用 /search?format=json 获取候选结果，必须显式开启 json 格式。
+  formats:
+    - html
+    - json
+  # 启用结果缓存，减少重复请求
+  cache: true
+  # 最大请求超时时间（秒）
+  max_request_timeout: 10.0
+
+engines:
+  # DuckDuckGo 作为站点限定搜索主力；若上游触发 CAPTCHA，后端仍会回退入口页抓取。
+  - name: duckduckgo
+    engine: duckduckgo
+    disabled: false
+    weight: 3
+
+  # 保留维基百科作为低权重补充，避免启用已频繁 CAPTCHA 或限流的引擎。
+  - name: wikipedia
+    engine: wikipedia
+    disabled: false
+    weight: 1
+    language: zh
+
+outgoing:
+  # 增加请求超时时间，适应网络波动
+  request_timeout: 8.0
+  # 池大小：控制并发连接数
+  pool_connections: 10
+  pool_maxsize: 20
+  # 重试配置
+  retries: 2
+  retry_on_http_error: true
+
+# Redis 缓存配置（可选，提升性能）
+# redis:
+#   url: redis://redis:6379/2

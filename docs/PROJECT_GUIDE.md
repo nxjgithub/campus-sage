@@ -48,6 +48,8 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - 关系型数据库现已支持真实 MySQL，Docker Compose 默认以 MySQL 作为 API/Worker 的关系库存储。
 - 问答上下文已附证据编号，vLLM 提示词要求强制引用编号；缺引用时服务层自动补全。
 - 正常回答会收敛引用列表：答案只标注 `[1]` 时，响应 `citations` 也只返回 `[1]` 对应证据，不再把未被答案使用的 TopK 候选证据展示到前端证据面板。
+- 问答链路已支持受控联网增强：知识库配置允许的 URL 前缀内，服务端每轮问答都会在向量库检索之外同步规划联网检索关键词；配置 SearxNG 搜索提供方后可先搜索候选 URL，再过滤授权前缀并抓取原网页正文作为 `source_type=web` 的临时引用证据。
+- 管理端知识库创建页与编辑弹窗已支持可视化配置受控联网检索：可开关联网能力、设置授权 URL 前缀、入口页 URL 与网页证据数。
 - 文档入库页已支持粘贴文本入口：前端会把文本封装为 UTF-8 TXT 文件，继续走暂存上传、解析预览、分块确认和正式入库流程。
 - 拒答策略已强化，增加关键词覆盖率阈值、最小上下文长度约束与“语义无证据”生成后兜底判定。
 - 问答已补充基础多轮策略：支持意图分流、追问 query 补全、信息不足时先澄清再回答。
@@ -69,8 +71,10 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 - Ask 响应新增 `user_message_id` 与 `assistant_created_at`，便于前端稳定渲染。
 - 数据层新增 `chat_run`，message 新增 `parent_message_id`、`edited_from_message_id`、`sequence_no`。
 - 监控路由统一为 `/api/v1/monitor/*`，去除重复挂载路径。
+- 队列监控在统计全为 `0` 时仍展示健康看板、运行时诊断和刷新入口，避免把正常空队列误判为页面空态。
 - chunk 切片已升级为标题/段落/句子边界优先策略，通知类 PDF 会合并软换行、保留文档标题和页内小节路径；重排器也会优先识别通知类意图短语，降低固定字符硬切和宽泛主题词导致的召回噪声。
 - `app/eval/` 评测模块已落地，支持 Recall@K、MRR、延迟统计。
+- 管理端评测样本现强制绑定标准证据文档名称或文档 ID；跨知识库运行会在执行前拒绝，并在结果中心展示逐题命中、排名、耗时与候选摘要。
 - 队列监控已增强：Redis 不可用统一错误、失败告警阈值、死信裁剪。
 - `.env.example` 与核心文档已同步新配置。
 - 用户管理已落地：JWT 登录/刷新、RBAC 权限、知识库访问控制与管理员脚本。
@@ -109,8 +113,8 @@ CampusSage 是面向高校场景的证据驱动问答系统（RAG），核心目
 ## 5. 开发命令参考
 ### 5.1 后端
 - 安装依赖：`.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
-- 启动依赖：`docker compose up -d mysql qdrant redis minio`
-- 容器化启动后端 + Worker：`docker compose up -d api worker mysql qdrant redis minio`
+- 启动依赖：`docker compose up -d mysql qdrant redis minio searxng`
+- 容器化启动后端 + Worker：`docker compose up -d api worker mysql qdrant redis minio searxng`
 - 启动 API：`.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
 - 代码检查：`.\.venv\Scripts\python.exe -m ruff check .`
 - 单元测试：`.\.venv\Scripts\python.exe -m pytest -q`

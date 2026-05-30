@@ -33,6 +33,7 @@ export function EvalCreatePage() {
         description: values.description?.trim() || undefined,
         items: values.items.map((item) => ({
           question: item.question.trim(),
+          gold_doc_name: item.gold_doc_name.trim(),
           gold_page_start: item.gold_page_start,
           gold_page_end: item.gold_page_end,
           tags: parseTags(item.tags_text)
@@ -56,7 +57,7 @@ export function EvalCreatePage() {
 
   const watchedName = Form.useWatch("name", form) ?? "";
   const watchedDescription = Form.useWatch("description", form) ?? "";
-  const watchedItems = Form.useWatch("items", form) ?? [{ question: "", tags_text: "" }];
+  const watchedItems = Form.useWatch("items", form) ?? [{ question: "", gold_doc_name: "", tags_text: "" }];
 
   const sampleCount = watchedItems.length;
   const completedQuestionCount = watchedItems.filter((item) => item?.question?.trim()).length;
@@ -80,7 +81,7 @@ export function EvalCreatePage() {
               新建评测集
             </Typography.Title>
             <Typography.Paragraph className="split-overview__desc">
-              左侧录入样本，右侧实时汇总当前进度和录入建议，让长表单不再散，也不会显得空。
+              左侧录入问题与标准证据文档，右侧实时汇总当前进度和录入建议。
             </Typography.Paragraph>
             <div className="split-overview__notes">
               <span className="split-overview__note">先建样本，再运行评测</span>
@@ -131,7 +132,7 @@ export function EvalCreatePage() {
           <div className="split-create-layout split-create-layout--wide">
             <div className="split-create-main">
               <div className="split-pane-copy">
-                <Typography.Text className="split-pane-copy__title">每条样本至少填写问题</Typography.Text>
+                <Typography.Text className="split-pane-copy__title">每条样本填写问题与标准证据</Typography.Text>
                 <Typography.Text className="split-pane-copy__desc">
                   页码和标签作为辅助信息按需补充，创建完成后再回到评测中心选择知识库和运行参数。
                 </Typography.Text>
@@ -141,7 +142,7 @@ export function EvalCreatePage() {
                 form={form}
                 layout="vertical"
                 initialValues={{
-                  items: [{ question: "", tags_text: "" }]
+                  items: [{ question: "", gold_doc_name: "", tags_text: "" }]
                 }}
                 onFinish={(values) => {
                   createSetMutation.mutate(values);
@@ -190,6 +191,13 @@ export function EvalCreatePage() {
                           >
                             <Input.TextArea rows={3} placeholder="输入用于评测的问题" />
                           </Form.Item>
+                          <Form.Item
+                            name={[field.name, "gold_doc_name"]}
+                            label="标准证据文档名称"
+                            rules={[{ required: true, message: "请输入标准证据文档名称" }]}
+                          >
+                            <Input placeholder="填写知识库中的完整文档名称，例如：本科生考试管理规定.pdf" />
+                          </Form.Item>
                           <div className="ops-kpi-grid">
                             <Form.Item name={[field.name, "gold_page_start"]} label="起始页">
                               <InputNumber min={1} style={{ width: "100%" }} />
@@ -208,7 +216,7 @@ export function EvalCreatePage() {
                         <Button
                           icon={<PlusOutlined />}
                           onClick={() => {
-                            add({ question: "", tags_text: "" });
+                            add({ question: "", gold_doc_name: "", tags_text: "" });
                           }}
                         >
                           新增样本
@@ -268,7 +276,7 @@ export function EvalCreatePage() {
                 <Typography.Text className="split-side-card__title">录入建议</Typography.Text>
                 <div className="split-side-list">
                   <div className="split-side-list__item">优先覆盖高频问题、拒答场景和容易混淆的问题。</div>
-                  <div className="split-side-list__item">如果已知证据页码，尽量补充起止页，方便后续核验。</div>
+                  <div className="split-side-list__item">标准文档名称必须与知识库中的文档名称一致，页码可按需补充。</div>
                   <div className="split-side-list__item">创建后直接回到评测中心运行，验证不同知识库和阈值策略。</div>
                 </div>
               </section>

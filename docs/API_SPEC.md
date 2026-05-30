@@ -3,13 +3,13 @@
 本文档定义 CampusSage（CSage）后端 API 规范（FastAPI）。目标：接口形状稳定、错误格式统一、支持 RAG 证据链与可观测性。
 
 通用约定：
-`API 前缀`：`/api/v1`  
-`响应格式`：JSON  
-`编码`：UTF-8  
+`API 前缀`：`/api/v1`
+`响应格式`：JSON
+`编码`：UTF-8
 `request_id`：建议每个响应返回 `request_id`，并在 Header 返回 `X-Request-ID`
 
 认证约定：
-- 除 `/auth/*` 接口外，默认需要 `Authorization: Bearer <access_token>`  
+- 除 `/auth/*` 接口外，默认需要 `Authorization: Bearer <access_token>`
 - 若知识库 `visibility=public`，问答接口与知识库列表可匿名访问；匿名列表只返回 public 知识库
 - 角色与知识库可见性矩阵：游客只能读/问 `public`；`user` 可读/问 `public/internal`；`manager` 可读/问/维护 `public/internal`，但不能访问 `admin` 知识库；`admin` 可访问和维护全部知识库
 - `kb_access` 只作为 public/internal 知识库的细粒度授权补充，不允许让非 admin 角色绕过 `visibility=admin`
@@ -33,58 +33,59 @@
 }
 ```
 字段说明：
-`code`：错误码（枚举化，参见 `docs/CONVENTIONS.md`）  
-`message`：中文错误信息  
+`code`：错误码（枚举化，参见 `docs/CONVENTIONS.md`）
+`message`：中文错误信息
 `detail`：可选，结构化上下文信息
 
 
 ## 1. 数据模型（概览）
 ### 1.1 KnowledgeBase
-`kb_id: str`  
-`name: str`  
-`description: str | null`  
-`visibility: str`（"public" | "internal" | "admin"）  
-`config: object`（RAG 参数，如 topk/threshold/rerank_enabled/max_context_tokens）  
-`created_at: str`  
+`kb_id: str`
+`name: str`
+`description: str | null`
+`visibility: str`（"public" | "internal" | "admin"）
+`config: object`（RAG 参数，如 topk/threshold/rerank_enabled/max_context_tokens；可选受控联网检索配置 web_enabled/allowed_web_prefixes/web_seed_urls/web_search_topk）
+`created_at: str`
 `updated_at: str`
 
 ### 1.2 Document
-`doc_id: str`  
-`kb_id: str`  
-`doc_name: str`  
-`doc_version: str | null`  
-`published_at: str | null`  
-`status: str`（"pending" | "processing" | "indexed" | "failed" | "deleted"）  
-`error_message: str | null`  
-`chunk_count: int`  
-`created_at: str`  
+`doc_id: str`
+`kb_id: str`
+`doc_name: str`
+`doc_version: str | null`
+`published_at: str | null`
+`status: str`（"pending" | "processing" | "indexed" | "failed" | "deleted"）
+`error_message: str | null`
+`chunk_count: int`
+`created_at: str`
 `updated_at: str`
 
 ### 1.3 IngestJob
-`job_id: str`  
-`kb_id: str`  
-`doc_id: str`  
-`status: str`（"queued" | "running" | "succeeded" | "failed" | "canceled"）  
-`progress: object | null`（可选：stage/pages_parsed/chunks_built/embeddings_done/vectors_upserted/stage_ms/parse_ms/chunk_ms/embed_ms/upsert_ms）  
-`error_message: str | null`  
-`error_code: str | null`  
-`started_at: str | null`  
-`finished_at: str | null`  
-`created_at: str`  
+`job_id: str`
+`kb_id: str`
+`doc_id: str`
+`status: str`（"queued" | "running" | "succeeded" | "failed" | "canceled"）
+`progress: object | null`（可选：stage/pages_parsed/chunks_built/embeddings_done/vectors_upserted/stage_ms/parse_ms/chunk_ms/embed_ms/upsert_ms）
+`error_message: str | null`
+`error_code: str | null`
+`started_at: str | null`
+`finished_at: str | null`
+`created_at: str`
 `updated_at: str`
 
 ### 1.4 Citation（与 `docs/RAG_CONTRACT.md` 对齐）
-`citation_id: int`  
-`doc_id: str`  
-`doc_name: str`  
-`doc_version: str | null`  
-`published_at: str | null`  
-`source_uri: str | null`  
-`page_start: int | null`  
-`page_end: int | null`  
-`section_path: str | null`  
-`chunk_id: str`  
-`snippet: str`  
+`citation_id: int`
+`doc_id: str`
+`doc_name: str`
+`source_type: str | null`（"pdf" | "docx" | "html" | "text" | "web"）
+`doc_version: str | null`
+`published_at: str | null`
+`source_uri: str | null`
+`page_start: int | null`
+`page_end: int | null`
+`section_path: str | null`
+`chunk_id: str`
+`snippet: str`
 `score: float | null`
 `asset_id/asset_type/asset_label/asset_url: str | null`（兼容单图字段）
 `assets: List[{asset_id, asset_label, asset_url, media_type, file_name}]`（推荐，多图字段）
@@ -92,47 +93,47 @@
 > 说明：`score` 用于调试与可解释性，默认可为 null；当请求 `debug=true` 时建议返回真实分数。
 
 ### 1.5 AskResponse
-`answer: str`  
-`refusal: bool`  
-`refusal_reason: str | null`  
-`suggestions: List[str]`  
-`next_steps: List[{action, label, detail, value}]`  
+`answer: str`
+`refusal: bool`
+`refusal_reason: str | null`
+`suggestions: List[str]`
+`next_steps: List[{action, label, detail, value}]`
 其中 `action` 当前允许值：`search_keyword | rewrite_question | add_context | check_official_source | verify_kb_scope`
-`citations: List[Citation]`  
-`conversation_id: str | null`  
-`message_id: str | null`  
-`user_message_id: str | null`  
-`assistant_created_at: str | null`  
-`timing: object | null`（retrieve_ms/rerank_ms/context_ms/generate_ms/total_ms）  
+`citations: List[Citation]`
+`conversation_id: str | null`
+`message_id: str | null`
+`user_message_id: str | null`
+`assistant_created_at: str | null`
+`timing: object | null`（retrieve_ms/rerank_ms/context_ms/generate_ms/total_ms）
 `request_id: str | null`
 
 ### 1.6 User
-`user_id: str`  
-`email: str`  
-`status: str`（"active" | "disabled" | "deleted"）  
-`roles: List[str]`  
-`created_at: str`  
-`updated_at: str`  
+`user_id: str`
+`email: str`
+`status: str`（"active" | "disabled" | "deleted"）
+`roles: List[str]`
+`created_at: str`
+`updated_at: str`
 `last_login_at: str | null`
 
 ### 1.7 TokenResponse
-`access_token: str`  
-`refresh_token: str`  
-`token_type: str`（"bearer"）  
-`expires_in: int`  
+`access_token: str`
+`refresh_token: str`
+`token_type: str`（"bearer"）
+`expires_in: int`
 `request_id: str | null`
 
 ### 1.8 ChatRun
-`run_id: str`  
-`kb_id: str | null`  
-`user_id: str | null`  
-`conversation_id: str | null`  
-`user_message_id: str | null`  
-`assistant_message_id: str | null`  
-`status: str`（"running" | "succeeded" | "failed" | "canceled"）  
-`cancel_flag: bool`  
-`started_at: str`  
-`finished_at: str | null`  
+`run_id: str`
+`kb_id: str | null`
+`user_id: str | null`
+`conversation_id: str | null`
+`user_message_id: str | null`
+`assistant_message_id: str | null`
+`status: str`（"running" | "succeeded" | "failed" | "canceled"）
+`cancel_flag: bool`
+`started_at: str`
+`finished_at: str | null`
 `request_id: str | null`
 
 
@@ -153,7 +154,11 @@
     "max_context_tokens": 3000,
     "min_evidence_chunks": 1,
     "min_context_chars": 20,
-    "min_keyword_coverage": 0.3
+    "min_keyword_coverage": 0.3,
+    "web_enabled": false,
+    "allowed_web_prefixes": [],
+    "web_seed_urls": [],
+    "web_search_topk": 3
   }
 }
 ```
@@ -220,6 +225,10 @@
   - `min_evidence_chunks`：`>=1` 且不能大于 `topk`
   - `min_context_chars`：`>=1`
   - `min_keyword_coverage`：`0~1`
+  - `web_enabled`：是否允许该知识库触发受控联网检索
+  - `allowed_web_prefixes`：允许访问的 http/https URL 前缀列表；后端按 URL 源和路径边界匹配，不得配置 localhost、内网 IP、file 协议或未授权站点
+  - `web_seed_urls`：可选入口页，必须落在 `allowed_web_prefixes` 内
+  - `web_search_topk`：`1~10`
 - 参数不合法时返回 `400 + VALIDATION_FAILED`。
 
 ### 2.5 删除知识库
@@ -235,10 +244,10 @@
 
 Content-Type：`multipart/form-data`
 
-表单字段：  
-`file`：上传文件（建议先支持 PDF）  
-`doc_name`：可选，不传则使用文件名  
-`doc_version`：可选  
+表单字段：
+`file`：上传文件（建议先支持 PDF）
+`doc_name`：可选，不传则使用文件名
+`doc_version`：可选
 `published_at`：可选，格式 `YYYY-MM-DD`
 `source_uri`：可选，要求为 `http/https` 官方来源链接；不得填写演示页、占位页、本地路径或不可公开访问地址
 
@@ -431,6 +440,7 @@ Content-Type：`multipart/form-data`
       "citation_id": 1,
       "doc_id": "doc_123",
       "doc_name": "教务管理规定.pdf",
+      "source_type": "pdf",
       "doc_version": "2025-09",
       "published_at": "2025-09-01",
       "source_uri": "https://example.edu/academic/policy",
@@ -481,7 +491,7 @@ Content-Type：`multipart/form-data`
   "request_id": "req_xxx"
 }
 ```
-说明：`debug=true` 时返回 `citations.score`，否则可为 `null`。  
+说明：`debug=true` 时返回 `citations.score`，否则可为 `null`。
 约束：`citations` 与 `refusal` 规则必须符合 `docs/RAG_CONTRACT.md`。
 - 运行时参数约束：
   - `topk`（可选）：`1~50`
@@ -494,11 +504,12 @@ Content-Type：`multipart/form-data`
 - 身份认知：对“你是谁/你能做什么/你的职责是什么”等系统身份问题，服务端可在检索前返回固定身份说明；该响应不是知识库事实回答，允许 `refusal=false`、`citations=[]` 且 `timing.retrieve_ms=0`。
 - 提问推荐：对“我可以问哪些问题/当前知识库能问什么”等请求，服务端会基于当前知识库分块样本调用生成模型生成若干可直接提问的问题；响应允许 `refusal=false`、`citations=[]`，并在 `answer/suggestions` 中返回推荐问题。拒答响应也可在 `suggestions` 和 `next_steps` 中追加这类推荐问题。
 - 引用收敛：若答案正文只标注了部分引用编号，响应 `citations[]` 只返回这些编号对应的证据，避免前端证据面板展示未被答案实际使用的候选 chunk。
+- 受控联网检索：当知识库配置 `web_enabled=true` 且存在 `allowed_web_prefixes`，服务端每轮问答都会在向量库检索之外同步执行一次受控联网检索；若配置了搜索提供方（如 SearxNG），先执行站点限定搜索并过滤授权 URL，再抓取原网页正文；未配置搜索提供方或搜索失败时回退到入口页抓取。网页正文会作为 `source_type=web` 的临时证据进入上下文和 citation，找不到足够网页证据时仍按拒答处理。
 - 时效策略：当问题包含“最新/当前/今年”等时效诉求时，服务端会检查 `citations.published_at`，必要时在 `answer` 中追加“请核验最新公告”的提示，并通过 `next_steps` 引导到官方来源。
 
 ### 4.2 发起问答（流式 SSE）
-`POST /api/v1/kb/{kb_id}/ask/stream`  
-`Content-Type: application/json`  
+`POST /api/v1/kb/{kb_id}/ask/stream`
+`Content-Type: application/json`
 `Accept: text/event-stream`
 
 请求体与 `POST /api/v1/kb/{kb_id}/ask` 一致。
@@ -506,6 +517,7 @@ Content-Type：`multipart/form-data`
 SSE 事件约定（每个事件都必须带 `request_id`）：
 - `start`：流式启动
 - `ping`：心跳事件（保活）
+- `status`：问答执行状态（如分析意图、检索向量库、搜索授权网站、调用 LLM）
 - `token`：增量文本片段（`delta`）
 - `citation`：单条引用对象
 - `refusal`：拒答结果（包含 `answer/refusal_reason/suggestions/next_steps`）
@@ -520,6 +532,9 @@ data: {"run_id":"run_123","conversation_id":"conv_001","request_id":"req_xxx"}
 event: token
 data: {"run_id":"run_123","delta":"根据教务管理规定","request_id":"req_xxx"}
 
+event: status
+data: {"run_id":"run_123","phase":"web_search","label":"已抓取授权网页证据","detail":"来源：https://jsj.suse.edu.cn/xydt/list.htm。","request_id":"req_xxx"}
+
 event: ping
 data: {"run_id":"run_123","request_id":"req_xxx"}
 
@@ -531,8 +546,10 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 ```
 说明：
 - 服务端会周期性发送 `ping` 事件，降低中间层静默断连风险。
+- `status` 事件用于前端过程可视化，不作为最终答案证据；是否真的使用网页证据仍以最终 `citations[].source_type=web` 和 `source_uri` 为准。
 - 当 `VLLM_ENABLED=true` 时，`token` 事件来自 vLLM OpenAI 兼容接口的真实增量输出；当本地未启用 vLLM 时，服务端仍会把兜底答案切片输出，便于无模型环境演示接口状态机。
 - 服务端会在流式结束前校验引用编号；若模型遗漏 `[1][2]`，会补发一段引用编号增量，并以补齐后的最终文本持久化助手消息。
+- 服务端会先完成生成后拒答判定，再补发引用编号增量；若模型使用“没有任何一条提到”“无法基于现有证据解释”等软拒答表达，最终必须发送 `refusal` 事件，前端覆盖临时文本并清空临时引用。
 - 取消生成或检测到断连后，服务端会设置 run 取消标记，并尽量关闭正在读取的上游 vLLM 流，避免继续消耗模型资源。
 - 连接断开后，服务端会标记对应 run 取消（`status=canceled`）。
 
@@ -953,10 +970,14 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 {
   "name": "教务评测集_v1",
   "items": [
-    {"question": "缓考申请流程是什么？", "gold_doc_id": "doc_123", "gold_page_start": 5, "gold_page_end": 6}
+    {"question": "缓考申请流程是什么？", "gold_doc_name": "本科生考试管理规定.pdf", "gold_page_start": 5, "gold_page_end": 6}
   ]
 }
 ```
+
+说明：
+- 每条样本必须提供 `gold_doc_name` 或 `gold_doc_id`，否则无法计算 Recall@K 与 MRR。
+- 管理端优先使用业务可读的 `gold_doc_name`，名称需与目标知识库中已完成入库的文档名称一致。
 
 ### 7.2 列出评测集
 `GET /api/v1/eval/sets`
@@ -989,6 +1010,7 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 - `topk`：`1~50`
 - `threshold`（可选）：`0~1`
 - 参数不合法时返回 `400 + VALIDATION_FAILED`。
+- 评测样本的标准文档不属于目标知识库、尚未完成入库或名称无法匹配时，返回 `400 + VALIDATION_FAILED`，不生成误导性的零分运行记录。
 
 ### 7.4 列出评测运行
 `GET /api/v1/eval/runs?limit=50&offset=0`
@@ -1047,6 +1069,14 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
   "request_id": "req_xxx"
 }
 ```
+
+### 7.6 获取逐题评测结果
+`GET /api/v1/eval/runs/{run_id}/results`
+
+说明：
+- 返回每条样本的问题、标准文档、是否命中、排名、耗时与候选摘要。
+- 新运行会保存阈值过滤前后排名与候选数量，便于排查零分、阈值误杀和跨库配置问题。
+- 历史运行可能没有候选摘要，但仍会返回已持久化的命中、排名与耗时。
 
 
 ## 8. 监控（Queue Monitor，可选）
@@ -1152,13 +1182,13 @@ data: {"run_id":"run_123","status":"succeeded","conversation_id":"conv_001","use
 
 
 ## 9. 状态码建议映射
-`400`：入参校验失败（VALIDATION_*）  
-`401/403`：鉴权/权限错误（AUTH_*）  
-`404`：资源不存在（KB/DOC/CONV not found）  
-`409`：冲突（重复创建/版本冲突等）  
-`429`：限流  
-`500`：服务内部错误（UNEXPECTED_ERROR）  
-`502/503`：外部依赖不可用（Qdrant/vLLM）  
+`400`：入参校验失败（VALIDATION_*）
+`401/403`：鉴权/权限错误（AUTH_*）
+`404`：资源不存在（KB/DOC/CONV not found）
+`409`：冲突（重复创建/版本冲突等）
+`429`：限流
+`500`：服务内部错误（UNEXPECTED_ERROR）
+`502/503`：外部依赖不可用（Qdrant/vLLM）
 
 注意：RAG “拒答”不应使用 4xx/5xx，而应返回 `200 + refusal=true`（业务可预期结果）。
 

@@ -31,10 +31,16 @@ from app.rag.retrieval_policy import resolve_search_topk
 from app.rag.reranker import get_reranker
 from app.rag.source_uri import is_official_source_uri
 from app.rag.vector_store import VectorHit, VectorStore, get_vector_store
+from app.rag.web_search import WebEvidenceRetriever, build_web_search_config
 
 _NO_EVIDENCE_ANSWER_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(没有|未|无)(直接|明确)?(证据|依据|信息|内容)(表明|说明|提及)?"),
     re.compile(r"(无法|不能|难以)(从|根据).{0,8}(证据|材料|内容).{0,8}(确认|判断|回答)"),
+    re.compile(r"(没有|未找到|缺少).{0,24}(提到|提及|说明|包含|涉及)"),
+    re.compile(
+        r"(无法|不能|难以)(基于|依据|根据|从).{0,12}(现有|当前)?"
+        r"(证据|材料|内容|信息).{0,16}(解释|确认|判断|回答)"
+    ),
     re.compile(r"(证据|信息).{0,8}(不足|有限).{0,8}(无法|不能|难以)"),
     re.compile(r"(无法|不能|难以)(回答|确认|判断)"),
     re.compile(r"(没有|未).{0,20}(关于).{0,20}(信息|说明|内容)"),
@@ -82,6 +88,15 @@ class _GenerationInputs:
     slots: dict[str, str]
 
 
+@dataclass(slots=True)
+class _WebRetrievalResult:
+    """联网检索结果和诊断信息。"""
+
+    query: str | None
+    provider: str | None
+    hits: list[VectorHit]
+
+
 class RagService:
     """问答服务。"""
 
@@ -93,6 +108,7 @@ class RagService:
         self._context_builder = ContextBuilder(settings.rag_max_context_tokens)
         self._llm_client = VllmClient(settings)
         self._reranker = get_reranker(settings)
+        self._web_retriever = WebEvidenceRetriever(settings)
         self._logger = get_logger()
         database = get_database(settings)
         repository = ConversationRepository(database)
@@ -281,6 +297,13 @@ class RagService:
                 "request_id": request_id,
             },
         }
+        yield self._status_event(
+            run_id=run_id,
+            request_id=request_id,
+            phase="intent",
+            label="分析问题意图",
+            detail=f"识别为 {intent_decision.intent}，准备进入证据检索。",
+        )
         if cancel_checker():
             yield self._canceled_event(run_id, request_id)
             yield self._done_event(run_id, request_id, status="canceled")
@@ -300,6 +323,22 @@ class RagService:
                 user_message_id=user_message.message_id,
             )
             return
+        web_config = build_web_search_config(kb.config or {}, self._settings)
+        yield self._status_event(
+            run_id=run_id,
+            request_id=request_id,
+            phase="vector_retrieval",
+            label="检索向量库",
+            detail=f"知识库：{getattr(kb, 'name', kb_id)}。",
+        )
+        if web_config.enabled and web_config.allowed_prefixes:
+            yield self._status_event(
+                run_id=run_id,
+                request_id=request_id,
+                phase="web_scope",
+                label="准备搜索授权网站",
+                detail=f"授权范围：{_format_status_targets(web_config.allowed_prefixes)}。",
+            )
         prepared = self._prepare_generation_inputs(
             kb=kb,
             question=intent_decision.retrieval_query,
@@ -312,10 +351,23 @@ class RagService:
             dialog_state=dialog_state,
             intent_decision=intent_decision,
         )
+        yield self._retrieval_status_event(
+            run_id=run_id,
+            request_id=request_id,
+            result=prepared,
+            web_enabled=web_config.enabled and bool(web_config.allowed_prefixes),
+        )
         streamed_answer = False
         if isinstance(prepared, _ComputationResult):
             computed = prepared
         else:
+            yield self._status_event(
+                run_id=run_id,
+                request_id=request_id,
+                phase="llm_generation",
+                label="调用 LLM 生成回答",
+                detail="已完成证据筛选，正在基于引用上下文生成。",
+            )
             generate_start = time.perf_counter()
             self._ensure_llm_enabled()
             streamed_answer = True
@@ -360,37 +412,46 @@ class RagService:
                     user_message_id=user_message.message_id,
                 )
                 return
-            if citation_delta:
-                yield {
-                    "event": "token",
-                    "data": {
-                        "run_id": run_id,
-                        "delta": citation_delta,
-                        "request_id": request_id,
-                    },
-                }
             generate_ms = int((time.perf_counter() - generate_start) * 1000)
             computed = self._build_generated_result(
                 prepared=prepared,
                 answer=answer,
                 generate_ms=generate_ms,
             )
-            if streamed_answer and not computed.refusal and computed.answer != answer:
-                policy_delta = (
-                    computed.answer[len(answer) :]
-                    if computed.answer.startswith(answer)
-                    else computed.answer
-                )
-                if policy_delta:
+            if streamed_answer and not computed.refusal:
+                # 引用补全必须等待生成后拒答判定，避免软拒答短暂展示引用标记。
+                if citation_delta:
                     yield {
                         "event": "token",
                         "data": {
                             "run_id": run_id,
-                            "delta": policy_delta,
+                            "delta": citation_delta,
                             "request_id": request_id,
                         },
                     }
+                if computed.answer != answer:
+                    policy_delta = (
+                        computed.answer[len(answer) :]
+                        if computed.answer.startswith(answer)
+                        else computed.answer
+                    )
+                    if policy_delta:
+                        yield {
+                            "event": "token",
+                            "data": {
+                                "run_id": run_id,
+                                "delta": policy_delta,
+                                "request_id": request_id,
+                            },
+                        }
         if computed.refusal:
+            yield self._status_event(
+                run_id=run_id,
+                request_id=request_id,
+                phase="refusal",
+                label="证据不足，生成拒答建议",
+                detail=f"拒答原因：{computed.refusal_reason or 'UNKNOWN'}。",
+            )
             assistant_message = self._save_assistant_message(
                 conversation_id=conversation.conversation_id,
                 computed=computed,
@@ -442,6 +503,13 @@ class RagService:
             )
             return
         if not streamed_answer:
+            yield self._status_event(
+                run_id=run_id,
+                request_id=request_id,
+                phase="llm_generation",
+                label="输出问答结果",
+                detail="正在推送最终回答内容。",
+            )
             for chunk in self._stream_text_chunks(computed.answer):
                 if cancel_checker():
                     yield self._canceled_event(run_id, request_id, user_message.message_id)
@@ -503,6 +571,64 @@ class RagService:
             assistant_created_at=assistant_message.created_at,
             refusal=False,
             timing=computed.timing,
+        )
+
+    def _status_event(
+        self,
+        run_id: str,
+        request_id: str | None,
+        phase: str,
+        label: str,
+        detail: str | None = None,
+    ) -> dict[str, object]:
+        """构造前端可展示的问答执行状态事件。"""
+
+        return {
+            "event": "status",
+            "data": {
+                "run_id": run_id,
+                "phase": phase,
+                "label": label,
+                "detail": detail,
+                "request_id": request_id,
+            },
+        }
+
+    def _retrieval_status_event(
+        self,
+        run_id: str,
+        request_id: str | None,
+        result: _GenerationInputs | _ComputationResult,
+        web_enabled: bool,
+    ) -> dict[str, object]:
+        """根据检索结果构造联网命中状态。"""
+
+        web_uris = _extract_web_source_uris(result.hits_for_log)
+        web_query = result.slots.get("web_query")
+        web_provider = result.slots.get("web_provider")
+        diagnostic = _format_web_diagnostic(web_query, web_provider)
+        if web_uris:
+            return self._status_event(
+                run_id=run_id,
+                request_id=request_id,
+                phase="web_search",
+                label="已抓取授权网页证据",
+                detail=f"{diagnostic}来源：{_format_status_targets(web_uris)}。",
+            )
+        if web_enabled:
+            return self._status_event(
+                run_id=run_id,
+                request_id=request_id,
+                phase="web_search",
+                label="未命中授权网页证据",
+                detail=f"{diagnostic}本轮未抓取到可用于回答的授权网页，继续使用知识库证据或执行拒答策略。",
+            )
+        return self._status_event(
+            run_id=run_id,
+            request_id=request_id,
+            phase="context",
+            label="完成证据筛选",
+            detail=f"候选证据 {len(result.hits_for_log)} 条。",
         )
 
     def _compute_answer(
@@ -697,6 +823,8 @@ class RagService:
             min_value=0,
             max_value=1,
         )
+        diagnostic_slots = dict(intent_decision.slots)
+        diagnostic_slots.setdefault("dialog_turn", str(dialog_state.turn_count))
 
         total_start = time.perf_counter()
         if intent_decision.direct_answer is not None:
@@ -779,6 +907,25 @@ class RagService:
             min_chunks,
             min_coverage,
         )
+        web_result = self._retrieve_web_evidence_if_needed(
+            kb=kb,
+            question=normalized_question,
+            local_hits=hits,
+            local_refusal_reason=refusal_reason,
+        )
+        if web_result.query:
+            diagnostic_slots["web_query"] = web_result.query
+        if web_result.provider:
+            diagnostic_slots["web_provider"] = web_result.provider
+        if web_result.hits:
+            hits = self._merge_web_hits(web_result.hits, hits, resolved_topk)
+            refusal_reason = self._get_refusal_reason(
+                normalized_question,
+                hits,
+                resolved_threshold,
+                min_chunks,
+                min_coverage,
+            )
         if refusal_reason is not None:
             suggestions, next_steps = self._build_refusal_guidance(
                 kb_id=str(kb.kb_id),
@@ -807,7 +954,7 @@ class RagService:
                 rerank_enabled=resolved_rerank_enabled,
                 hits_for_log=hits,
                 intent=intent_decision.intent,
-                slots=intent_decision.slots,
+                slots=diagnostic_slots,
             )
 
         context_start = time.perf_counter()
@@ -841,12 +988,10 @@ class RagService:
                 rerank_enabled=resolved_rerank_enabled,
                 hits_for_log=context_result.hits,
                 intent=intent_decision.intent,
-                slots=intent_decision.slots,
+                slots=diagnostic_slots,
             )
 
         citations = self._build_citations(context_result.hits, debug)
-        slots = dict(intent_decision.slots)
-        slots.setdefault("dialog_turn", str(dialog_state.turn_count))
         return _GenerationInputs(
             kb_id=str(kb.kb_id),
             kb_name=str(getattr(kb, "name", kb.kb_id)),
@@ -862,7 +1007,7 @@ class RagService:
             rerank_enabled=resolved_rerank_enabled,
             hits_for_log=context_result.hits,
             intent=intent_decision.intent,
-            slots=slots,
+            slots=diagnostic_slots,
         )
 
     def _build_generated_result(
@@ -1132,6 +1277,106 @@ class RagService:
             },
         }
 
+    def _retrieve_web_evidence_if_needed(
+        self,
+        kb,
+        question: str,
+        local_hits: list[VectorHit],
+        local_refusal_reason: str | None,
+    ) -> _WebRetrievalResult:
+        """在知识库授权范围内检索网页证据。"""
+
+        del local_hits
+        config = build_web_search_config(kb.config or {}, self._settings)
+        if not config.enabled or not config.allowed_prefixes:
+            return _WebRetrievalResult(query=None, provider=None, hits=[])
+        query = self._plan_web_search_query(
+            kb_name=str(getattr(kb, "name", kb.kb_id)),
+            question=question,
+            allowed_prefixes=config.allowed_prefixes,
+            local_refusal_reason=local_refusal_reason,
+        )
+        if not query:
+            return _WebRetrievalResult(query=None, provider=config.search_provider, hits=[])
+        try:
+            hits = self._web_retriever.retrieve(
+                kb_id=str(kb.kb_id),
+                kb_name=str(getattr(kb, "name", kb.kb_id)),
+                question=question,
+                query=query,
+                config=config,
+            )
+            return _WebRetrievalResult(
+                query=query,
+                provider=config.search_provider,
+                hits=hits,
+            )
+        except Exception:
+            return _WebRetrievalResult(query=query, provider=config.search_provider, hits=[])
+
+    def _plan_web_search_query(
+        self,
+        kb_name: str,
+        question: str,
+        allowed_prefixes: list[str],
+        local_refusal_reason: str | None,
+    ) -> str | None:
+        """调用模型规划联网检索查询，失败时使用保守规则兜底。"""
+
+        planner = getattr(self._llm_client, "plan_web_search", None)
+        if self._settings.vllm_enabled and callable(planner):
+            try:
+                query = planner(
+                    kb_name=kb_name,
+                    question=question,
+                    allowed_prefixes=allowed_prefixes,
+                    local_refusal_reason=local_refusal_reason,
+                )
+                if query:
+                    return query
+            except Exception:
+                pass
+        return _fallback_web_search_query(question)
+
+    def _question_needs_web(self, question: str) -> bool:
+        """识别明显需要联网核验的问题。"""
+
+        return any(
+            keyword in question
+            for keyword in (
+                "最新",
+                "当前",
+                "今天",
+                "今年",
+                "官网",
+                "网页",
+                "网址",
+                "查询",
+                "查一下",
+            )
+        )
+
+    def _merge_web_hits(
+        self,
+        web_hits: list[VectorHit],
+        local_hits: list[VectorHit],
+        topk: int,
+    ) -> list[VectorHit]:
+        """合并网页证据和本地证据，网页证据优先用于时效核验。"""
+
+        merged: list[VectorHit] = []
+        seen: set[str] = set()
+        for hit in [*web_hits, *local_hits]:
+            key = str(hit.payload.get("chunk_id") or hit.payload.get("source_uri") or "")
+            if key in seen:
+                continue
+            if key:
+                seen.add(key)
+            merged.append(hit)
+            if len(merged) >= topk:
+                break
+        return merged
+
     def _get_refusal_reason(
         self,
         question: str,
@@ -1165,6 +1410,7 @@ class RagService:
                     citation_id=index,
                     doc_id=payload.get("doc_id"),
                     doc_name=payload.get("doc_name"),
+                    source_type=payload.get("source_type"),
                     doc_version=payload.get("doc_version"),
                     published_at=payload.get("published_at"),
                     source_uri=payload.get("source_uri"),
@@ -1685,3 +1931,70 @@ class RagService:
                 "slot_keys": ",".join(sorted(slots.keys())),
             },
         )
+
+
+def _extract_web_source_uris(hits: list[VectorHit]) -> list[str]:
+    """从命中证据中提取网页来源地址。"""
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for hit in hits:
+        if hit.payload.get("source_type") != "web":
+            continue
+        source_uri = str(hit.payload.get("source_uri") or "").strip()
+        if not source_uri or source_uri in seen:
+            continue
+        seen.add(source_uri)
+        result.append(source_uri)
+    return result
+
+
+def _format_status_targets(targets: list[str]) -> str:
+    """压缩展示状态中的 URL 列表，避免撑开前端气泡。"""
+
+    visible = targets[:3]
+    suffix = f" 等 {len(targets)} 项" if len(targets) > len(visible) else ""
+    return "、".join(visible) + suffix
+
+
+def _format_web_diagnostic(query: str | None, provider: str | None) -> str:
+    """格式化联网检索诊断前缀。"""
+
+    parts: list[str] = []
+    if query:
+        parts.append(f"query：{query}")
+    if provider:
+        parts.append(f"提供方：{provider}")
+    if not parts:
+        return ""
+    return "；".join(parts) + "；"
+
+
+def _fallback_web_search_query(question: str) -> str:
+    """在模型规划不可用时生成保守搜索词。"""
+
+    cleaned = question.strip()
+    replacements = (
+        "请帮我",
+        "帮我",
+        "请查一下",
+        "查一下",
+        "查询",
+        "搜索",
+        "请问",
+        "官网",
+        "网页",
+        "有哪些",
+        "是什么",
+        "？",
+        "?",
+        "，",
+        ",",
+        "。",
+    )
+    for item in replacements:
+        cleaned = cleaned.replace(item, " ")
+    tokens = [token for token in cleaned.split() if token]
+    if tokens:
+        return " ".join(tokens)[:120]
+    return question.strip()[:120]

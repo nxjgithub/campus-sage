@@ -36,6 +36,10 @@
     - `max_context_tokens`
     - `min_context_chars`
     - `min_keyword_coverage`
+    - `web_enabled`
+    - `allowed_web_prefixes`
+    - `web_seed_urls`
+    - `web_search_topk`
   - `config` 取值约束：
     - `topk`: `1~50`
     - `threshold`: `0~1`
@@ -43,6 +47,8 @@
     - `min_evidence_chunks`: `>=1` 且不能大于 `topk`
     - `min_context_chars`: `>=1`
     - `min_keyword_coverage`: `0~1`
+    - `web_search_topk`: `1~10`
+  - 受控联网检索配置说明：`web_enabled=true` 时，后端只会访问 `allowed_web_prefixes` 授权范围内的 http/https 页面；`web_seed_urls` 必须落在授权前缀内。管理端创建页和编辑弹窗均提供可视化配置控件，URL 前缀与入口页按“一行一个 URL”录入并序列化为数组。
   - 成功：返回 `KnowledgeBaseResponse`
 - `GET /kb`
   - 用途：获取知识库列表
@@ -130,6 +136,7 @@
     - 用户询问“我可以问哪些问题”时，后端可返回 `refusal=false + citations=[]` 的提问推荐结果，前端按普通助手回答展示，并可将 `suggestions[]` 作为可点击/可复制的推荐问题
     - 拒答结果中的 `suggestions[]` 可能包含“可尝试提问：...”的问题推荐，来源于当前知识库样本和模型生成，前端不得当作错误详情隐藏
     - 后端会将 `citations[]` 收敛到答案正文实际标注的引用编号；证据面板只展示响应中的引用，不再自行补齐或展示未被答案引用的候选证据
+    - 知识库启用受控联网检索时，`citations[]` 可能包含 `source_type=web` 的网页证据；前端仍按 `doc_name + source_uri + snippet` 展示，`source_uri` 可作为官方来源复核入口
   - 匿名约束：
     - 当 `kb.visibility=public` 时允许匿名访问
     - 前端通过知识库列表选择目标知识库，不向用户暴露 `kb_id` 手动输入
@@ -163,9 +170,10 @@
 
 - `POST /kb/{kb_id}/ask/stream`
   - 类型：SSE（`Accept: text/event-stream`）
-  - 事件序列：`start -> ping/token/citation/refusal -> done`
+  - 事件序列：`start -> ping/status/token/citation/refusal -> done`
   - 关键事件字段：
     - `start`: `run_id/conversation_id/request_id`
+    - `status`: `phase/label/detail/request_id`，用于展示问答执行状态，例如检索向量库、实际联网 query、搜索提供方、搜索授权网站、调用 LLM
     - `token`: `delta`
     - `citation`: `citation`
     - `refusal`: `answer/refusal_reason/suggestions/next_steps`
@@ -173,6 +181,7 @@
     - `error`: `code/message/request_id`
   - 前端规则：
     - `refusal` 仍属于业务成功态，不显示接口失败。
+    - `status` 只作为过程诊断展示，不写入消息正文，也不得替代最终引用证据；登录态回答完成后若刷新历史消息，应按 `message_id` 保留本轮过程状态。
     - `ping` 仅保活，不更新消息正文。
     - `done.status=canceled` 时将消息标记为“已取消生成”。
 
@@ -287,6 +296,7 @@
   - 用途：列出服务端评测集，运行页优先使用该列表，本地最近记录只作为兜底
 - `POST /eval/sets`
   - 用途：创建评测集
+  - 每条样本必须包含 `gold_doc_name` 或 `gold_doc_id`；管理端创建页使用业务可读的 `gold_doc_name`
 - `GET /eval/runs`
   - 用途：列出服务端评测运行
   - 查询参数：`limit/offset`
@@ -296,6 +306,8 @@
   - 失败：参数非法时返回 `400 + VALIDATION_FAILED`
 - `GET /eval/runs/{run_id}`
   - 用途：查询评测结果
+- `GET /eval/runs/{run_id}/results`
+  - 用途：查询逐题命中、排名、耗时与候选摘要
 
 ## 12. 前端 Query Key 约定
 - `["kb","list"]`

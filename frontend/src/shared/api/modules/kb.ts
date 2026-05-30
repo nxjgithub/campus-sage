@@ -7,6 +7,10 @@ export interface KbConfig {
   max_context_tokens: number;
   min_context_chars?: number;
   min_keyword_coverage?: number;
+  web_enabled?: boolean;
+  allowed_web_prefixes?: string[];
+  web_seed_urls?: string[];
+  web_search_topk?: number;
 }
 
 export interface KbItem {

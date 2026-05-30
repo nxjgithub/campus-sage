@@ -109,6 +109,14 @@
 - `RAG_RERANK_CANDIDATE_MULTIPLIER`：默认 4（启用重排时的候选池放大倍数）
 - `RAG_RERANK_CANDIDATE_CAP`：默认 40（启用重排时的候选池上限）
 - `RAG_STALE_WARNING_DAYS`：默认 730（时效问题下，证据发布日期超过该天数将追加“请核验最新公告”提示）
+- `RAG_WEB_SEARCH_TOPK`：默认 3（知识库启用受控联网检索时，最多返回的网页证据数）
+- `RAG_WEB_SEARCH_PROVIDER`：默认 `seed`；设为 `searxng` 时先调用 SearxNG 搜索候选 URL，再按授权前缀过滤并抓取原网页正文
+- `RAG_WEB_SEARCH_BASE_URL`：SearxNG 基础地址。本机后端示例为 `http://127.0.0.1:8082`；Docker Compose 中 `api/worker` 会通过 `RAG_WEB_SEARCH_BASE_URL_INTERNAL` 覆盖为 `http://searxng:8080`
+- `RAG_WEB_SEARCH_BASE_URL_INTERNAL`：Docker Compose 内部 SearxNG 地址，默认 `http://searxng:8080`
+- `RAG_WEB_SEARCH_API_KEY`：搜索服务 API Key，可选；配置后以 `Authorization: Bearer <key>` 发送
+- `RAG_WEB_SEARCH_RESULT_LIMIT`：默认 10（搜索提供方返回的候选 URL 上限）
+- `RAG_WEB_SEARCH_MAX_PAGES`：默认 6（单次问答最多抓取的授权网页数量）
+- `RAG_WEB_FETCH_TIMEOUT_S`：默认 8（单页网页抓取超时秒数）
 - `CHUNK_SIZE`：默认 500（分块目标大小，字符数；切片器会优先保留标题、段落和完整句子）
 - `CHUNK_OVERLAP`：默认 100（分块重叠，字符数；实际重叠以完整语义单元为边界）
 
@@ -128,6 +136,7 @@
 - 若本地 Embedding 质量一般，可适度提高该候选池；但过大也会带来额外延迟。
 - 通知、公告、指南等 PDF 文档入库时，切片器会把首页标题和“一、二、三”等页内小节写入 `section_path`，并在长小节拆分时尽量保留小节标题作为每个 chunk 的语义锚点。
 - 简单重排器会优先识别 `主要功能`、`参与方式`、`培训对象`、`开课时间`、`课程安排` 等通知类意图短语，避免仅含宽泛主题词的候选压过精确小节。
+- 受控联网检索由知识库 `config.web_enabled=true` 打开，并通过 `allowed_web_prefixes` 限定可使用网站。启用后每轮问答都会同时执行向量库检索和受控联网检索。`RAG_WEB_SEARCH_PROVIDER=searxng` 时会先用 `site:<host> <query>` 搜索候选 URL，再过滤到授权前缀内并抓取原网页正文；`seed` 模式或搜索服务不可用时回退到 `web_seed_urls` 起点抓取。Docker Compose 已提供 `searxng` 服务，对宿主机暴露 `http://127.0.0.1:8082`，容器内使用 `http://searxng:8080`；`deploy/searxng/settings.yml` 已开启 `json` 输出格式，并在未配置 Valkey 的本地演示环境关闭 limiter，只保留 DuckDuckGo 与维基百科引擎。系统按 URL 源和路径边界校验授权范围，禁止访问 localhost、内网 IP、非 http/https、相似域名、相似路径和重定向后不在授权前缀内的 URL。联网证据只作为临时可引用证据，不会自动写入向量库。
 
 
 ## 6. 上传与存储

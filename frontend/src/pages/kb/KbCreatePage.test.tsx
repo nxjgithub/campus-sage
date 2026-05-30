@@ -63,7 +63,11 @@ describe("KbCreatePage 创建交互", () => {
         rerank_enabled: false,
         max_context_tokens: 3000,
         min_context_chars: 20,
-        min_keyword_coverage: 0.3
+        min_keyword_coverage: 0.3,
+        web_enabled: false,
+        allowed_web_prefixes: [],
+        web_seed_urls: [],
+        web_search_topk: 3
       },
       created_at: "2026-02-12T12:00:00Z",
       updated_at: "2026-02-12T12:00:00Z"
@@ -87,7 +91,11 @@ describe("KbCreatePage 创建交互", () => {
           rerank_enabled: false,
           max_context_tokens: 3000,
           min_context_chars: 20,
-          min_keyword_coverage: 0.3
+          min_keyword_coverage: 0.3,
+          web_enabled: false,
+          allowed_web_prefixes: [],
+          web_seed_urls: [],
+          web_search_topk: 3
         }
       });
     });

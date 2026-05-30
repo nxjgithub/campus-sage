@@ -5,7 +5,9 @@ import pytest
 
 from app.auth.service import UserService
 from app.core.settings import get_settings
+from app.core.utils import utc_now_iso
 from app.db.database import get_database, reset_database
+from app.db.models import DocumentRecord
 from app.db.repos import RepositoryProvider
 from app.main import app
 from app.rag.embedding import get_embedder
@@ -160,6 +162,24 @@ def test_eval_api_flow() -> None:
         "text": "补考 条件 说明",
     }
     store.upsert(kb_id=kb_id, entries=[VectorEntry(vector=vector, payload=payload)])
+    now = utc_now_iso()
+    RepositoryProvider(get_database(settings)).document().create(
+        DocumentRecord(
+            doc_id="doc_eval",
+            kb_id=kb_id,
+            doc_name="eval.pdf",
+            doc_version=None,
+            published_at="2025-01-01",
+            source_uri=None,
+            status="indexed",
+            error_message=None,
+            chunk_count=1,
+            file_path=None,
+            created_at=now,
+            updated_at=now,
+            deleted=False,
+        )
+    )
 
     eval_set = client.post(
         "/api/v1/eval/sets",
@@ -168,7 +188,7 @@ def test_eval_api_flow() -> None:
             "items": [
                 {
                     "question": question,
-                    "gold_doc_id": "doc_eval",
+                    "gold_doc_name": "eval.pdf",
                     "gold_page_start": 1,
                     "gold_page_end": 1,
                 }
@@ -206,6 +226,12 @@ def test_eval_api_flow() -> None:
     assert fetched.status_code == 200
     fetched_payload = fetched.json()
     assert fetched_payload["run_id"] == run_id
+    details = client.get(f"/api/v1/eval/runs/{run_id}/results", headers=headers)
+    assert details.status_code == 200
+    detail_items = details.json()["items"]
+    assert detail_items[0]["hit"] is True
+    assert detail_items[0]["rank"] == 1
+    assert detail_items[0]["top_candidates"][0]["doc_name"] == "eval.pdf"
 
     listed_runs = client.get("/api/v1/eval/runs?limit=10&offset=0", headers=headers)
     assert listed_runs.status_code == 200
@@ -227,6 +253,69 @@ def test_eval_run_rejects_invalid_topk() -> None:
     assert response.status_code == 400
     payload = response.json()
     assert payload["error"]["code"] == "VALIDATION_FAILED"
+
+
+def test_eval_set_rejects_item_without_gold_document() -> None:
+    """缺少标准证据的评测样本无法计算指标，应在创建时拒绝。"""
+
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    response = client.post(
+        "/api/v1/eval/sets",
+        json={"name": "无标准证据评测集", "items": [{"question": "补考条件是什么？"}]},
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+def test_eval_run_rejects_gold_document_from_another_kb() -> None:
+    """标准文档属于其他知识库时应拒绝运行，避免产生误导性零分。"""
+
+    client = TestClient(app)
+    headers = _auth_headers(client)
+    source_kb_id = client.post(
+        "/api/v1/kb", json={"name": "标准文档知识库"}, headers=headers
+    ).json()["kb_id"]
+    target_kb_id = client.post(
+        "/api/v1/kb", json={"name": "待评测知识库"}, headers=headers
+    ).json()["kb_id"]
+    now = utc_now_iso()
+    RepositoryProvider(get_database(get_settings())).document().create(
+        DocumentRecord(
+            doc_id="doc_other_kb",
+            kb_id=source_kb_id,
+            doc_name="跨库标准文档.pdf",
+            doc_version=None,
+            published_at=None,
+            source_uri=None,
+            status="indexed",
+            error_message=None,
+            chunk_count=1,
+            file_path=None,
+            created_at=now,
+            updated_at=now,
+            deleted=False,
+        )
+    )
+    eval_set_id = client.post(
+        "/api/v1/eval/sets",
+        json={
+            "name": "跨库评测集",
+            "items": [{"question": "跨库问题", "gold_doc_id": "doc_other_kb"}],
+        },
+        headers=headers,
+    ).json()["eval_set_id"]
+
+    response = client.post(
+        "/api/v1/eval/runs",
+        json={"eval_set_id": eval_set_id, "kb_id": target_kb_id, "topk": 5},
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_FAILED"
 
 
 def test_eval_run_rejects_invalid_threshold() -> None:

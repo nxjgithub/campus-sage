@@ -56,6 +56,10 @@ describe("EvalCreatePage submit", () => {
       " \u8865\u8003\u7533\u8bf7\u6d41\u7a0b\u662f\u4ec0\u4e48\uff1f "
     );
     await userEvent.type(
+      screen.getByLabelText("\u6807\u51c6\u8bc1\u636e\u6587\u6863\u540d\u79f0"),
+      " \u672c\u79d1\u751f\u8003\u8bd5\u7ba1\u7406\u89c4\u5b9a.pdf "
+    );
+    await userEvent.type(
       screen.getByLabelText("\u6807\u7b7e\uff08\u9017\u53f7\u5206\u9694\uff09"),
       "policy, exam "
     );
@@ -70,6 +74,7 @@ describe("EvalCreatePage submit", () => {
         items: [
           {
             question: "\u8865\u8003\u7533\u8bf7\u6d41\u7a0b\u662f\u4ec0\u4e48\uff1f",
+            gold_doc_name: "\u672c\u79d1\u751f\u8003\u8bd5\u7ba1\u7406\u89c4\u5b9a.pdf",
             gold_page_start: undefined,
             gold_page_end: undefined,
             tags: ["policy", "exam"]

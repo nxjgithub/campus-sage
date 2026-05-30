@@ -21,6 +21,7 @@ import {
   Segmented,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
   Tooltip,
@@ -36,8 +37,11 @@ import { OpsPane } from "../../shared/components/OpsWorkbench";
 import { PageState } from "../../shared/components/PageState";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
 import {
+  buildKbConfig,
   formatDateParts,
+  formatUrlLines,
   KbEditValues,
+  parseUrlLines,
   resolveVisibilityColor,
   TableDensity,
   VisibilityFilter
@@ -88,7 +92,11 @@ export function KbPage() {
       rerank_enabled: kbDetailQuery.data.config.rerank_enabled,
       max_context_tokens: kbDetailQuery.data.config.max_context_tokens,
       min_context_chars: kbDetailQuery.data.config.min_context_chars ?? 20,
-      min_keyword_coverage: kbDetailQuery.data.config.min_keyword_coverage ?? 0.3
+      min_keyword_coverage: kbDetailQuery.data.config.min_keyword_coverage ?? 0.3,
+      web_enabled: kbDetailQuery.data.config.web_enabled ?? false,
+      allowed_web_prefixes_text: formatUrlLines(kbDetailQuery.data.config.allowed_web_prefixes),
+      web_seed_urls_text: formatUrlLines(kbDetailQuery.data.config.web_seed_urls),
+      web_search_topk: kbDetailQuery.data.config.web_search_topk ?? 3
     });
   }, [editForm, kbDetailQuery.data]);
 
@@ -100,14 +108,7 @@ export function KbPage() {
       return updateKb(editingKbId, {
         description: values.description?.trim() || null,
         visibility: values.visibility,
-        config: {
-          topk: values.topk,
-          threshold: values.threshold,
-          rerank_enabled: values.rerank_enabled,
-          max_context_tokens: values.max_context_tokens,
-          min_context_chars: values.min_context_chars,
-          min_keyword_coverage: values.min_keyword_coverage
-        }
+        config: buildKbConfig(values)
       });
     },
     onSuccess: async () => {
@@ -353,8 +354,8 @@ export function KbPage() {
                           TopK {record.config?.topk ?? "-"} · 阈值 {record.config?.threshold ?? "-"}
                         </Typography.Text>
                         <Typography.Text type="secondary" className="kb-strategy-cell__secondary">
-                          重排 {record.config ? (record.config.rerank_enabled ? "on" : "off") : "-"} · 上下文{" "}
-                          {record.config?.max_context_tokens ?? "-"}
+                          重排 {record.config ? (record.config.rerank_enabled ? "on" : "off") : "-"} · 联网{" "}
+                          {record.config ? (record.config.web_enabled ? "on" : "off") : "-"}
                         </Typography.Text>
                       </div>
                     )
@@ -455,7 +456,7 @@ export function KbPage() {
             {kbDetailQuery.data?.name ?? "当前知识库"}
           </Typography.Text>
           <Typography.Text className="kb-pane-copy__desc">
-            只保留说明、可见性和关键检索参数，避免弹窗承载过多次要信息。
+            维护说明、可见性、检索策略和受控联网范围，保存后会直接影响问答链路。
           </Typography.Text>
         </div>
         <Form<KbEditValues>
@@ -500,6 +501,48 @@ export function KbPage() {
               <Form.Item name="min_keyword_coverage" label="最小关键词覆盖率">
                 <InputNumber min={0} max={1} step={0.05} style={{ width: "100%" }} />
               </Form.Item>
+            </div>
+            <div className="kb-web-config">
+              <div className="kb-form-section__head">
+                <Typography.Text className="kb-form-section__title">受控联网检索</Typography.Text>
+                <Typography.Text className="kb-form-section__hint">
+                  授权前缀每行一个；启用后后端仍会按白名单和拒答策略校验。
+                </Typography.Text>
+              </div>
+              <div className="kb-modal-grid">
+                <Form.Item name="web_enabled" label="联网检索" valuePropName="checked">
+                  <Switch checkedChildren="启用" unCheckedChildren="关闭" />
+                </Form.Item>
+                <Form.Item name="web_search_topk" label="网页证据数">
+                  <InputNumber min={1} max={10} style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item
+                  name="allowed_web_prefixes_text"
+                  label="授权 URL 前缀"
+                  dependencies={["web_enabled"]}
+                  rules={[
+                    {
+                      validator: async (_, value?: string) => {
+                        if (!editForm.getFieldValue("web_enabled")) {
+                          return;
+                        }
+                        if (parseUrlLines(value).length > 0) {
+                          return;
+                        }
+                        throw new Error("启用联网检索时请填写至少一个授权 URL 前缀");
+                      }
+                    }
+                  ]}
+                >
+                  <Input.TextArea
+                    rows={3}
+                    placeholder={"https://jwc.suse.edu.cn/\nhttps://xsc.suse.edu.cn/"}
+                  />
+                </Form.Item>
+                <Form.Item name="web_seed_urls_text" label="入口页 URL（可选）">
+                  <Input.TextArea rows={3} placeholder={"https://jwc.suse.edu.cn/jwgg/list.htm"} />
+                </Form.Item>
+              </div>
             </div>
           </div>
         </Form>

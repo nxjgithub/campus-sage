@@ -16,13 +16,20 @@ from app.db.models import (
     EvalSetRecord,
 )
 from app.db.repos.interfaces import (
+    DocumentRepositoryProtocol,
     EvalItemRepositoryProtocol,
     EvalResultRepositoryProtocol,
     EvalRunRepositoryProtocol,
     EvalSetRepositoryProtocol,
     KnowledgeBaseRepositoryProtocol,
 )
-from app.eval.dto import EvalItem, EvalResult, EvalSet
+from app.eval.dto import (
+    EvalCandidatePreview,
+    EvalItem,
+    EvalResult,
+    EvalRunItemDetail,
+    EvalSet,
+)
 from app.eval.metrics import mean_reciprocal_rank, percentile, recall_at_k
 from app.eval.runner import evaluate_items
 
@@ -37,6 +44,7 @@ class EvalService:
         eval_run_repo: EvalRunRepositoryProtocol,
         eval_result_repo: EvalResultRepositoryProtocol,
         kb_repo: KnowledgeBaseRepositoryProtocol,
+        doc_repo: DocumentRepositoryProtocol,
         settings: Settings,
     ) -> None:
         self._eval_set_repo = eval_set_repo
@@ -44,6 +52,7 @@ class EvalService:
         self._eval_run_repo = eval_run_repo
         self._eval_result_repo = eval_result_repo
         self._kb_repo = kb_repo
+        self._doc_repo = doc_repo
         self._settings = settings
 
     def create_eval_set(
@@ -76,8 +85,8 @@ class EvalService:
             description=description,
             created_at=now,
         )
-        self._eval_set_repo.create(record)
         item_records = self._build_item_records(eval_set_id, items, now)
+        self._eval_set_repo.create(record)
         self._eval_item_repo.create_many(item_records)
         return record, item_records
 
@@ -132,12 +141,14 @@ class EvalService:
                 detail={"eval_set_id": eval_set_id},
                 status_code=400,
             )
+        self._validate_items_for_kb(item_records, kb_id)
         eval_set = EvalSet(
             name=eval_set_record.name,
             items=[
                 EvalItem(
                     question=item.question,
-                    gold_doc_id=item.gold_doc_id or "",
+                    gold_doc_id=item.gold_doc_id,
+                    gold_doc_name=item.gold_doc_name,
                     gold_page_start=item.gold_page_start,
                     gold_page_end=item.gold_page_end,
                 )
@@ -174,7 +185,17 @@ class EvalService:
                 hit=result.rank is not None,
                 rank=result.rank,
                 retrieve_ms=result.retrieve_ms,
-                notes=None,
+                notes=json.dumps(
+                    {
+                        "raw_rank": result.raw_rank,
+                        "threshold_rank": result.threshold_rank,
+                        "raw_hit_count": result.raw_hit_count,
+                        "threshold_hit_count": result.threshold_hit_count,
+                        "final_hit_count": result.final_hit_count,
+                        "top_candidates": [asdict(candidate) for candidate in result.top_candidates],
+                    },
+                    ensure_ascii=False,
+                ),
                 created_at=now,
             )
             for item, result in zip(item_records, item_results)
@@ -195,6 +216,46 @@ class EvalService:
             )
         metrics = _load_metrics(record.metrics_json)
         return record, metrics
+
+    def get_run_results(self, run_id: str) -> list[EvalRunItemDetail]:
+        """获取逐题评测结果，便于定位零分与排序问题。"""
+
+        run_record = self._eval_run_repo.get(run_id)
+        if run_record is None:
+            raise AppError(
+                code=ErrorCode.EVAL_RUN_NOT_FOUND,
+                message="评测运行不存在",
+                detail={"run_id": run_id},
+                status_code=404,
+            )
+        item_records = {
+            item.eval_item_id: item
+            for item in self._eval_item_repo.list_by_set(run_record.eval_set_id)
+        }
+        details: list[EvalRunItemDetail] = []
+        for result in self._eval_result_repo.list_by_run(run_id):
+            item = item_records.get(result.eval_item_id)
+            if item is None:
+                continue
+            notes = _load_result_notes(result.notes)
+            details.append(
+                EvalRunItemDetail(
+                    eval_item_id=item.eval_item_id,
+                    question=item.question,
+                    gold_doc_id=item.gold_doc_id,
+                    gold_doc_name=item.gold_doc_name,
+                    hit=result.hit,
+                    rank=result.rank,
+                    retrieve_ms=result.retrieve_ms,
+                    raw_rank=notes.get("raw_rank"),
+                    threshold_rank=notes.get("threshold_rank"),
+                    raw_hit_count=notes.get("raw_hit_count"),
+                    threshold_hit_count=notes.get("threshold_hit_count"),
+                    final_hit_count=notes.get("final_hit_count"),
+                    top_candidates=_load_candidate_previews(notes.get("top_candidates")),
+                )
+            )
+        return details
 
     def list_runs(
         self, limit: int = 50, offset: int = 0
@@ -222,6 +283,7 @@ class EvalService:
                     status_code=400,
                 )
             gold_doc_id = item.get("gold_doc_id")
+            gold_doc_name = str(item.get("gold_doc_name") or "").strip() or None
             gold_page_start = item.get("gold_page_start")
             gold_page_end = item.get("gold_page_end")
             if (
@@ -235,6 +297,13 @@ class EvalService:
                     detail={"item": item},
                     status_code=400,
                 )
+            if not gold_doc_id and not gold_doc_name:
+                raise AppError(
+                    code=ErrorCode.VALIDATION_FAILED,
+                    message="评测样本必须填写标准文档名称或标准文档 ID",
+                    detail={"question": question},
+                    status_code=400,
+                )
             tags = item.get("tags")
             tags_json = json.dumps(tags, ensure_ascii=False) if tags is not None else None
             records.append(
@@ -243,6 +312,7 @@ class EvalService:
                     eval_set_id=eval_set_id,
                     question=question,
                     gold_doc_id=str(gold_doc_id) if gold_doc_id else None,
+                    gold_doc_name=gold_doc_name,
                     gold_page_start=gold_page_start,
                     gold_page_end=gold_page_end,
                     tags_json=tags_json,
@@ -250,6 +320,46 @@ class EvalService:
                 )
             )
         return records
+
+    def _validate_items_for_kb(self, items: list[EvalItemRecord], kb_id: str) -> None:
+        """校验评测标准证据属于目标知识库，避免跨库运行产生误导性零分。"""
+
+        target_doc_names = {
+            document.doc_name
+            for document in self._doc_repo.list_by_kb(kb_id)
+            if not document.deleted and document.status == "indexed"
+        }
+        for item in items:
+            if item.gold_doc_id:
+                document = self._doc_repo.get(item.gold_doc_id)
+                if (
+                    document is None
+                    or document.deleted
+                    or document.status != "indexed"
+                    or document.kb_id != kb_id
+                ):
+                    raise AppError(
+                        code=ErrorCode.VALIDATION_FAILED,
+                        message="评测样本标准文档不属于当前知识库或尚未完成入库",
+                        detail={
+                            "question": item.question,
+                            "gold_doc_id": item.gold_doc_id,
+                            "kb_id": kb_id,
+                        },
+                        status_code=400,
+                    )
+                continue
+            if not item.gold_doc_name or item.gold_doc_name not in target_doc_names:
+                raise AppError(
+                    code=ErrorCode.VALIDATION_FAILED,
+                    message="评测样本标准文档名称未在当前知识库中找到",
+                    detail={
+                        "question": item.question,
+                        "gold_doc_name": item.gold_doc_name,
+                        "kb_id": kb_id,
+                    },
+                    status_code=400,
+                )
 
 
 def _build_metrics(item_results: list, topk: int) -> EvalResult:
@@ -282,3 +392,36 @@ def _load_metrics(payload: str | None) -> EvalResult | None:
         p95_ms=int(data.get("p95_ms", 0)),
         samples=int(data.get("samples", 0)),
     )
+
+
+def _load_result_notes(payload: str | None) -> dict[str, object]:
+    """解析逐题诊断信息，兼容历史空备注。"""
+
+    if not payload:
+        return {}
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _load_candidate_previews(payload: object) -> list[EvalCandidatePreview]:
+    """解析候选摘要列表，忽略历史脏数据。"""
+
+    if not isinstance(payload, list):
+        return []
+    previews: list[EvalCandidatePreview] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        previews.append(
+            EvalCandidatePreview(
+                rank=int(item.get("rank", 0)),
+                doc_id=item.get("doc_id"),
+                doc_name=item.get("doc_name"),
+                score=item.get("score"),
+                matched=bool(item.get("matched")),
+            )
+        )
+    return previews

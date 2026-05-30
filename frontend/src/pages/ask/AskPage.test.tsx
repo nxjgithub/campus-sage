@@ -114,6 +114,26 @@ function mockBasicStream() {
       data: { run_id: "run_1", conversation_id: "conv_1", request_id: "req_1" }
     });
     options?.onEvent?.({
+      event: "status",
+      data: {
+        run_id: "run_1",
+        phase: "vector_retrieval",
+        label: "检索向量库",
+        detail: "知识库：教务知识库。",
+        request_id: "req_1"
+      }
+    });
+    options?.onEvent?.({
+      event: "status",
+      data: {
+        run_id: "run_1",
+        phase: "web_search",
+        label: "已抓取授权网页证据",
+        detail: "来源：https://jsj.suse.edu.cn/xydt/list.htm。",
+        request_id: "req_1"
+      }
+    });
+    options?.onEvent?.({
       event: "token",
       data: { run_id: "run_1", delta: "根据规定[1]可以办理。", request_id: "req_1" }
     });
@@ -308,6 +328,10 @@ describe("AskPage 聊天交互", () => {
     await fillQuestionInput("补考申请条件？");
     await userEvent.click(screen.getByRole("button", { name: /发送/ }));
 
+    expect(await screen.findByText("检索向量库")).toBeInTheDocument();
+    expect(await screen.findByText("已抓取授权网页证据")).toBeInTheDocument();
+    expect(await screen.findByText("来源：https://jsj.suse.edu.cn/xydt/list.htm。")).toBeInTheDocument();
+
     const marker = await screen.findByRole("button", { name: "[1]" });
     await userEvent.click(marker);
 
@@ -315,6 +339,67 @@ describe("AskPage 聊天交互", () => {
     const snippet = await screen.findByText("补考申请需要满足课程修读条件。");
     const card = snippet.closest(".citation-card");
     expect(card).toHaveClass("citation-card--active");
+  });
+
+  it("登录态回答完成并刷新历史后仍保留本轮执行状态", async () => {
+    mockAccessToken = "token_ask";
+    mockAuthState = {
+      status: "authenticated",
+      user: { user_id: "user_1", email: "admin@example.com", roles: ["admin"], status: "active" },
+      role: "admin",
+      isAuthenticated: true
+    };
+    vi.mocked(fetchConversationMessagesPage)
+      .mockResolvedValue({
+        items: [
+          {
+            message_id: "msg_user_1",
+            role: "user",
+            content: "补考申请条件？",
+            created_at: "2026-02-21T10:00:00Z",
+            request_id: "req_user_1"
+          },
+          {
+            message_id: "msg_assistant_1",
+            parent_message_id: "msg_user_1",
+            role: "assistant",
+            content: "根据规定[1]可以办理。",
+            citations: [
+              {
+                citation_id: 1,
+                doc_id: "doc_1",
+                doc_name: "教务手册",
+                chunk_id: "chunk_1",
+                snippet: "补考申请需要满足课程修读条件。",
+                section_path: "考试管理/补考"
+              }
+            ],
+            refusal: false,
+            refusal_reason: null,
+            suggestions: [],
+            next_steps: [],
+            timing: { total_ms: 120 },
+            created_at: "2026-02-21T10:00:00Z",
+            request_id: "req_1"
+          }
+        ],
+        has_more: false,
+        next_before: null
+      });
+
+    renderWithProviders(<AskPage />);
+
+    await fillQuestionInput("补考申请条件？");
+    await userEvent.click(screen.getByRole("button", { name: /发送/ }));
+
+    await waitFor(() => {
+      expect(fetchConversationMessagesPage).toHaveBeenCalledWith("conv_1", {
+        limit: 30
+      });
+    });
+    expect(await screen.findByText("检索向量库")).toBeInTheDocument();
+    expect(await screen.findByText("已抓取授权网页证据")).toBeInTheDocument();
+    expect(screen.getByText("来源：https://jsj.suse.edu.cn/xydt/list.htm。")).toBeInTheDocument();
   });
 
   it("证据弹窗打开后按任意键应关闭", async () => {
@@ -384,6 +469,80 @@ describe("AskPage 聊天交互", () => {
       "_blank",
       "noopener,noreferrer"
     );
+  });
+
+  it("最终拒答事件应覆盖临时生成文本并清理临时引用", async () => {
+    vi.mocked(askStreamByKb).mockImplementation(async (_kbId, _payload, options) => {
+      options?.onEvent?.({
+        event: "start",
+        data: { run_id: "run_soft_refusal", conversation_id: "conv_soft_refusal", request_id: "req_soft_refusal" }
+      });
+      options?.onEvent?.({
+        event: "token",
+        data: {
+          run_id: "run_soft_refusal",
+          delta: "抱歉，没有任何一条证据提到该事件。参考：[1]",
+          request_id: "req_soft_refusal"
+        }
+      });
+      options?.onEvent?.({
+        event: "citation",
+        data: {
+          run_id: "run_soft_refusal",
+          citation: {
+            citation_id: 1,
+            doc_id: "doc_soft_refusal",
+            doc_name: "临时证据",
+            chunk_id: "chunk_soft_refusal",
+            snippet: "这条引用不应保留。"
+          },
+          request_id: "req_soft_refusal"
+        }
+      });
+      options?.onEvent?.({
+        event: "refusal",
+        data: {
+          run_id: "run_soft_refusal",
+          answer: "当前知识库中未找到足够证据，无法给出可靠答案。",
+          refusal_reason: "LOW_EVIDENCE",
+          suggestions: [],
+          next_steps: [
+            {
+              action: "verify_kb_scope",
+              label: "确认知识库范围",
+              detail: "先确认当前知识库是否已收录对应制度；若未收录，需要先补充文档。",
+              value: null
+            }
+          ],
+          conversation_id: "conv_soft_refusal",
+          user_message_id: "msg_user_soft_refusal",
+          message_id: "msg_assistant_soft_refusal",
+          request_id: "req_soft_refusal"
+        }
+      });
+      options?.onEvent?.({
+        event: "done",
+        data: {
+          run_id: "run_soft_refusal",
+          status: "succeeded",
+          conversation_id: "conv_soft_refusal",
+          user_message_id: "msg_user_soft_refusal",
+          message_id: "msg_assistant_soft_refusal",
+          refusal: true,
+          request_id: "req_soft_refusal"
+        }
+      });
+    });
+    renderWithProviders(<AskPage />);
+
+    await fillQuestionInput("请解释具体事件");
+    await userEvent.click(screen.getByRole("button", { name: /发送/ }));
+
+    expect(await screen.findByText("等待补充")).toBeInTheDocument();
+    expect(screen.getByText("当前知识库中未找到足够证据，无法给出可靠答案。")).toBeInTheDocument();
+    expect(screen.queryByText("抱歉，没有任何一条证据提到该事件。参考：[1]")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "[1]" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看引用" })).not.toBeInTheDocument();
   });
 
   it("空态示例问题应可直接回填输入框", async () => {
@@ -791,6 +950,16 @@ describe("AskPage 聊天交互", () => {
         event: "start",
         data: { run_id: "run_recover", conversation_id: "conv_recover", request_id: "req_recover" }
       });
+      options?.onEvent?.({
+        event: "status",
+        data: {
+          run_id: "run_recover",
+          phase: "web_search",
+          label: "未命中授权网页证据",
+          detail: "提供方：seed；继续使用知识库证据或执行拒答策略。",
+          request_id: "req_recover"
+        }
+      });
       throw new Error("stream disconnected");
     });
     vi.mocked(getChatRun).mockResolvedValue({
@@ -844,6 +1013,8 @@ describe("AskPage 聊天交互", () => {
       expect(getChatRun).toHaveBeenCalledWith("run_recover");
     });
     expect(await screen.findByText("恢复后的服务端回答。")).toBeInTheDocument();
+    expect(await screen.findByText("未命中授权网页证据")).toBeInTheDocument();
+    expect(screen.getByText("提供方：seed；继续使用知识库证据或执行拒答策略。")).toBeInTheDocument();
     expect(screen.queryByText("生成已中断。")).not.toBeInTheDocument();
   });
 });

@@ -17,6 +17,12 @@ services:
       RERANK_BACKEND: ${RERANK_BACKEND:-simple}
       RERANK_BASE_URL: ${RERANK_BASE_URL_INTERNAL:-http://rerank:80}
       RERANK_API_PATH: ${RERANK_API_PATH:-/rerank}
+      RAG_WEB_SEARCH_PROVIDER: ${RAG_WEB_SEARCH_PROVIDER:-seed}
+      RAG_WEB_SEARCH_BASE_URL: ${RAG_WEB_SEARCH_BASE_URL_INTERNAL:-http://searxng:8080}
+      RAG_WEB_SEARCH_API_KEY: ${RAG_WEB_SEARCH_API_KEY:-}
+      RAG_WEB_SEARCH_RESULT_LIMIT: ${RAG_WEB_SEARCH_RESULT_LIMIT:-10}
+      RAG_WEB_SEARCH_MAX_PAGES: ${RAG_WEB_SEARCH_MAX_PAGES:-6}
+      RAG_WEB_FETCH_TIMEOUT_S: ${RAG_WEB_FETCH_TIMEOUT_S:-8}
       ASSET_STORAGE_BACKEND: ${ASSET_STORAGE_BACKEND:-local}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL_INTERNAL:-http://minio:9000}
       S3_REGION: ${S3_REGION:-us-east-1}
@@ -40,6 +46,8 @@ services:
         condition: service_started
       redis:
         condition: service_started
+      searxng:
+        condition: service_started
       minio-init:
         condition: service_completed_successfully
   worker:
@@ -60,6 +68,12 @@ services:
       RERANK_BACKEND: ${RERANK_BACKEND:-simple}
       RERANK_BASE_URL: ${RERANK_BASE_URL_INTERNAL:-http://rerank:80}
       RERANK_API_PATH: ${RERANK_API_PATH:-/rerank}
+      RAG_WEB_SEARCH_PROVIDER: ${RAG_WEB_SEARCH_PROVIDER:-seed}
+      RAG_WEB_SEARCH_BASE_URL: ${RAG_WEB_SEARCH_BASE_URL_INTERNAL:-http://searxng:8080}
+      RAG_WEB_SEARCH_API_KEY: ${RAG_WEB_SEARCH_API_KEY:-}
+      RAG_WEB_SEARCH_RESULT_LIMIT: ${RAG_WEB_SEARCH_RESULT_LIMIT:-10}
+      RAG_WEB_SEARCH_MAX_PAGES: ${RAG_WEB_SEARCH_MAX_PAGES:-6}
+      RAG_WEB_FETCH_TIMEOUT_S: ${RAG_WEB_FETCH_TIMEOUT_S:-8}
       ASSET_STORAGE_BACKEND: ${ASSET_STORAGE_BACKEND:-local}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL_INTERNAL:-http://minio:9000}
       S3_REGION: ${S3_REGION:-us-east-1}
@@ -80,6 +94,8 @@ services:
       qdrant:
         condition: service_started
       redis:
+        condition: service_started
+      searxng:
         condition: service_started
       minio-init:
         condition: service_completed_successfully
@@ -119,6 +135,22 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./deploy/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      SEARXNG_SETTINGS_PATH: /etc/searxng/settings.yml
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      NO_PROXY: "*"
+      no_proxy: "*"
   tei:
     image: ghcr.io/huggingface/text-embeddings-inference:86-1.8
     ports:

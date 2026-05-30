@@ -10,6 +10,10 @@ export interface KbFormValues {
   max_context_tokens: number;
   min_context_chars: number;
   min_keyword_coverage: number;
+  web_enabled: boolean;
+  allowed_web_prefixes_text: string;
+  web_seed_urls_text: string;
+  web_search_topk: number;
 }
 
 export interface KbEditValues {
@@ -21,6 +25,10 @@ export interface KbEditValues {
   max_context_tokens: number;
   min_context_chars: number;
   min_keyword_coverage: number;
+  web_enabled: boolean;
+  allowed_web_prefixes_text: string;
+  web_seed_urls_text: string;
+  web_search_topk: number;
 }
 
 export type VisibilityFilter = "all" | "public" | "internal" | "admin";
@@ -34,6 +42,10 @@ export const DEFAULT_KB_FORM_VALUES: KbFormValues = {
   max_context_tokens: 3000,
   min_context_chars: 20,
   min_keyword_coverage: 0.3,
+  web_enabled: false,
+  allowed_web_prefixes_text: "",
+  web_seed_urls_text: "",
+  web_search_topk: 3,
   name: "",
   description: ""
 };
@@ -69,9 +81,29 @@ export function formatDateParts(value?: string | null) {
   };
 }
 
+export function parseUrlLines(value?: string | null) {
+  return (value ?? "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function formatUrlLines(value?: string[] | null) {
+  return (value ?? []).join("\n");
+}
+
 export function buildKbConfig(values: Pick<
   KbFormValues,
-  "topk" | "threshold" | "rerank_enabled" | "max_context_tokens" | "min_context_chars" | "min_keyword_coverage"
+  | "topk"
+  | "threshold"
+  | "rerank_enabled"
+  | "max_context_tokens"
+  | "min_context_chars"
+  | "min_keyword_coverage"
+  | "web_enabled"
+  | "allowed_web_prefixes_text"
+  | "web_seed_urls_text"
+  | "web_search_topk"
 >): KbConfig {
   return {
     topk: values.topk,
@@ -79,6 +111,10 @@ export function buildKbConfig(values: Pick<
     rerank_enabled: values.rerank_enabled,
     max_context_tokens: values.max_context_tokens,
     min_context_chars: values.min_context_chars,
-    min_keyword_coverage: values.min_keyword_coverage
+    min_keyword_coverage: values.min_keyword_coverage,
+    web_enabled: values.web_enabled,
+    allowed_web_prefixes: parseUrlLines(values.allowed_web_prefixes_text),
+    web_seed_urls: parseUrlLines(values.web_seed_urls_text),
+    web_search_topk: values.web_search_topk
   };
 }

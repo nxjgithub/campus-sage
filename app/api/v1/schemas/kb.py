@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_address
 from typing import Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.api.v1.schemas.common import RequestIdMixin
 
@@ -25,6 +27,28 @@ class KnowledgeBaseConfig(BaseModel):
     min_keyword_coverage: float | None = Field(
         default=None, ge=0, le=1, description="关键词覆盖率阈值"
     )
+    web_enabled: bool = Field(default=False, description="是否启用受控联网检索")
+    allowed_web_prefixes: list[str] = Field(
+        default_factory=list,
+        description="允许联网访问的 URL 前缀",
+    )
+    web_seed_urls: list[str] = Field(
+        default_factory=list,
+        description="联网检索入口页 URL",
+    )
+    web_search_topk: int | None = Field(
+        default=None, ge=1, le=10, description="联网证据最大返回条数"
+    )
+
+    @field_validator("allowed_web_prefixes", "web_seed_urls")
+    @classmethod
+    def validate_web_urls(cls, value: list[str]) -> list[str]:
+        """校验联网检索 URL 配置只允许 http/https。"""
+
+        for item in value:
+            if not _is_allowed_web_url(item):
+                raise ValueError("联网检索 URL 必须使用 http/https")
+        return value
 
     @model_validator(mode="after")
     def validate_evidence_consistency(self) -> "KnowledgeBaseConfig":
@@ -54,6 +78,30 @@ class KnowledgeBaseConfigUpdate(BaseModel):
     min_keyword_coverage: float | None = Field(
         default=None, ge=0, le=1, description="关键词覆盖率阈值"
     )
+    web_enabled: bool | None = Field(default=None, description="是否启用受控联网检索")
+    allowed_web_prefixes: list[str] | None = Field(
+        default=None,
+        description="允许联网访问的 URL 前缀",
+    )
+    web_seed_urls: list[str] | None = Field(
+        default=None,
+        description="联网检索入口页 URL",
+    )
+    web_search_topk: int | None = Field(
+        default=None, ge=1, le=10, description="联网证据最大返回条数"
+    )
+
+    @field_validator("allowed_web_prefixes", "web_seed_urls")
+    @classmethod
+    def validate_partial_web_urls(cls, value: list[str] | None) -> list[str] | None:
+        """校验局部更新中的联网检索 URL 配置。"""
+
+        if value is None:
+            return None
+        for item in value:
+            if not _is_allowed_web_url(item):
+                raise ValueError("联网检索 URL 必须使用 http/https")
+        return value
 
     @model_validator(mode="after")
     def validate_partial_evidence_consistency(self) -> "KnowledgeBaseConfigUpdate":
@@ -118,3 +166,19 @@ class KnowledgeBaseListResponse(RequestIdMixin):
     """知识库列表响应。"""
 
     items: list[KnowledgeBaseListItem] = Field(description="知识库列表")
+
+
+def _is_allowed_web_url(value: str) -> bool:
+    """校验联网检索 URL 不指向本机或内网地址。"""
+
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+    hostname = parsed.hostname.lower().strip("[]")
+    if hostname == "localhost" or hostname.endswith(".localhost"):
+        return False
+    try:
+        address = ip_address(hostname)
+    except ValueError:
+        return True
+    return not (address.is_private or address.is_loopback or address.is_link_local)

@@ -1,5 +1,6 @@
 export interface EvalItemFormRow {
   question: string;
+  gold_doc_name: string;
   gold_page_start?: number;
   gold_page_end?: number;
   tags_text?: string;

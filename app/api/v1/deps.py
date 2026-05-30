@@ -122,6 +122,7 @@ def get_eval_service(
         eval_run_repo=provider.eval_run(),
         eval_result_repo=provider.eval_result(),
         kb_repo=provider.knowledge_base(),
+        doc_repo=provider.document(),
         settings=settings,
     )
 

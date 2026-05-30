@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -442,6 +443,257 @@ def test_refusal_guidance_adds_llm_question_suggestions() -> None:
     assert any(step.value == "奖学金评定条件有哪些？" for step in result.next_steps)
 
 
+def test_compute_answer_uses_controlled_web_evidence_when_local_evidence_missing() -> None:
+    settings = Settings(
+        _env_file=None,
+        vllm_enabled=True,
+        rag_threshold=0.5,
+        rag_min_keyword_coverage=0.0,
+        rag_min_context_chars=1,
+    )
+    generated: list[tuple[str, str]] = []
+
+    class _StubVectorStore:
+        def search(
+            self,
+            kb_id: str,
+            query_vector: list[float],
+            topk: int,
+            filters: dict[str, object] | None = None,
+        ) -> list[VectorHit]:
+            del kb_id, query_vector, topk, filters
+            return []
+
+    class _StubWebRetriever:
+        def retrieve(self, kb_id, kb_name, question, query, config):
+            del kb_name, config
+            assert kb_id == "kb_web"
+            assert query == "官网奖学金最新通知"
+            return [
+                VectorHit(
+                    score=0.95,
+                    payload={
+                        "doc_id": "web_notice",
+                        "doc_name": "学生处奖学金通知",
+                        "doc_version": None,
+                        "published_at": None,
+                        "source_type": "web",
+                        "source_uri": "https://xsc.example.edu/notice.html",
+                        "page_start": None,
+                        "page_end": None,
+                        "section_path": "学生处奖学金通知",
+                        "chunk_id": "web_chunk_1",
+                        "chunk_index": 0,
+                        "text": "官网奖学金最新通知说明，学生应按评定条件提交材料并关注公示安排。",
+                    },
+                )
+            ]
+
+    class _StubLlmClient:
+        def plan_web_search(
+            self,
+            kb_name: str,
+            question: str,
+            allowed_prefixes: list[str],
+            local_refusal_reason: str | None,
+        ) -> str | None:
+            del kb_name, question, allowed_prefixes
+            assert local_refusal_reason == "NO_EVIDENCE"
+            return "官网奖学金最新通知"
+
+        def generate(self, question: str, context: str) -> str:
+            generated.append((question, context))
+            return "应按官网通知中的评定条件提交材料，并关注公示安排。"
+
+    service = object.__new__(RagService)
+    service._settings = settings
+    service._embedder = SimpleEmbedder(vector_dim=8)
+    service._vector_store = _StubVectorStore()
+    service._context_builder = ContextBuilder(settings.rag_max_context_tokens)
+    service._reranker = SimpleReranker()
+    service._llm_client = _StubLlmClient()
+    service._web_retriever = _StubWebRetriever()
+
+    result = service._compute_answer(
+        kb=SimpleNamespace(
+            kb_id="kb_web",
+            name="联网知识库",
+            config={
+                "topk": 3,
+                "threshold": 0.5,
+                "rerank_enabled": False,
+                "min_evidence_chunks": 1,
+                "min_context_chars": 1,
+                "min_keyword_coverage": 0.0,
+                "web_enabled": True,
+                "allowed_web_prefixes": ["https://xsc.example.edu/"],
+                "web_seed_urls": ["https://xsc.example.edu/"],
+                "web_search_topk": 2,
+            },
+        ),
+        question="奖学金最新通知是什么？",
+        topk=None,
+        threshold=None,
+        rerank_enabled=None,
+        filters=None,
+        debug=True,
+        normalized_question="奖学金最新通知是什么",
+        dialog_state=DialogState(
+            turn_count=0,
+            last_user_question=None,
+            pending_clarification=False,
+            history_text="",
+        ),
+        intent_decision=IntentDecision(
+            intent="qa",
+            normalized_question="奖学金最新通知是什么",
+            retrieval_query="奖学金最新通知是什么？",
+        ),
+    )
+
+    assert result.refusal is False
+    assert generated
+    assert "官网奖学金最新通知说明" in generated[0][1]
+    assert result.citations[0].source_type == "web"
+    assert result.citations[0].source_uri == "https://xsc.example.edu/notice.html"
+    assert "参考：[1]" in result.answer
+
+
+def test_compute_answer_searches_web_even_when_local_evidence_is_enough() -> None:
+    settings = Settings(
+        _env_file=None,
+        vllm_enabled=True,
+        rag_threshold=0.5,
+        rag_min_keyword_coverage=0.0,
+        rag_min_context_chars=1,
+    )
+    calls: list[str] = []
+
+    class _StubVectorStore:
+        def search(
+            self,
+            kb_id: str,
+            query_vector: list[float],
+            topk: int,
+            filters: dict[str, object] | None = None,
+        ) -> list[VectorHit]:
+            del kb_id, query_vector, topk, filters
+            return [
+                VectorHit(
+                    score=0.92,
+                    payload={
+                        "doc_id": "local_doc",
+                        "doc_name": "本地通知",
+                        "doc_version": None,
+                        "published_at": None,
+                        "source_type": "document",
+                        "source_uri": None,
+                        "page_start": None,
+                        "page_end": None,
+                        "section_path": "本地公告",
+                        "chunk_id": "local_chunk_1",
+                        "chunk_index": 0,
+                        "text": "奖学金评定条件包括成绩、综合表现和材料提交要求。",
+                    },
+                )
+            ]
+
+    class _StubWebRetriever:
+        def retrieve(self, kb_id, kb_name, question, query, config):
+            del kb_name, question, config
+            calls.append(query)
+            assert kb_id == "kb_web"
+            assert query == "奖学金评定条件"
+            return [
+                VectorHit(
+                    score=0.88,
+                    payload={
+                        "doc_id": "web_notice",
+                        "doc_name": "官网奖学金通知",
+                        "doc_version": None,
+                        "published_at": None,
+                        "source_type": "web",
+                        "source_uri": "https://xsc.example.edu/scholarship.html",
+                        "page_start": None,
+                        "page_end": None,
+                        "section_path": "官网奖学金通知",
+                        "chunk_id": "web_chunk_1",
+                        "chunk_index": 0,
+                        "text": "官网奖学金评定条件说明，需提交申请材料并等待学院审核。",
+                    },
+                )
+            ]
+
+    class _StubLlmClient:
+        def plan_web_search(
+            self,
+            kb_name: str,
+            question: str,
+            allowed_prefixes: list[str],
+            local_refusal_reason: str | None,
+        ) -> str | None:
+            del kb_name, question, allowed_prefixes
+            assert local_refusal_reason is None
+            return "奖学金评定条件"
+
+        def generate(self, question: str, context: str) -> str:
+            del question
+            assert "奖学金评定条件包括成绩" in context
+            assert "官网奖学金评定条件说明" in context
+            return "奖学金评定需参考本地通知和官网说明。[1][2]"
+
+    service = object.__new__(RagService)
+    service._settings = settings
+    service._embedder = SimpleEmbedder(vector_dim=8)
+    service._vector_store = _StubVectorStore()
+    service._context_builder = ContextBuilder(settings.rag_max_context_tokens)
+    service._reranker = SimpleReranker()
+    service._llm_client = _StubLlmClient()
+    service._web_retriever = _StubWebRetriever()
+
+    result = service._compute_answer(
+        kb=SimpleNamespace(
+            kb_id="kb_web",
+            name="联网知识库",
+            config={
+                "topk": 3,
+                "threshold": 0.5,
+                "rerank_enabled": False,
+                "min_evidence_chunks": 1,
+                "min_context_chars": 1,
+                "min_keyword_coverage": 0.0,
+                "web_enabled": True,
+                "allowed_web_prefixes": ["https://xsc.example.edu/"],
+                "web_seed_urls": ["https://xsc.example.edu/"],
+                "web_search_topk": 2,
+            },
+        ),
+        question="奖学金评定条件是什么？",
+        topk=None,
+        threshold=None,
+        rerank_enabled=None,
+        filters=None,
+        debug=True,
+        normalized_question="奖学金评定条件是什么",
+        dialog_state=DialogState(
+            turn_count=0,
+            last_user_question=None,
+            pending_clarification=False,
+            history_text="",
+        ),
+        intent_decision=IntentDecision(
+            intent="qa",
+            normalized_question="奖学金评定条件是什么",
+            retrieval_query="奖学金评定条件是什么？",
+        ),
+    )
+
+    assert calls == ["奖学金评定条件"]
+    assert result.refusal is False
+    assert result.citations[0].source_type == "web"
+    assert result.citations[1].source_type == "document"
+
+
 def test_empty_llm_answer_does_not_fallback_to_retrieved_snippet() -> None:
     settings = Settings(_env_file=None, vllm_enabled=True)
     service = object.__new__(RagService)
@@ -537,6 +789,45 @@ def test_generated_result_only_returns_answer_cited_evidence() -> None:
 
     assert result.refusal is False
     assert [item.citation_id for item in result.citations] == [1]
+
+
+def test_generated_result_converts_soft_no_evidence_answer_to_refusal() -> None:
+    """模型使用较口语化的无证据表达时也必须收敛为拒答。"""
+
+    settings = Settings(_env_file=None)
+    service = object.__new__(RagService)
+    service._settings = settings
+    service._build_refusal_guidance = lambda **kwargs: ([], [])
+    prepared = SimpleNamespace(
+        kb_id="kb_test",
+        kb_name="测试知识库",
+        normalized_question="请解释具体事件。",
+        citations=[_citation_dto(1, "doc_1", "证据一")],
+        retrieve_ms=1,
+        rerank_ms=2,
+        context_ms=3,
+        total_start=time.perf_counter(),
+        topk=1,
+        threshold=0.25,
+        rerank_enabled=False,
+        hits_for_log=[],
+        intent="qa",
+        slots={},
+    )
+
+    result = service._build_generated_result(
+        prepared=prepared,
+        answer=(
+            "抱歉，根据您提供的证据，没有任何一条提到这一具体内容。"
+            "因此，我无法基于现有证据解释该事件。"
+        ),
+        generate_ms=4,
+    )
+
+    assert result.refusal is True
+    assert result.refusal_reason == "LOW_EVIDENCE"
+    assert result.citations == []
+    assert result.answer == "当前知识库中未找到足够证据，无法给出可靠答案。 当前检索到的内容过少，暂时不足以支持回答。"
 
 
 def test_ask_stream_uses_vllm_delta_stream_before_saving_message() -> None:

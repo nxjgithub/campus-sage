@@ -9,6 +9,7 @@ import {
   InputNumber,
   Select,
   Space,
+  Switch,
   Tooltip,
   Typography,
   message
@@ -18,7 +19,7 @@ import { createKb, fetchKbList } from "../../shared/api/modules/kb";
 import { formatApiErrorMessage, normalizeApiError } from "../../shared/api/errors";
 import { useAuth } from "../../shared/auth/auth";
 import { RequestErrorAlert } from "../../shared/components/RequestErrorAlert";
-import { buildKbConfig, DEFAULT_KB_FORM_VALUES, KbFormValues } from "./kbShared";
+import { buildKbConfig, DEFAULT_KB_FORM_VALUES, KbFormValues, parseUrlLines } from "./kbShared";
 
 const VISIBILITY_LABEL: Record<KbFormValues["visibility"], string> = {
   public: "公开",
@@ -75,6 +76,11 @@ export function KbCreatePage() {
     Form.useWatch("threshold", form) ?? DEFAULT_KB_FORM_VALUES.threshold;
   const watchedRerank =
     Form.useWatch("rerank_enabled", form) ?? DEFAULT_KB_FORM_VALUES.rerank_enabled;
+  const watchedWebEnabled =
+    Form.useWatch("web_enabled", form) ?? DEFAULT_KB_FORM_VALUES.web_enabled;
+  const watchedAllowedPrefixes =
+    Form.useWatch("allowed_web_prefixes_text", form) ??
+    DEFAULT_KB_FORM_VALUES.allowed_web_prefixes_text;
 
   const publicCount = kbQuery.data?.items.filter((item) => item.visibility === "public").length ?? 0;
   const internalCount =
@@ -211,24 +217,77 @@ export function KbCreatePage() {
                         </div>
                       ),
                       children: (
-                        <div className="kb-advanced-grid">
-                          <Form.Item name="rerank_enabled" label="启用重排">
-                            <Select
-                              options={[
-                                { value: true, label: "启用" },
-                                { value: false, label: "关闭" }
+                        <div className="kb-advanced-panel">
+                          <div className="kb-advanced-grid">
+                            <Form.Item name="rerank_enabled" label="启用重排">
+                              <Select
+                                options={[
+                                  { value: true, label: "启用" },
+                                  { value: false, label: "关闭" }
+                                ]}
+                              />
+                            </Form.Item>
+                            <Form.Item name="max_context_tokens" label="最大上下文">
+                              <InputNumber min={100} style={{ width: "100%" }} />
+                            </Form.Item>
+                            <Form.Item name="min_context_chars" label="最小上下文长度">
+                              <InputNumber min={1} style={{ width: "100%" }} />
+                            </Form.Item>
+                            <Form.Item name="min_keyword_coverage" label="最小关键词覆盖率">
+                              <InputNumber min={0} max={1} step={0.05} style={{ width: "100%" }} />
+                            </Form.Item>
+                          </div>
+                          <div className="kb-web-config">
+                            <div className="kb-form-section__head">
+                              <Typography.Text className="kb-form-section__title">
+                                受控联网检索
+                              </Typography.Text>
+                              <Typography.Text className="kb-form-section__hint">
+                                只允许访问授权 URL 前缀内的网页，并作为临时证据参与回答。
+                              </Typography.Text>
+                            </div>
+                            <div className="kb-config-grid">
+                              <Form.Item
+                                name="web_enabled"
+                                label="联网检索"
+                                valuePropName="checked"
+                              >
+                                <Switch checkedChildren="启用" unCheckedChildren="关闭" />
+                              </Form.Item>
+                              <Form.Item name="web_search_topk" label="网页证据数">
+                                <InputNumber min={1} max={10} style={{ width: "100%" }} />
+                              </Form.Item>
+                            </div>
+                            <Form.Item
+                              name="allowed_web_prefixes_text"
+                              label="授权 URL 前缀"
+                              dependencies={["web_enabled"]}
+                              rules={[
+                                {
+                                  validator: async (_, value?: string) => {
+                                    if (!form.getFieldValue("web_enabled")) {
+                                      return;
+                                    }
+                                    if (parseUrlLines(value).length > 0) {
+                                      return;
+                                    }
+                                    throw new Error("启用联网检索时请填写至少一个授权 URL 前缀");
+                                  }
+                                }
                               ]}
-                            />
-                          </Form.Item>
-                          <Form.Item name="max_context_tokens" label="最大上下文">
-                            <InputNumber min={100} style={{ width: "100%" }} />
-                          </Form.Item>
-                          <Form.Item name="min_context_chars" label="最小上下文长度">
-                            <InputNumber min={1} style={{ width: "100%" }} />
-                          </Form.Item>
-                          <Form.Item name="min_keyword_coverage" label="最小关键词覆盖率">
-                            <InputNumber min={0} max={1} step={0.05} style={{ width: "100%" }} />
-                          </Form.Item>
+                            >
+                              <Input.TextArea
+                                rows={3}
+                                placeholder={"https://jwc.suse.edu.cn/\nhttps://xsc.suse.edu.cn/"}
+                              />
+                            </Form.Item>
+                            <Form.Item name="web_seed_urls_text" label="入口页 URL（可选）">
+                              <Input.TextArea
+                                rows={3}
+                                placeholder={"https://jwc.suse.edu.cn/jwgg/list.htm"}
+                              />
+                            </Form.Item>
+                          </div>
                         </div>
                       )
                     }
@@ -286,6 +345,14 @@ export function KbCreatePage() {
                     <span className="split-side-metric__label">重排</span>
                     <span className="split-side-metric__value">
                       {watchedRerank ? "已启用" : "未启用"}
+                    </span>
+                  </div>
+                  <div className="split-side-metric">
+                    <span className="split-side-metric__label">联网</span>
+                    <span className="split-side-metric__value">
+                      {watchedWebEnabled
+                        ? `已启用 / ${parseUrlLines(watchedAllowedPrefixes).length} 个前缀`
+                        : "未启用"}
                     </span>
                   </div>
                   <div className="split-side-metric">

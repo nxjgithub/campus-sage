@@ -133,6 +133,19 @@ class Settings(BaseSettings):
         default=730,
         description="证据发布日期超过该天数时触发时效核验提示",
     )
+    rag_web_search_topk: int = Field(default=3, description="联网证据最大返回条数")
+    rag_web_search_provider: Literal["seed", "searxng"] = Field(
+        default="seed", description="联网搜索提供方"
+    )
+    rag_web_search_base_url: str | None = Field(
+        default=None, description="联网搜索提供方基础地址"
+    )
+    rag_web_search_api_key: str | None = Field(
+        default=None, description="联网搜索提供方 API Key"
+    )
+    rag_web_search_result_limit: int = Field(default=10, description="联网搜索候选结果数")
+    rag_web_search_max_pages: int = Field(default=6, description="联网检索最大抓取页数")
+    rag_web_fetch_timeout_s: int = Field(default=8, description="联网证据抓取超时秒数")
     chunk_size: int = Field(default=500, description="分块大小（字符数）")
     chunk_overlap: int = Field(default=100, description="分块重叠（字符数）")
 

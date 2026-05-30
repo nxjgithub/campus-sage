@@ -20,7 +20,10 @@ from app.api.v1.schemas.documents import (
     DocumentUploadResponse,
 )
 from app.api.v1.schemas.eval import (
+    EvalCandidatePreviewResponse,
     EvalMetrics,
+    EvalRunItemResultListResponse,
+    EvalRunItemResultResponse,
     EvalRunRequest,
     EvalRunResponse,
     EvalSetCreateRequest,
@@ -81,7 +84,10 @@ __all__ = [
     "DocumentListResponse",
     "DocumentResponse",
     "DocumentUploadResponse",
+    "EvalCandidatePreviewResponse",
     "EvalMetrics",
+    "EvalRunItemResultListResponse",
+    "EvalRunItemResultResponse",
     "EvalRunRequest",
     "EvalRunResponse",
     "EvalSetCreateRequest",

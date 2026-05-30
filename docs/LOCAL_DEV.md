@@ -453,7 +453,7 @@ Copy-Item .env.example .env
 
 2) 启动 API + Worker + 依赖服务：
 ```powershell
-docker compose up -d api worker mysql qdrant redis tei minio
+docker compose up -d api worker mysql qdrant redis tei minio searxng
 ```
 
 3) 查看服务状态与日志：

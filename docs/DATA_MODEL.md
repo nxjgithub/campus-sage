@@ -161,6 +161,7 @@
 - `eval_set_id`（FK）
 - `question`（text）
 - `gold_doc_id`（string，nullable）
+- `gold_doc_name`（string，nullable；管理端优先使用，需与知识库文档名称一致）
 - `gold_page_start`（int，nullable）
 - `gold_page_end`（int，nullable）
 - `tags_json`（text/json，nullable）
@@ -188,7 +189,7 @@
 - `hit`（bool：gold 是否命中 TopK）
 - `rank`（int，nullable：gold 在结果中的名次）
 - `retrieve_ms`（int，nullable）
-- `notes`（text，nullable）
+- `notes`（text/json，nullable：候选摘要、阈值过滤前后排名与候选数量）
 - `created_at`（datetime）
 
 索引：

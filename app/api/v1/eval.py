@@ -12,7 +12,10 @@ from app.api.v1.deps import (
 )
 from app.api.v1.schemas.eval import (
     EvalMetrics,
+    EvalCandidatePreviewResponse,
     EvalRunRequest,
+    EvalRunItemResultListResponse,
+    EvalRunItemResultResponse,
     EvalRunListItem,
     EvalRunListResponse,
     EvalRunResponse,
@@ -171,6 +174,47 @@ def get_eval_run(
         rerank_enabled=record.rerank_enabled,
         metrics=_to_metrics(metrics),
         created_at=record.created_at,
+        request_id=request.state.request_id,
+    )
+
+
+@router.get("/runs/{run_id}/results", response_model=EvalRunItemResultListResponse)
+def get_eval_run_results(
+    request: Request,
+    run_id: str,
+    current_user: CurrentUser = Depends(require_permission(Permission.MONITOR_READ)),
+    service: EvalService = Depends(get_eval_service),
+) -> EvalRunItemResultListResponse:
+    """获取逐题评测结果。"""
+
+    return EvalRunItemResultListResponse(
+        items=[
+            EvalRunItemResultResponse(
+                eval_item_id=item.eval_item_id,
+                question=item.question,
+                gold_doc_id=item.gold_doc_id,
+                gold_doc_name=item.gold_doc_name,
+                hit=item.hit,
+                rank=item.rank,
+                retrieve_ms=item.retrieve_ms,
+                raw_rank=item.raw_rank,
+                threshold_rank=item.threshold_rank,
+                raw_hit_count=item.raw_hit_count,
+                threshold_hit_count=item.threshold_hit_count,
+                final_hit_count=item.final_hit_count,
+                top_candidates=[
+                    EvalCandidatePreviewResponse(
+                        rank=candidate.rank,
+                        doc_id=candidate.doc_id,
+                        doc_name=candidate.doc_name,
+                        score=candidate.score,
+                        matched=candidate.matched,
+                    )
+                    for candidate in item.top_candidates
+                ],
+            )
+            for item in service.get_run_results(run_id)
+        ],
         request_id=request.state.request_id,
     )
 

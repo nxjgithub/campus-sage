@@ -120,6 +120,10 @@ class KnowledgeBaseService:
             "min_evidence_chunks": self._settings.rag_min_evidence_chunks,
             "min_context_chars": self._settings.rag_min_context_chars,
             "min_keyword_coverage": self._settings.rag_min_keyword_coverage,
+            "web_enabled": False,
+            "allowed_web_prefixes": [],
+            "web_seed_urls": [],
+            "web_search_topk": self._settings.rag_web_search_topk,
         }
 
     def _validate_config_consistency(self, config: dict) -> None:
@@ -803,4 +807,3 @@ class DocumentService:
                 self._vector_store.delete_by_doc_id(
                     kb_id=document.kb_id, doc_id=document.doc_id
                 )
-

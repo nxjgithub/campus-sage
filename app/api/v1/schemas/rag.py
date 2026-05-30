@@ -63,6 +63,7 @@ class Citation(BaseModel):
     citation_id: int = Field(description="引用编号")
     doc_id: str = Field(description="文档ID")
     doc_name: str = Field(description="文档名称")
+    source_type: str | None = Field(default=None, description="来源类型")
     doc_version: str | None = Field(default=None, description="文档版本")
     published_at: str | None = Field(default=None, description="发布日期")
     source_uri: str | None = Field(default=None, description="文档官方来源链接")

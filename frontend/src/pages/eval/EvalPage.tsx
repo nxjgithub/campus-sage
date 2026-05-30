@@ -13,6 +13,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   EvalRunResponse,
   fetchEvalRun,
+  fetchEvalRunResults,
   fetchEvalRuns,
   fetchEvalSets,
   runEval
@@ -88,6 +89,11 @@ export function EvalPage() {
   const evalRunsQuery = useQuery({
     queryKey: ["eval", "runs"],
     queryFn: () => fetchEvalRuns({ limit: 100, offset: 0 })
+  });
+  const evalRunResultsQuery = useQuery({
+    queryKey: ["eval", "runs", runDetail?.run_id, "results"],
+    queryFn: () => fetchEvalRunResults(runDetail!.run_id),
+    enabled: Boolean(runDetail?.run_id)
   });
 
   useEffect(() => {
@@ -170,12 +176,15 @@ export function EvalPage() {
     if (kbQuery.isError) return normalizeApiError(kbQuery.error);
     if (evalSetsQuery.isError) return normalizeApiError(evalSetsQuery.error);
     if (evalRunsQuery.isError) return normalizeApiError(evalRunsQuery.error);
+    if (evalRunResultsQuery.isError) return normalizeApiError(evalRunResultsQuery.error);
     if (runEvalMutation.isError) return normalizeApiError(runEvalMutation.error);
     if (fetchRunMutation.isError) return normalizeApiError(fetchRunMutation.error);
     return null;
   }, [
     evalRunsQuery.error,
     evalRunsQuery.isError,
+    evalRunResultsQuery.error,
+    evalRunResultsQuery.isError,
     evalSetsQuery.error,
     evalSetsQuery.isError,
     fetchRunMutation.error,
@@ -577,6 +586,63 @@ export function EvalPage() {
                       width: 180,
                       align: "right",
                       className: "admin-table-cell--number"
+                    }
+                  ]}
+                />
+
+                <Typography.Text strong>逐题明细</Typography.Text>
+                <Table
+                  size={tableDensity}
+                  rowKey="eval_item_id"
+                  tableLayout="fixed"
+                  pagination={false}
+                  loading={evalRunResultsQuery.isLoading}
+                  dataSource={evalRunResultsQuery.data?.items ?? []}
+                  locale={{ emptyText: "暂无逐题结果" }}
+                  scroll={{ x: 980 }}
+                  columns={[
+                    {
+                      title: "问题",
+                      dataIndex: "question",
+                      width: 300,
+                      className: "admin-table-cell--primary"
+                    },
+                    {
+                      title: "标准文档",
+                      key: "gold_doc",
+                      width: 260,
+                      render: (_, item) => item.gold_doc_name ?? item.gold_doc_id ?? "-"
+                    },
+                    {
+                      title: "结果",
+                      dataIndex: "hit",
+                      width: 90,
+                      render: (hit: boolean) => <Tag color={hit ? "green" : "red"}>{hit ? "命中" : "未命中"}</Tag>
+                    },
+                    {
+                      title: "排名",
+                      dataIndex: "rank",
+                      width: 80,
+                      align: "right",
+                      render: (rank?: number | null) => rank ?? "-"
+                    },
+                    {
+                      title: "耗时(ms)",
+                      dataIndex: "retrieve_ms",
+                      width: 100,
+                      align: "right",
+                      render: (retrieveMs?: number | null) => retrieveMs ?? "-"
+                    },
+                    {
+                      title: "候选摘要",
+                      key: "top_candidates",
+                      width: 320,
+                      render: (_, item) =>
+                        item.top_candidates.length
+                          ? item.top_candidates
+                              .map((candidate) => `${candidate.rank}. ${candidate.doc_name ?? candidate.doc_id ?? "未知文档"}`)
+                              .join("；")
+                          : "历史运行未保存候选摘要"
                     }
                   ]}
                 />

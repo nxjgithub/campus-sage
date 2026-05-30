@@ -24,6 +24,7 @@ export interface CitationItem {
   citation_id: number;
   doc_id: string;
   doc_name: string;
+  source_type?: string | null;
   doc_version?: string | null;
   published_at?: string | null;
   source_uri?: string | null;
@@ -128,6 +129,14 @@ export interface AskStreamTokenData {
   request_id?: string | null;
 }
 
+export interface AskStreamStatusData {
+  run_id: string;
+  phase: string;
+  label: string;
+  detail?: string | null;
+  request_id?: string | null;
+}
+
 export interface AskStreamCitationData {
   run_id: string;
   citation: CitationItem;
@@ -173,6 +182,7 @@ export type AskStreamEvent =
   | { event: "start"; data: AskStreamStartData }
   | { event: "ping"; data: AskStreamPingData }
   | { event: "token"; data: AskStreamTokenData }
+  | { event: "status"; data: AskStreamStatusData }
   | { event: "citation"; data: AskStreamCitationData }
   | { event: "refusal"; data: AskStreamRefusalData }
   | { event: "done"; data: AskStreamDoneData }
@@ -267,6 +277,9 @@ function toStreamEvent(name: string, rawData: unknown): AskStreamEvent {
   }
   if (name === "token") {
     return { event: "token", data: data as unknown as AskStreamTokenData };
+  }
+  if (name === "status") {
+    return { event: "status", data: data as unknown as AskStreamStatusData };
   }
   if (name === "citation") {
     return { event: "citation", data: data as unknown as AskStreamCitationData };

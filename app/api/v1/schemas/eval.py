@@ -12,6 +12,7 @@ class EvalItemCreate(BaseModel):
 
     question: str = Field(description="问题")
     gold_doc_id: str | None = Field(default=None, description="标准答案文档ID")
+    gold_doc_name: str | None = Field(default=None, description="标准答案文档名称")
     gold_page_start: int | None = Field(default=None, description="标准页起始")
     gold_page_end: int | None = Field(default=None, description="标准页结束")
     tags: list[str] | None = Field(default=None, description="标签列表")
@@ -101,3 +102,37 @@ class EvalRunListResponse(RequestIdMixin):
     """评测运行列表响应。"""
 
     items: list[EvalRunListItem] = Field(description="评测运行列表")
+
+
+class EvalCandidatePreviewResponse(BaseModel):
+    """评测候选摘要响应。"""
+
+    rank: int = Field(description="候选排名")
+    doc_id: str | None = Field(default=None, description="候选文档ID")
+    doc_name: str | None = Field(default=None, description="候选文档名称")
+    score: float | None = Field(default=None, description="候选分数")
+    matched: bool = Field(description="是否命中标准证据")
+
+
+class EvalRunItemResultResponse(BaseModel):
+    """逐题评测结果响应。"""
+
+    eval_item_id: str = Field(description="评测样本ID")
+    question: str = Field(description="评测问题")
+    gold_doc_id: str | None = Field(default=None, description="标准文档ID")
+    gold_doc_name: str | None = Field(default=None, description="标准文档名称")
+    hit: bool = Field(description="是否命中标准证据")
+    rank: int | None = Field(default=None, description="最终命中排名")
+    retrieve_ms: int | None = Field(default=None, description="检索耗时")
+    raw_rank: int | None = Field(default=None, description="阈值过滤前命中排名")
+    threshold_rank: int | None = Field(default=None, description="阈值过滤后命中排名")
+    raw_hit_count: int | None = Field(default=None, description="原始候选数量")
+    threshold_hit_count: int | None = Field(default=None, description="阈值过滤后候选数量")
+    final_hit_count: int | None = Field(default=None, description="最终候选数量")
+    top_candidates: list[EvalCandidatePreviewResponse] = Field(description="候选摘要列表")
+
+
+class EvalRunItemResultListResponse(RequestIdMixin):
+    """逐题评测结果列表响应。"""
+
+    items: list[EvalRunItemResultResponse] = Field(description="逐题评测结果")

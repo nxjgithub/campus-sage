@@ -66,6 +66,7 @@ def run_mysql_migrations(database: DatabaseProtocol) -> None:
         0,
         MYSQL_COMMENT_BASE_SCHEMA_VERSION,
         MYSQL_COMMENT_SCHEMA_VERSION,
+        MYSQL_EVAL_GOLD_DOC_NAME_BASE_SCHEMA_VERSION,
         LATEST_SCHEMA_VERSION,
     }
     if current_version not in allowed_versions:
@@ -282,6 +283,7 @@ def _migration_1_initial_core_schema(database: DatabaseProtocol) -> None:
                 eval_set_id TEXT NOT NULL,
                 question TEXT NOT NULL,
                 gold_doc_id TEXT,
+                gold_doc_name TEXT,
                 gold_page_start INTEGER,
                 gold_page_end INTEGER,
                 tags_json TEXT,
@@ -516,11 +518,18 @@ def _migration_6_add_conversation_memory_schema(database: DatabaseProtocol) -> N
     )
 
 
+def _migration_7_add_eval_gold_doc_name(database: DatabaseProtocol) -> None:
+    """记录评测样本标准文档名称字段版本，字段由兼容逻辑补齐。"""
+
+    return None
+
+
 def _ensure_sqlite_compatibility(database: DatabaseProtocol) -> None:
     """补齐 SQLite 运行时必需字段，兼容旧版本数据库。"""
 
     _ensure_column(database, "message", "suggestions_json", "TEXT")
     _ensure_column(database, "message", "request_id", "TEXT")
+    _ensure_column(database, "eval_item", "gold_doc_name", "TEXT")
     _migration_6_add_conversation_memory_schema(database)
 
 
@@ -529,6 +538,7 @@ def _ensure_mysql_compatibility(database: DatabaseProtocol) -> None:
 
     _ensure_mysql_column(database, "message", "suggestions_json", "LONGTEXT NULL")
     _ensure_mysql_column(database, "message", "request_id", "VARCHAR(128) NULL")
+    _ensure_mysql_column(database, "eval_item", "gold_doc_name", "VARCHAR(255) NULL")
 
 
 def _ensure_column(
@@ -632,11 +642,13 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(4, "add_chat_run_schema", _migration_4_add_chat_run_schema),
     Migration(5, "add_mysql_schema_comments", _migration_5_add_mysql_schema_comments),
     Migration(6, "add_conversation_memory_schema", _migration_6_add_conversation_memory_schema),
+    Migration(7, "add_eval_gold_doc_name", _migration_7_add_eval_gold_doc_name),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 MYSQL_COMMENT_BASE_SCHEMA_VERSION = 4
 MYSQL_COMMENT_SCHEMA_VERSION = 5
+MYSQL_EVAL_GOLD_DOC_NAME_BASE_SCHEMA_VERSION = 6
 
 MYSQL_TABLE_COMMENTS: dict[str, str] = {
     "schema_migration": "数据库结构迁移历史表，记录已应用的 schema 版本。",
@@ -775,6 +787,7 @@ MYSQL_COLUMN_COMMENTS: dict[str, dict[str, MysqlColumnComment]] = {
         "eval_set_id": MysqlColumnComment("VARCHAR(128) NOT NULL", "所属评测集 ID。"),
         "question": MysqlColumnComment("LONGTEXT NOT NULL", "评测问题。"),
         "gold_doc_id": MysqlColumnComment("VARCHAR(128) NULL", "标准命中文档 ID。"),
+        "gold_doc_name": MysqlColumnComment("VARCHAR(255) NULL", "标准命中文档名称。"),
         "gold_page_start": MysqlColumnComment("INT NULL", "标准证据起始页码。"),
         "gold_page_end": MysqlColumnComment("INT NULL", "标准证据结束页码。"),
         "tags_json": MysqlColumnComment("LONGTEXT NULL", "样本标签 JSON。"),
@@ -1015,6 +1028,7 @@ MYSQL_BOOTSTRAP_STATEMENTS: tuple[str, ...] = (
         eval_set_id VARCHAR(128) NOT NULL,
         question LONGTEXT NOT NULL,
         gold_doc_id VARCHAR(128) NULL,
+        gold_doc_name VARCHAR(255) NULL,
         gold_page_start INT NULL,
         gold_page_end INT NULL,
         tags_json LONGTEXT NULL,

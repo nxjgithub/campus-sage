@@ -24,6 +24,7 @@ import {
   NextStepItem,
   AskStreamRefusalData,
   AskStreamStartData,
+  AskStreamStatusData,
   AskStreamTokenData,
   CitationItem,
   askStreamByKb,
@@ -62,6 +63,13 @@ import { formatRefusalReason } from "../../shared/utils/refusal";
 
 type ComposerStatus = "idle" | "sending" | "streaming" | "stopping" | "failed";
 
+interface TraceItem {
+  phase: string;
+  label: string;
+  detail: string | null;
+  request_id: string | null;
+}
+
 interface ThreadMessage {
   local_id: string;
   message_id: string | null;
@@ -77,6 +85,7 @@ interface ThreadMessage {
   timing: Record<string, number> | null;
   created_at: string;
   request_id: string | null;
+  trace_items: TraceItem[];
   pending: boolean;
 }
 
@@ -135,6 +144,7 @@ function toThreadMessage(item: ConversationMessage): ThreadMessage {
     timing: item.timing ?? null,
     created_at: item.created_at,
     request_id: item.request_id ?? null,
+    trace_items: [],
     pending: false
   };
 }
@@ -143,11 +153,30 @@ function mergeMessages(history: ThreadMessage[], local: ThreadMessage[]) {
   if (!local.length) {
     return history;
   }
+  const localTraceByMessageId = new Map<string, TraceItem[]>();
+  for (const item of local) {
+    if (item.message_id && item.trace_items.length > 0) {
+      localTraceByMessageId.set(item.message_id, item.trace_items);
+    }
+  }
+  const enrichedHistory = history.map((item) => {
+    if (!item.message_id) {
+      return item;
+    }
+    const traceItems = localTraceByMessageId.get(item.message_id);
+    if (!traceItems?.length) {
+      return item;
+    }
+    return {
+      ...item,
+      trace_items: traceItems
+    };
+  });
   const historyIds = new Set(
     history.map((item) => item.message_id).filter((item): item is string => Boolean(item))
   );
   const pending = local.filter((item) => !item.message_id || !historyIds.has(item.message_id));
-  return [...history, ...pending];
+  return [...enrichedHistory, ...pending];
 }
 
 function collapseRegeneratedAnswers(messages: ThreadMessage[]) {
@@ -210,6 +239,39 @@ function compactTime(iso?: string | null) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(time);
+}
+
+function appendTraceItem(items: TraceItem[], data: AskStreamStatusData) {
+  const nextItem: TraceItem = {
+    phase: data.phase,
+    label: data.label,
+    detail: data.detail ?? null,
+    request_id: data.request_id ?? null
+  };
+  const lastItem = items[items.length - 1];
+  if (
+    lastItem?.phase === nextItem.phase &&
+    lastItem.label === nextItem.label &&
+    lastItem.detail === nextItem.detail
+  ) {
+    return items;
+  }
+  return [...items, nextItem].slice(-8);
+}
+
+function isSameTraceItems(left: TraceItem[], right: TraceItem[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((item, index) => {
+    const target = right[index];
+    return (
+      item.phase === target.phase &&
+      item.label === target.label &&
+      item.detail === target.detail &&
+      item.request_id === target.request_id
+    );
+  });
 }
 
 function isAbortError(error: unknown) {
@@ -474,6 +536,32 @@ export function AskPage() {
     if (!historyMessages.length || !localMessages.length) {
       return;
     }
+    const localTraceByMessageId = new Map<string, TraceItem[]>();
+    for (const item of localMessages) {
+      if (item.message_id && item.trace_items.length > 0) {
+        localTraceByMessageId.set(item.message_id, item.trace_items);
+      }
+    }
+    if (localTraceByMessageId.size > 0) {
+      setHistoryMessages((previous) => {
+        let changed = false;
+        const next = previous.map((item) => {
+          if (!item.message_id) {
+            return item;
+          }
+          const traceItems = localTraceByMessageId.get(item.message_id);
+          if (!traceItems?.length || isSameTraceItems(item.trace_items, traceItems)) {
+            return item;
+          }
+          changed = true;
+          return {
+            ...item,
+            trace_items: traceItems
+          };
+        });
+        return changed ? next : previous;
+      });
+    }
     const ids = new Set(
       historyMessages
         .map((item) => item.message_id)
@@ -486,7 +574,7 @@ export function AskPage() {
       }
       return next;
     });
-  }, [historyMessages, localMessages.length]);
+  }, [historyMessages, localMessages]);
 
   const assistantMessages = useMemo(
     () => threadMessages.filter((item) => item.role === "assistant"),
@@ -762,8 +850,18 @@ export function AskPage() {
         setSelectionLockConversationId(run.conversation_id);
         updateActiveConversation(run.conversation_id);
         if (hasAccessToken) {
+          patchLocalUserMessageId(currentUserLocalIdRef.current ?? "", run.user_message_id);
+          if (currentAssistantLocalIdRef.current && run.assistant_message_id) {
+            patchLocalAssistant(currentAssistantLocalIdRef.current, {
+              message_id: run.assistant_message_id,
+              request_id: run.request_id ?? null,
+              pending: false
+            });
+          }
           await loadMessages(run.conversation_id, false);
-          setLocalMessages([]);
+          if (!run.user_message_id || !run.assistant_message_id) {
+            setLocalMessages([]);
+          }
         }
       }
       setComposerStatus(run.status === "failed" ? "failed" : "idle");
@@ -797,6 +895,15 @@ export function AskPage() {
       }));
       return;
     }
+    if (event.event === "status") {
+      const data = event.data as AskStreamStatusData;
+      patchLocalAssistant(runtime.assistantLocalId, (current) => ({
+        trace_items: appendTraceItem(current.trace_items, data),
+        request_id: data.request_id ?? current.request_id,
+        pending: true
+      }));
+      return;
+    }
     if (event.event === "citation") {
       patchLocalAssistant(runtime.assistantLocalId, (current) => ({
         citations: [...current.citations, event.data.citation]
@@ -814,6 +921,7 @@ export function AskPage() {
         refusal_reason: data.refusal_reason ?? null,
         suggestions: data.suggestions ?? [],
         next_steps: data.next_steps ?? [],
+        citations: [],
         timing: data.timing ?? null,
         created_at: data.assistant_created_at ?? nowIsoString(),
         request_id: data.request_id ?? null,
@@ -901,6 +1009,7 @@ export function AskPage() {
         timing: null,
         created_at: nowIsoString(),
         request_id: null,
+        trace_items: [],
         pending: false
       },
       {
@@ -918,6 +1027,7 @@ export function AskPage() {
         timing: null,
         created_at: nowIsoString(),
         request_id: null,
+        trace_items: [],
         pending: true
       }
     ]);
@@ -1679,6 +1789,28 @@ export function AskPage() {
                         <Typography.Paragraph>{item.content}</Typography.Paragraph>
                       )}
                     </div>
+                    {item.role === "assistant" && item.trace_items.length ? (
+                      <div className="chat-trace" aria-label="问答执行状态">
+                        {item.trace_items.map((trace, index) => (
+                          <div
+                            key={`${trace.phase}_${trace.label}_${index}`}
+                            className="chat-trace__item"
+                          >
+                            <span className="chat-trace__dot" aria-hidden="true" />
+                            <div className="chat-trace__body">
+                              <Typography.Text className="chat-trace__label">
+                                {trace.label}
+                              </Typography.Text>
+                              {trace.detail ? (
+                                <Typography.Text className="chat-trace__detail">
+                                  {trace.detail}
+                                </Typography.Text>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     {item.refusal ? (
                       <RefusalNextStepsCard
                         nextSteps={item.next_steps}

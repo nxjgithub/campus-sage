@@ -180,14 +180,11 @@ export function MonitorPage() {
     });
   }, [riskPercent, statsQuery.data, totalInQueue]);
 
-  const hasAnyStats = Boolean(totalInQueue || alerts.length);
   const pageStatus = statsQuery.isLoading
     ? "loading"
     : statsQuery.isError
       ? "error"
-      : hasAnyStats
-        ? "success"
-        : "empty";
+      : "success";
 
   const chartItems = useMemo(
     () =>

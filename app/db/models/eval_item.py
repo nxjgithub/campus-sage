@@ -11,6 +11,7 @@ class EvalItemRecord:
     eval_set_id: str
     question: str
     gold_doc_id: str | None
+    gold_doc_name: str | None
     gold_page_start: int | None
     gold_page_end: int | None
     tags_json: str | None
